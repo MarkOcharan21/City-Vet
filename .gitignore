@@ -1,0 +1,34 @@
+# ── Dependencies ─────────────────────────────────────────
+node_modules/
+
+# ── Secrets ──────────────────────────────────────────────
+# NEVER commit local env files (backend/.env holds the real
+# Gmail app password + LAN URLs). Keep .env.example tracked.
+**/.env
+!**/.env.example
+
+# ── Build output ─────────────────────────────────────────
+dist/
+build/
+
+# ── Database backups / data dumps ───────────────────────
+# Full dumps contain real owner/pet PII — keep OUT of the public repo.
+backend/backup_pet_vet_system_*.sql
+
+# ── Runtime artifacts (uploads, logs) ───────────────────
+backend/uploads/
+*.log
+
+# ── Local dev TLS certs (private keys — never public) ───
+frontend/certs/
+frontend/public/mkcert-rootCA.pem
+
+# ── OS / editor ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# ── Throwaway QA scripts / screenshots ──────────────────
+test-*.mjs
+carousel-*.png

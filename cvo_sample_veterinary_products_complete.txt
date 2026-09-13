@@ -1,0 +1,101 @@
+SAMPLE VETERINARY CLINIC PRODUCTS
+For Veterinary System Prototype
+
+NOTE:
+This is a SAMPLE/PLACEHOLDER product catalog for UI/database prototyping.
+The listed prices are NOT confirmed official Cabuyao City Veterinary Office prices.
+Replace prices and product availability with the official CVO/Treasury schedule once verified.
+
+==================================================
+VACCINES
+==================================================
+1. Anti-Rabies Vaccine - Dog - ₱100
+2. Anti-Rabies Vaccine - Cat - ₱100
+3. 3-in-1 / FVRCP Vaccine - Cat - ₱500
+4. 4-in-1 / FVRCP Vaccine - Cat - ₱600
+5. 5-in-1 Vaccine - Dog - ₱500
+6. 6-in-1 Vaccine - Dog - ₱600
+7. 8-in-1 Vaccine - Dog - ₱750
+8. Kennel Cough / Bordetella Vaccine - Dog - ₱800
+
+==================================================
+DEWORMERS / ANTIPARASITICS
+==================================================
+1. Dewormer - Internal Parasites - ₱50–₱150
+2. Broad-Spectrum Dewormer - Internal Parasites - ₱100–₱250
+3. Flea and Tick Medication - External Parasites - ₱150–₱500
+4. Flea/Tick Topical Treatment - External Parasites - ₱150–₱500
+5. Ear Mite Treatment - Ear Mites - ₱100–₱300
+
+==================================================
+VITAMINS / SUPPLEMENTS
+==================================================
+1. Multivitamins - General Supplement - ₱50–₱150
+2. Vitamin B Complex - Vitamin Supplement - ₱50–₱150
+3. Vitamin C Supplement - Supplement - ₱50–₱150
+4. Calcium Supplement - Bone/Calcium Support - ₱80–₱200
+5. Appetite/Recovery Supplement - Nutritional Support - ₱100–₱300
+6. Nutritional Supplement - General Nutritional Support - ₱100–₱300
+7. Puppy/Kitten Multivitamins - Growth Support - ₱100–₱250
+8. Senior Pet Supplement - Senior Pet Support - ₱150–₱350
+
+==================================================
+COMMON MEDICINES
+==================================================
+1. Antibiotic - Bacterial Infection - ₱100–₱300
+2. Anti-inflammatory - Pain/Inflammation - ₱50–₱200
+3. Antihistamine - Allergy - ₱50–₱150
+4. Pain Reliever / Analgesic - Pain Management - ₱50–₱200
+5. Topical Antiseptic - Wound Care - ₱50–₱150
+6. Wound Ointment - Minor Wounds - ₱80–₱200
+7. Ear Medication - Ear Infection/Care - ₱100–₱300
+8. Eye Medication - Eye Care - ₱100–₱300
+9. Skin Medication - Skin Conditions - ₱100–₱300
+10. Gastrointestinal Medication - Digestive Problems - ₱100–₱300
+11. Anti-diarrheal Medication - Diarrhea - ₱50–₱200
+12. Anti-emetic Medication - Vomiting/Nausea - ₱100–₱300
+
+==================================================
+TOPICAL / WOUND CARE
+==================================================
+1. Antiseptic Solution - Wound Cleaning - ₱50–₱150
+2. Wound Spray - Wound Care - ₱100–₱250
+3. Wound Ointment - Wound Care - ₱80–₱200
+4. Healing/Protective Cream - Skin/Wound Care - ₱100–₱250
+5. Ear Cleaning Solution - Ear Hygiene - ₱100–₱250
+6. Eye Cleaning Solution - Eye Hygiene - ₱100–₱250
+
+==================================================
+OTHER COMMON VETERINARY SUPPLIES
+==================================================
+1. Oral Syringe - Medication Administration - ₱10–₱30
+2. Disposable Syringe - Medication/Procedure - ₱5–₱20
+3. Gauze - Wound Care - ₱10–₱50
+4. Cotton / Cotton Balls - Wound Care - ₱10–₱50
+5. Disposable Gloves - Veterinary Procedure - ₱5–₱20
+6. Bandage - Wound Care - ₱20–₱100
+7. Alcohol / Disinfectant - Cleaning - ₱30–₱100
+
+==================================================
+IMPORTANT FOR THE SYSTEM
+==================================================
+Do NOT treat this list as the official inventory or price list of the
+Cabuyao City Veterinary Office.
+
+For the actual system database, each product should ideally have:
+- Product Name
+- Category
+- Subcategory
+- Species
+- Unit
+- Price
+- Stock Quantity (if applicable)
+- Active/Inactive Status
+- Effective Date
+- Remarks
+
+Prices and available products should be editable by authorized staff/admin
+once the official CVO/Treasury list is obtained.
+
+Medicines should only be recorded/dispensed according to the veterinary
+professional's instructions and the clinic's actual policies.
