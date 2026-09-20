@@ -5,6 +5,7 @@ import api from '../../services/api';
 import StatusBadge from '../../components/StatusBadge';
 import PetSearchSelect from '../../components/PetSearchSelect';
 import { Calendar, User, FileText, Syringe, Stethoscope, CheckCircle2, Clock, MapPin, PawPrint } from 'lucide-react';
+import { resolveMediaUrl } from '../../utils/mediaUrl';
 
 const NO_BARANGAY_KEY = '__none__';
 const CABUYAO_CENTER = [14.2471, 121.1367];
@@ -35,6 +36,30 @@ const BARANGAY_COORDINATES = {
   'San Isidro': [14.2401, 121.1398],
 };
 
+// Approximate radius (in meters) for each barangay's coverage area
+// These are rough estimates based on barangay size
+const BARANGAY_RADIUS = {
+  'Baclaran': 1200,
+  'Banay-banay': 1100,
+  'Banaybanay': 1100,
+  'Banlic': 1000,
+  'Barangay 1 (Poblacion)': 500,
+  'Barangay 2 (Poblacion)': 500,
+  'Barangay 3 (Poblacion)': 500,
+  'Bigaa': 1300,
+  'Butong': 1100,
+  'Casile': 1200,
+  'Diezmo': 1100,
+  'Gulod': 1200,
+  'Mamatid': 1300,
+  'Marinig': 1100,
+  'Niugan': 1100,
+  'Pittland': 1300,
+  'Pulo': 1000,
+  'Sala': 1100,
+  'San Isidro': 1000,
+};
+
 // Specific subdivision coordinates for known locations in Cabuyao City
 const SUBDIVISION_COORDINATES = {
   'Hongkong Village': [14.2503, 121.1250], // From Wikimapia: 14°15'1"N 121°7'30"E
@@ -49,6 +74,7 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
   const markerRef = useRef(null);
   const watchIdRef = useRef(null);
   const [locationMessage, setLocationMessage] = useState('Select a pet to view the owner location.');
+  const [locating, setLocating] = useState(false);
 
   useEffect(() => {
     if (!mapElementRef.current || mapRef.current) return undefined;
@@ -80,18 +106,48 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !pet) return undefined;
+    if (!map || !pet) {
+      setLocating(false);
+      return undefined;
+    }
 
     let cancelled = false;
     const fallbackPosition = L.latLng(CABUYAO_CENTER);
-    const pinIcon = L.divIcon({
-      className: 'traceability-map-pin',
-      html: '<span></span>',
-      iconSize: [30, 38],
-      iconAnchor: [15, 38],
-    });
+    const hasPhoto = Boolean(pet?.photo && String(pet.photo).trim() !== '');
+    const petName = escapeHtml(pet?.name || '');
+    const pinIcon = hasPhoto
+      ? L.divIcon({
+        className: 'traceability-map-pin pin-with-photo',
+        html: `<span class="traceability-pin-squircle-wrap">`
+            + `<span class="traceability-pin-ring"></span>`
+            + `<span class="traceability-pin-ring"></span>`
+            + `<span class="traceability-pin-ring"></span>`
+            + `<span class="traceability-pin-squircle">`
+            + `<img class="traceability-pin-img" src="${resolveMediaUrl(pet.photo)}" alt="${petName}" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />`
+            + `<span class="traceability-pin-placeholder">🐾</span>`
+            + `</span>`
+            + `<span class="traceability-pin-tail"></span>`
+            + `</span>`,
+        iconSize: [64, 82],
+        iconAnchor: [32, 80],
+      })
+      : L.divIcon({
+        className: 'traceability-map-pin pin-no-photo',
+        html: `<span class="traceability-pin-squircle-wrap">`
+            + `<span class="traceability-pin-ring"></span>`
+            + `<span class="traceability-pin-ring"></span>`
+            + `<span class="traceability-pin-ring"></span>`
+            + `<span class="traceability-pin-squircle pin-squircle-empty">`
+            + `<span class="traceability-pin-placeholder">🐾</span>`
+            + `</span>`
+            + `<span class="traceability-pin-tail"></span>`
+            + `</span>`,
+        iconSize: [64, 82],
+        iconAnchor: [32, 80],
+      });
 
     setLocationMessage('Locating the registered owner address...');
+    setLocating(true);
 
     // Improved address formatting for better Philippine geocoding
     const formatAddressForGeocoding = (address, barangay) => {
@@ -199,6 +255,8 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
         }
 
         if (!CABUYAO_BOUNDS.contains(position)) {
+          if (cancelled) return;
+          setLocating(false);
           setLocationMessage('The registered address is outside Cabuyao City.');
           if (markerRef.current) markerRef.current.remove();
           markerRef.current = null;
@@ -206,6 +264,7 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
           return;
         }
 
+        setLocating(false);
         setLocationMessage(locationMessage);
         if (!markerRef.current) {
           markerRef.current = L.marker(position, { icon: pinIcon }).addTo(map);
@@ -216,10 +275,19 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
         // Use higher zoom for exact address, lower zoom for approximate barangay location
         const zoomLevel = result ? 15 : (isBarangayFallback ? 13 : 12);
         map.setView(position, zoomLevel, { animate: true });
+        markerRef.current.unbindTooltip();
+        markerRef.current.bindTooltip(buildPetCardHtml(pet), {
+          permanent: true,
+          direction: 'top',
+          offset: hasPhoto ? [0, -74] : [0, -50],
+          className: 'traceability-pet-card',
+          interactive: false,
+        });
 
       } catch (error) {
         if (cancelled) return;
         console.error('Geocoding error:', error);
+        setLocating(false);
         setLocationMessage('Cabuyao City location; address lookup unavailable');
         if (!markerRef.current) markerRef.current = L.marker(fallbackPosition, { icon: pinIcon }).addTo(map);
         map.setView(fallbackPosition, 12);
@@ -266,7 +334,15 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
         </div>
         <span className="traceability-location-status">{locationMessage}</span>
       </div>
-      <div ref={mapElementRef} className="traceability-location-map" />
+      <div className="traceability-map-wrap">
+        <div ref={mapElementRef} className="traceability-location-map" />
+{locating && (
+            <div className="traceability-locating-overlay" role="status" aria-live="polite">
+              <LogoPulse />
+              <span>Locating pet...</span>
+            </div>
+          )}
+      </div>
       {pet && (
         <div className="traceability-owner-panel">
           {ownerPets.length > 1 && (
@@ -349,75 +425,94 @@ function BarangayHeatmapMap({ data, loading, onSelectBarangay }) {
 
     if (!data || data.length === 0) return undefined;
 
-    const maxCount = Math.max(...data.map((row) => row.total_pets), 1);
-    const layer = L.layerGroup().addTo(map);
+    try {
+      const maxCount = Math.max(...data.map((row) => row.total_pets), 1);
+      const layer = L.layerGroup().addTo(map);
 
-    data.forEach((row) => {
-      const radius = 14 + Math.sqrt(row.total_pets / maxCount) * 30;
-      const color = riskColor(row.risk_level);
-      const marker = L.circleMarker(row.coords, {
-        radius,
-        color,
-        weight: 2,
-        fillColor: color,
-        fillOpacity: 0.35,
+      data.forEach((row) => {
+        try {
+          const color = riskColor(row.risk_level);
+          const radius = BARANGAY_RADIUS[row.barangay] || BARANGAY_RADIUS['San Isidro'] || 1000;
+          
+          // Create circle for the barangay with larger radius to show coverage area
+          const marker = L.circle(row.coords, {
+            radius,
+            color,
+            weight: 2,
+            fillColor: color,
+            fillOpacity: 0.35,
+          });
+
+          marker.bindTooltip(
+            `<strong>${row.barangay}</strong><br/>${row.total_pets} pet${row.total_pets !== 1 ? 's' : ''} · ${row.risk_level} risk`,
+            { direction: 'auto', offset: [0, -60] },
+          );
+
+          marker.bindPopup(
+            `<div class="trace-heatmap-popup">`
+            + `<h4>${row.barangay}</h4>`
+            + `<span class="risk-chip risk-${row.risk_level.toLowerCase()}">${row.risk_level} risk</span>`
+            + `<table>`
+            + `<tr><td>Registered pets</td><td><strong>${row.total_pets}</strong></td></tr>`
+            + `<tr><td>Protected (up to date)</td><td><strong>${row.vaccinated_pets}</strong></td></tr>`
+            + `<tr><td>Unvaccinated</td><td><strong>${row.unvaccinated_pets}</strong></td></tr>`
+            + `<tr><td>Overdue boosters</td><td><strong>${row.overdue_pets}</strong></td></tr>`
+            + `<tr><td>Coverage</td><td><strong>${row.coverage_pct}%</strong></td></tr>`
+            + `<tr><td>Risk score</td><td><strong>${row.risk_score}</strong> / 100</td></tr>`
+            + `</table>`
+            + `<button type="button" data-barangay="${row.barangay}" class="trace-heatmap-btn">Trace pets in this barangay</button>`
+            + `</div>`,
+            { autoPan: true, autoPanPadding: [28, 28], closeOnClick: false, keepInView: true },
+          );
+
+          layer.addLayer(marker);
+        } catch (err) {
+          console.error('Error adding barangay marker:', row.barangay, err);
+        }
       });
 
-      marker.bindTooltip(
-        `<strong>${row.barangay}</strong><br/>${row.total_pets} pet${row.total_pets !== 1 ? 's' : ''} · ${row.risk_level} risk`,
-        { direction: 'auto', offset: [0, -radius] },
-      );
+      layerRef.current = layer;
 
-      marker.bindPopup(
-        `<div class="trace-heatmap-popup">`
-        + `<h4>${row.barangay}</h4>`
-        + `<span class="risk-chip risk-${row.risk_level.toLowerCase()}">${row.risk_level} risk</span>`
-        + `<table>`
-        + `<tr><td>Registered pets</td><td><strong>${row.total_pets}</strong></td></tr>`
-        + `<tr><td>Protected (up to date)</td><td><strong>${row.vaccinated_pets}</strong></td></tr>`
-        + `<tr><td>Unvaccinated</td><td><strong>${row.unvaccinated_pets}</strong></td></tr>`
-        + `<tr><td>Overdue boosters</td><td><strong>${row.overdue_pets}</strong></td></tr>`
-        + `<tr><td>Lost pets</td><td><strong>${row.lost_pets}</strong></td></tr>`
-        + `<tr><td>Coverage</td><td><strong>${row.coverage_pct}%</strong></td></tr>`
-        + `</table>`
-        + `<button type="button" data-barangay="${row.barangay}" class="trace-heatmap-btn">Trace pets in this barangay</button>`
-        + `</div>`,
-        { autoPan: true, autoPanPadding: [28, 28], closeOnClick: false, keepInView: true },
-      );
-
-      layer.addLayer(marker);
-    });
-
-    layerRef.current = layer;
-
-    const handler = (event) => {
-      const barangay = event.target.closest?.('.trace-heatmap-btn')?.dataset?.barangay;
-      if (barangay && onSelectBarangay) onSelectBarangay(barangay);
-    };
-    map.on('popupopen', (e) => {
-      e.popup.getElement()?.addEventListener('click', handler);
-    });
-    map.on('popupclose', (e) => {
-      e.popup.getElement()?.removeEventListener('click', handler);
-    });
-
-    const group = L.featureGroup(data.map((row) => L.circleMarker(row.coords)));
-    const bounds = group.getBounds();
-    // Wait for tiles + layout so the fit is exact; pad keeps every bubble
-    // (and the popup anchor of top-edge barangays) clear of the map border.
-    map.whenReady(() => {
-      map.invalidateSize();
-      map.fitBounds(bounds.pad(0.28), {
-        padding: [28, 28],
-        maxZoom: 13,
-        animate: false,
+      const handler = (event) => {
+        const barangay = event.target.closest?.('.trace-heatmap-btn')?.dataset?.barangay;
+        if (barangay && onSelectBarangay) onSelectBarangay(barangay);
+      };
+      map.on('popupopen', (e) => {
+        e.popup.getElement()?.addEventListener('click', handler);
       });
-    });
+      map.on('popupclose', (e) => {
+        e.popup.getElement()?.removeEventListener('click', handler);
+      });
 
-    return () => {
-      layer.remove();
-      layerRef.current = null;
-    };
+      const group = L.featureGroup(data.map((row) => {
+        try {
+          const radius = BARANGAY_RADIUS[row.barangay] || BARANGAY_RADIUS['San Isidro'] || 1000;
+          return L.circle(row.coords, { radius });
+        } catch (err) {
+          console.error('Error creating circle for bounds:', row.barangay, err);
+          return L.circle(row.coords, { radius: 1000 });
+        }
+      }));
+      const bounds = group.getBounds();
+      // Wait for tiles + layout so the fit is exact; pad keeps every circle
+      // (and the popup anchor of top-edge barangays) clear of the map border.
+      map.whenReady(() => {
+        map.invalidateSize();
+        map.fitBounds(bounds.pad(0.28), {
+          padding: [28, 28],
+          maxZoom: 13,
+          animate: false,
+        });
+      });
+
+      return () => {
+        layer.remove();
+        layerRef.current = null;
+      };
+    } catch (err) {
+      console.error('Error rendering heatmap:', err);
+      return undefined;
+    }
   }, [data, onSelectBarangay]);
 
   return (
@@ -431,7 +526,15 @@ function BarangayHeatmapMap({ data, loading, onSelectBarangay }) {
           {loading ? 'Loading barangay data...' : `${data.length} barangay${data.length !== 1 ? 's' : ''} mapped`}
         </span>
       </div>
-      <div ref={mapElementRef} className="traceability-location-map traceability-heatmap-map" />
+      <div className="traceability-map-wrap">
+        <div ref={mapElementRef} className="traceability-location-map traceability-heatmap-map" />
+        {loading && (
+          <div className="traceability-locating-overlay" role="status" aria-live="polite">
+            <LogoPulse />
+            <span>Loading barangay data...</span>
+          </div>
+        )}
+      </div>
       <div className="traceability-heatmap-legend">
         <span className="legend-title">Risk level</span>
         {['High', 'Medium', 'Low'].map((level) => (
@@ -440,7 +543,7 @@ function BarangayHeatmapMap({ data, loading, onSelectBarangay }) {
             {level}
           </span>
         ))}
-        <span className="legend-hint">Bubble size = number of registered pets</span>
+        <span className="legend-hint">Circle size = barangay coverage area</span>
       </div>
     </section>
   );
@@ -455,6 +558,41 @@ const RISK_COLORS = {
 
 function riskColor(level) {
   return RISK_COLORS[level] || RISK_COLORS.Low;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[ch]));
+}
+
+function LogoPulse({ size = 72 }) {
+  return (
+    <div className="cvo-pulse-loader" aria-hidden="true">
+      <img src="/cityvet-logo.jpg" alt="" style={{ width: size, height: size }} />
+    </div>
+  );
+}
+
+function buildPetCardHtml(pet) {
+  const name = escapeHtml(pet?.name);
+  const code = pet?.pet_code ? escapeHtml(pet.pet_code) : '';
+  const species = pet?.species_name ? escapeHtml(pet.species_name) : '';
+  const owner = pet?.owner_name ? escapeHtml(pet.owner_name) : '';
+  const barangay = pet?.barangay ? escapeHtml(pet.barangay) : '';
+  const address = pet?.address ? escapeHtml(pet.address) : '';
+  const sub = [code, species].filter(Boolean).join(' · ');
+  return '<div class="traceability-pet-card">'
+    + `<span class="traceability-pet-card-name">${name}</span>`
+    + (sub ? `<span class="traceability-pet-card-sub">${sub}</span>` : '')
+    + (owner ? `<span class="traceability-pet-card-row"><strong>Owner</strong>${owner}</span>` : '')
+    + (barangay ? `<span class="traceability-pet-card-row"><strong>Barangay</strong>${barangay}</span>` : '')
+    + (address ? `<span class="traceability-pet-card-row"><strong>Address</strong>${address}</span>` : '')
+    + '</div>';
 }
 
 function barangayCoord(name) {
@@ -496,8 +634,14 @@ export default function Traceability() {
     if (mapMode !== 'heatmap') return undefined;
     setLoadingHeatmap(true);
     api.get('/analytics/barangay-heatmap')
-      .then((res) => setHeatmap(res.data.summary || []))
-      .catch((err) => console.error('Heatmap load error:', err))
+      .then((res) => {
+        setHeatmap(res.data.summary || []);
+        console.log('Heatmap data loaded:', res.data.summary);
+      })
+      .catch((err) => {
+        console.error('Heatmap load error:', err);
+        setHeatmap([]);
+      })
       .finally(() => setLoadingHeatmap(false));
     return undefined;
   }, [mapMode]);
@@ -549,9 +693,16 @@ export default function Traceability() {
   }, [heatmap]);
 
   const mappedHeatmap = useMemo(
-    () => heatmap
-      .map((row) => ({ ...row, coords: barangayCoord(row.barangay) }))
-      .filter((row) => row.coords),
+    () => {
+      if (!heatmap || heatmap.length === 0) return [];
+      return heatmap.map((row) => {
+        const coords = barangayCoord(row.barangay);
+        if (!coords) {
+          console.warn(`[Traceability] No coordinates found for barangay: ${row.barangay}, using city center`);
+        }
+        return { ...row, coords: coords ?? CABUYAO_CENTER };
+      });
+    },
     [heatmap],
   );
 
@@ -570,12 +721,13 @@ export default function Traceability() {
       <p className="page-intro">Follow a pet record's full lifecycle — from registration, verification, QR issuance, vaccination, and clinical consultations.</p>
 
       <div className="form-card" style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+        <div className="traceability-search-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
           <div>
             <label style={{ marginBottom: '0.5rem', display: 'block' }}>Filter by Barangay</label>
             <div style={{ position: 'relative' }}>
               <MapPin size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
               <select
+                className="traceability-brgy-select"
                 value={selectedBarangay}
                 onChange={(e) => {
                   setSelectedBarangay(e.target.value);
@@ -667,6 +819,9 @@ export default function Traceability() {
             { label: 'Vaccination Coverage', value: `${heatmapStats.coverage}%`, color: 'var(--color-success)' },
             { label: 'Unvaccinated', value: heatmapStats.unvaccinated, color: RISK_COLORS.High },
             { label: 'Overdue Boosters', value: heatmapStats.overdue, color: RISK_COLORS.Medium },
+            { label: 'High Risk', value: heatmapStats.high, color: RISK_COLORS.High },
+            { label: 'Medium Risk', value: heatmapStats.medium, color: RISK_COLORS.Medium },
+            { label: 'Low Risk', value: heatmapStats.low, color: RISK_COLORS.Low },
             { label: 'Lost Pets', value: heatmapStats.lost, color: 'var(--color-text-muted)' },
           ].map((stat) => (
             <div key={stat.label} className="traceability-heatmap-stat">
@@ -701,8 +856,8 @@ export default function Traceability() {
 
       {loading && (
         <div className="traceability-container" style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-text-muted)' }}>
-          <div className="spinner" style={{ width: '40px', height: '40px', borderWidth: '3px', borderColor: 'var(--color-primary)', borderTopColor: 'transparent', margin: '0 auto 1rem' }}></div>
-          Loading traceability data...
+          <LogoPulse />
+          <div style={{ marginTop: '1rem' }}>Loading traceability data...</div>
         </div>
       )}
 
@@ -932,15 +1087,15 @@ export default function Traceability() {
           box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
-        .trace-step-content h3 {
-          margin: 0 0 0.5rem;
-          font-size: 1.1rem;
-          color: var(--color-ink);
-        }
+.trace-step-content h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  color: var(--color-ink);
+}
 
-        .trace-step-content .status-badge {
-          display: inline-flex;
-        }
+.trace-step-content .status-badge {
+  display: inline-flex;
+}
       `}</style>
     </div>
   );
