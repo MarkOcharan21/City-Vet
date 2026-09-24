@@ -7,3 +7,10 @@ Dockerfile*
 railway.json
 railway.toml
 *.md
+
+*.sql
+_*.js
+_*.cjs
+_*.py
+migrate*.log
+.env.*

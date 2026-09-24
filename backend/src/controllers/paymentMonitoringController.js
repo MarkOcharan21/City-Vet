@@ -1,14 +1,14 @@
 const db = require("../config/db");
 const fs = require("fs");
 const { generatePmToken, writeReceiptQrImage } = require("../utils/qrReceipt");
-const { ocrReceiptFile } = require("../utils/paddleOcr");
+const { ocrReceiptFile } = require("../utils/ocrService");
 const { uploadLocalFile, isAbsoluteUrl } = require("../utils/cloudUpload");
 const { logAudit } = require("../middleware/auditMiddleware");
 
 const PAYMENT_TYPES = ["Consultation", "Vaccination", "Medicine"];
 
 // =========================================
-// OCR THE RECEIPT PHOTO (PaddleOCR sidecar)
+// OCR THE RECEIPT PHOTO (in-process Tesseract.js)
 // =========================================
 
 async function ocrReceipt(req, res) {
