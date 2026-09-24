@@ -29,8 +29,10 @@ const fromUrl = configFromDatabaseUrl(process.env.DATABASE_URL || process.env.MY
 // on shared plans.
 const poolLimit = Number(process.env.DB_POOL_LIMIT) || (fromUrl ? 5 : 10);
 
-// External hosts (esp. FreeSQLDatabase) expect SSL for remote clients. Off by
-// default so the local XAMPP setup keeps working with zero config.
+// Do NOT force SSL unless the host actually supports it. FreeSQLDatabase does
+// NOT offer TLS, so DB_SSL must stay false/empty there — otherwise every pool
+// connect fails with "Server does not support secure connection" (and repeated
+// failures get the client host blocked by max_connect_errors).
 const sslOpt = process.env.DB_SSL === 'true' || process.env.DB_SSL === '1'
   ? { ssl: { rejectUnauthorized: false } }
   : {};
