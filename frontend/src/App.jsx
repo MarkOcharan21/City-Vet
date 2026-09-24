@@ -21,6 +21,7 @@ import ClinicalMedicineRecords from "./pages/owner/ClinicalMedicineRecords";
 import RecordRequest from "./pages/owner/RecordRequest";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
+import AccountSetup from "./pages/auth/AccountSetup";
 
 
 // STAFF
@@ -48,6 +49,7 @@ import Traceability from "./pages/admin/Traceability";
 import AnalyticsReports from "./pages/admin/AnalyticsReports";
 import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
 import ActivityAuditTrail from "./pages/admin/ActivityAuditTrail";
+import ProductCatalog from "./pages/admin/ProductCatalog";
 import NotificationCenter from "./pages/shared/NotificationCenter";
 
 // LAYOUTS
@@ -76,6 +78,8 @@ export default function App() {
           <Route path="/owner/forgot-password" element={<ForgotPassword />} />
 
           <Route path="/owner/reset-password" element={<ResetPassword />} />
+
+          <Route path="/account-setup" element={<AccountSetup />} />
 
           <Route path="/owner/register" element={<OwnerRegister />} />
 
@@ -237,6 +241,11 @@ export default function App() {
             <Route
               path="activity-audit-trail"
               element={<ActivityAuditTrail />}
+            />
+
+            <Route
+              path="catalog"
+              element={<ProductCatalog />}
             />
           </Route>
         </Routes>

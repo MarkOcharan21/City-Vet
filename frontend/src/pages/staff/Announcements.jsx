@@ -4,6 +4,8 @@ import { io } from "socket.io-client";
 import api from "../../services/api";
 import toast from "react-hot-toast";
 import { Megaphone } from "lucide-react";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import useMinLoading from "../../hooks/useMinLoading";
 import AnnouncementCard from "../../components/announcements/AnnouncementCard";
 
 import { getSocketOrigin } from "../../utils/socketOrigin";
@@ -15,6 +17,7 @@ export default function Announcements() {
   const highlightId = searchParams.get("highlight");
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
+  const showLoading = useMinLoading(loading);
 
   async function loadAnnouncements() {
     try {
@@ -67,10 +70,8 @@ export default function Announcements() {
         </div>
       </div>
 
-      {loading ? (
-        <div style={{ padding: 40, textAlign: "center", color: "var(--color-text-muted)" }}>
-          Loading announcements…
-        </div>
+      {showLoading ? (
+        <LoadingSpinner text="Loading announcements…" fullPage={false} />
       ) : announcements.length === 0 ? (
         <div style={{
           background: "var(--color-card)", padding: "48px 24px",

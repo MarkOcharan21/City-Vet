@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import useMinLoading from '../../hooks/useMinLoading';
 import toast from 'react-hot-toast';
 import {
   Activity,
@@ -152,6 +153,7 @@ export default function ActivityAuditTrail() {
   const [logs, setLogs] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const showLoading = useMinLoading(loading);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
@@ -403,7 +405,7 @@ export default function ActivityAuditTrail() {
         )}
       </div>
 
-      {loading ? (
+      {showLoading ? (
         <LoadingSpinner text="Loading activity log…" fullPage={false} />
       ) : logs.length === 0 ? (
         <div className="empty-state">

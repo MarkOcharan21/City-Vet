@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import useMinLoading from "../../hooks/useMinLoading";
 import {
   BellRing,
   CheckCircle2,
@@ -78,6 +80,7 @@ export default function OwnerDashboard() {
   const [slices, setSlices] = useState({});
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(true);
+  const showLoading = useMinLoading(loading);
   const [showAllActivity, setShowAllActivity] = useState(false);
 
   function load() {
@@ -245,6 +248,8 @@ export default function OwnerDashboard() {
   const visibleActivity = showAllActivity ? activity : activity.slice(0, VISIBLE_ACTIVITY);
   const petsFailed = errors.pets || (!loading && slices.pets === undefined);
 
+  if (showLoading) return <LoadingSpinner text="Loading your dashboard..." />;
+
   return (
     <div className="page owner-dashboard">
       <section aria-labelledby="od-mypets-title">
@@ -268,7 +273,7 @@ export default function OwnerDashboard() {
         ) : (
           <div className="od-pets">
             {!loading &&
-              pets.map((pet) => {
+              pets.slice(0, 4).map((pet) => {
                 const vax = petVaccineStatus(pet);
                 return (
 <article className="od-pet" key={pet.id}>
@@ -315,6 +320,9 @@ export default function OwnerDashboard() {
             {"📌"}
           </span>
           Important for Your Pets
+          <Link to="/owner/vaccinations" className="od-viewall">
+            View More <ChevronRight size={16} />
+          </Link>
         </h2>
 
         {petAlerts.length === 0 ? (
@@ -327,7 +335,7 @@ export default function OwnerDashboard() {
           </div>
         ) : (
           <div className="od-alerts">
-            {petAlerts.map((alert) => {
+            {petAlerts.slice(0, 2).map((alert) => {
               const tone = alert.isOverdue ? "danger" : "warn";
               const diff = alert.due ? daysFromToday(alert.due) : null;
               return (

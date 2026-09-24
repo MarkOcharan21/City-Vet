@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import api from '../../services/api';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import useMinLoading from '../../hooks/useMinLoading';
 import StatusBadge from '../../components/StatusBadge';
 import DigitalPetBooklet from '../../components/booklet/DigitalPetBooklet';
 import {
   CABUYAO_BARANGAYS,
   CABUYAO_POB_BARANGAYS,
 } from '../../data/cabuyaoBarangays';
+import PrintReportButton from '../../components/staff/PrintReportButton';
 
 const NO_BARANGAY_KEY = '__none__';
 
@@ -83,6 +86,7 @@ export default function PetRecords() {
             Browse registered pets and narrow results by owner, verification status, or barangay.
           </p>
         </div>
+        <PrintReportButton category="pets" />
       </div>
 
       <div className="panel-card table-panel-card">
@@ -184,7 +188,7 @@ export default function PetRecords() {
               {loading ? (
                 <tr>
                   <td colSpan="7" className="empty-state-cell">
-                    Loading pet records...
+                    <LoadingSpinner text="Loading pet records..." fullPage={false} />
                   </td>
                 </tr>
               ) : pets.length === 0 ? (

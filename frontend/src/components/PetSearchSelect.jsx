@@ -188,12 +188,12 @@ export default function PetSearchSelect({
 
       {open && (
         <div className="pet-search-dropdown" role="listbox" aria-label="Pet search results">
-          {loading && (
-            <div className="pet-search-message">
-              <Loader2 size={16} className="pet-search-spin" aria-hidden="true" />
-              Searching pets...
-            </div>
-          )}
+{loading && (
+          <div className="pet-search-message">
+            <Loader2 size={18} className="pet-search-spin pet-search-spin-static" aria-hidden="true" />
+            Searching pets<span className="pet-search-dots"><span>.</span><span>.</span><span>.</span></span>
+          </div>
+        )}
           {!loading && results.length === 0 && (
             <div className="pet-search-message">
               {term.trim() || barangay

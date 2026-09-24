@@ -26,7 +26,7 @@ export default defineConfig({
     server: {
     host: true,
     port: process.env.PORT ? Number(process.env.PORT) : 5178,
-    strictPort: false,
+    strictPort: true,
     // HTTPS by default (self-signed certs). Falls back to plain HTTP only when
     // the local certs are missing. Force plain HTTP with VITE_HTTPS=0.
     https: process.env.VITE_HTTPS === "0" ? undefined : httpsOptions,

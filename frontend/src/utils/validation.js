@@ -6,9 +6,19 @@ import {
 
 export { ALL_CABUYAO_BARANGAYS, CABUYAO_BARANGAYS, CABUYAO_POB_BARANGAYS };
 
-export const REQUEST_TYPES = ['Vaccination Card', 'Record Summary', 'Certificate of Registration'];
+export const REQUEST_TYPES = [
+  'Vaccination Card',
+  'Record Summary',
+  'Certificate of Registration',
+  'Health Certificate',
+  'Medical Record',
+  'Prescription Record',
+  'Payment Record',
+  'Pet Transfer Certificate',
+];
 export const REQUEST_FORMATS = ['PDF', 'Printed Copy'];
 export const STAFF_ROLES = ['Staff', 'Veterinarian', 'Admin'];
+export const CREATABLE_STAFF_ROLES = ['Staff', 'Veterinarian'];
 
 export function trim(value) {
   return typeof value === 'string' ? value.trim() : value;
@@ -145,9 +155,15 @@ export function validateStaffUserCreation(data) {
   const fullNameError = getFullNameError(data.full_name);
   if (fullNameError) errors.full_name = fullNameError;
   if (!isValidEmail(data.email)) errors.email = 'Enter a valid email address.';
+  if (!CREATABLE_STAFF_ROLES.includes(trim(data.role_name))) errors.role_name = 'Select a valid role.';
+  return buildResult(errors);
+}
+
+export function validateAccountSetup(data) {
+  const errors = {};
   const passwordError = getPasswordError(data.password);
   if (passwordError) errors.password = passwordError;
-  if (!STAFF_ROLES.includes(trim(data.role_name))) errors.role_name = 'Select a valid role.';
+  if (data.password !== data.confirmPassword) errors.confirmPassword = 'Passwords do not match.';
   return buildResult(errors);
 }
 

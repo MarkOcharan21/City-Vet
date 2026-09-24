@@ -23,7 +23,7 @@ function pickPet(pet) {
     color: base.color || "—",
     registration_date: base.registration_date || null,
     status: base.status || "Registered",
-    full_name: base.full_name || "—",
+    full_name: base.full_name || base.owner_name || "—",
     contact_number: base.contact_number || null,
     address: base.address || null,
     barangay: base.barangay || null,

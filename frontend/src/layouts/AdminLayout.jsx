@@ -9,6 +9,7 @@ import {
   BarChart3,
   Megaphone,
   FileText,
+  Package,
   Moon,
   Sun,
   PanelLeftClose,
@@ -126,6 +127,11 @@ export default function AdminLayout() {
           <NavLink to="/admin/activity-audit-trail" onClick={() => setMobileOpen(false)}>
             <FileText size={16} />
             <span className="sidebar-label">Activity &amp; Audit Trail</span>
+          </NavLink>
+
+          <NavLink to="/admin/catalog" onClick={() => setMobileOpen(false)}>
+            <Package size={16} />
+            <span className="sidebar-label">Product Catalog</span>
           </NavLink>
         </nav>
 

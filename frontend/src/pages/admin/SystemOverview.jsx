@@ -3,13 +3,55 @@ import { useNavigate } from 'react-router-dom';
 import { Megaphone } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 import api from '../../services/api';
 import SummaryCard from '../../components/SummaryCard';
 import AnnouncementWidget from "../../components/announcements/AnnouncementWidget";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, ChartDataLabels);
 
-const CHART_PALETTE = ["#c8102e", "#c6a15b", "#1e7a46", "#b8860b", "#7a0c1e", "#6b6062"];
+const datalabelWhiteStyle = {
+  font: { family: 'Inter', size: 11, weight: 'bold' },
+  color: '#ffffff',
+  textStrokeColor: 'rgba(36, 20, 22, 0.9)',
+  textStrokeWidth: 3,
+  clamp: false,
+  clip: false,
+};
+
+const barangayBarOptions = {
+  indexAxis: 'y',
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: { backgroundColor: '#241416', padding: 12, cornerRadius: 8 },
+    datalabels: {
+      anchor: 'end',
+      align: 'left',
+      offset: -4,
+      ...datalabelWhiteStyle,
+    },
+  },
+  scales: {
+    x: {
+      beginAtZero: true,
+      ticks: { stepSize: 1, precision: 0, font: { family: 'Inter' } },
+      grid: { color: 'rgba(36, 20, 22, 0.06)' },
+      suggestedMax: (context) => {
+        const max = Math.max(...(context.chart.data.datasets[0]?.data || [0]));
+        return max * 1.25;
+      },
+    },
+    y: {
+      grid: { display: false },
+      ticks: { font: { family: 'Inter', size: 11 } },
+    },
+  },
+  layout: {
+    padding: { right: 16 },
+  },
+};
 
 export default function SystemOverview() {
   const navigate = useNavigate();
@@ -30,31 +72,17 @@ export default function SystemOverview() {
       .catch(console.error);
   }, []);
 
-  const males = charts?.petsBySex.find((s) => s.sex === 'Male')?.total || 0;
-  const females = charts?.petsBySex.find((s) => s.sex === 'Female')?.total || 0;
+  const males = charts?.petsBySex?.find((s) => s.sex === 'Male')?.total || 0;
+  const females = charts?.petsBySex?.find((s) => s.sex === 'Female')?.total || 0;
+  const dogsTotal = charts?.dogsTotal || 0;
+  const catsTotal = charts?.catsTotal || 0;
+  const dogMale = charts?.dogsBySex?.find((s) => s.sex === 'Male')?.total || 0;
+  const dogFemale = charts?.dogsBySex?.find((s) => s.sex === 'Female')?.total || 0;
+  const catMale = charts?.catsBySex?.find((s) => s.sex === 'Male')?.total || 0;
+  const catFemale = charts?.catsBySex?.find((s) => s.sex === 'Female')?.total || 0;
 
   const hasBarangayData = Array.isArray(dashboard?.barangays) &&
     dashboard.barangays.some((b) => Number(b.total) > 0);
-
-  const barangayBarOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: { backgroundColor: '#241416', padding: 12, cornerRadius: 8 },
-    },
-    scales: {
-      x: {
-        beginAtZero: true,
-        ticks: { stepSize: 1, font: { family: 'Inter' } },
-        grid: { color: 'rgba(36, 20, 22, 0.06)' },
-      },
-      y: {
-        grid: { display: false },
-        ticks: { font: { family: 'Inter', size: 11 } },
-      },
-    },
-  };
 
   return (
     <div className="page">
@@ -78,10 +106,34 @@ export default function SystemOverview() {
         </button>
       </div>
 
-      <div className="summary-row">
-        <SummaryCard label="Total Pets" value={summary?.total_pets ?? '—'} />
-        <SummaryCard label="Male" value={males} />
-        <SummaryCard label="Female" value={females} />
+      <div className="summary-row summary-row--center">
+        <SummaryCard
+          label="Registered Dogs"
+          value={charts ? dogsTotal : '—'}
+          color="#1e7a46"
+          sub={[
+            { label: 'Male', value: charts ? dogMale : '—' },
+            { label: 'Female', value: charts ? dogFemale : '—' },
+          ]}
+        />
+        <SummaryCard
+          label="Registered Cats"
+          value={charts ? catsTotal : '—'}
+          color="#c8102e"
+          sub={[
+            { label: 'Male', value: charts ? catMale : '—' },
+            { label: 'Female', value: charts ? catFemale : '—' },
+          ]}
+        />
+        <SummaryCard
+          label="Pet Sex Distribution"
+          value={charts ? males + females : '—'}
+          color="#c6a15b"
+          sub={[
+            { label: 'Male', value: charts ? males : '—' },
+            { label: 'Female', value: charts ? females : '—' },
+          ]}
+        />
       </div>
 
       <h2>Analytics per Barangay</h2>

@@ -7,6 +7,7 @@ import {
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import FieldError from '../../components/ui/FieldError';
+import { showPersistentToast } from '../../components/PersistentToast';
 import { validatePetRegistration } from '../../utils/validation';
 import { resolveMediaUrl } from '../../utils/mediaUrl';
 import useOfflineDetection from '../../hooks/useOfflineDetection';
@@ -254,7 +255,7 @@ export default function PetRegistration() {
       }
       try {
         await saveNow(form, photo);
-        toast.success('You are offline. Registration saved as a draft — continue it from Draft Registration.');
+        showPersistentToast('You are offline. Registration saved as a draft — continue it from Draft Registration.', { tone: 'offline' });
       } catch {
         toast.error('Could not save your draft offline.');
       }
@@ -301,7 +302,7 @@ export default function PetRegistration() {
         }
         try {
           await saveNow(form, photo);
-          toast.success('Connection lost. Your registration was saved as a draft — continue it from Draft Registration.');
+          showPersistentToast('Connection lost. Your registration was saved as a draft — continue it from Draft Registration.', { tone: 'offline' });
         } catch {
           setError('Registration failed. Please try again.');
         }

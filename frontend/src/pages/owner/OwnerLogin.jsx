@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Clock } from "lucide-react";
+import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
+import { ArrowLeft, Clock, CheckCircle2 } from "lucide-react";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import PasswordInput from "../../components/PasswordInput";
@@ -11,10 +11,12 @@ export default function OwnerLogin() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [verified, setVerified] = useState(false);
 
   const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
 
   useEffect(() => {
     if (searchParams.get('session') === 'expired') {
@@ -25,10 +27,19 @@ export default function OwnerLogin() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (location.state?.verified) {
+      setVerified(true);
+      const timer = setTimeout(() => setVerified(false), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [location.state]);
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
     setSessionExpired(false);
+    setVerified(false);
     setLoading(true);
 
     try {
@@ -97,6 +108,25 @@ export default function OwnerLogin() {
           }}>
             <Clock size={20} />
             <span>Your session has expired. Please log in again to continue.</span>
+          </div>
+        )}
+
+        {/* Verified Email Banner */}
+        {verified && (
+          <div style={{
+            background: '#ecfdf5',
+            border: '1px solid #34d399',
+            borderRadius: '8px',
+            padding: '12px 16px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: '14px',
+            color: '#065f46'
+          }}>
+            <CheckCircle2 size={20} />
+            <span>Your email has been verified and your account is now active. You may log in.</span>
           </div>
         )}
 

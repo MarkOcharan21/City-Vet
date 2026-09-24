@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Printer, Trash2 } from 'lucide-react';
+import { Plus, Printer, Trash2, Eye } from 'lucide-react';
 import api from '../../services/api';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import useMinLoading from '../../hooks/useMinLoading';
 import toast from 'react-hot-toast';
 import {
   getPrintFooter,
@@ -10,6 +12,7 @@ import {
 } from '../../utils/printReport';
 import FieldError from '../../components/ui/FieldError';
 import OwnerPetPicker from '../../components/OwnerPetPicker';
+import PrintReportButton from '../../components/staff/PrintReportButton';
 
 const formatDate = (value) => {
   if (!value) return '—';
@@ -360,6 +363,9 @@ export default function MedicineRecords() {
     items: [emptyPrescriptionItem()],
   });
   const [recordSearch, setRecordSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -388,11 +394,33 @@ export default function MedicineRecords() {
       .finally(() => setLoading(false));
   }, []);
 
+  const availableYears = useMemo(() => {
+    const years = new Set();
+    records.forEach((r) => {
+      const raw = r.prescribed_date;
+      if (!raw) return;
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) years.add(d.getFullYear());
+    });
+    return [...years].sort((a, b) => b - a);
+  }, [records]);
+
   const filteredRecords = useMemo(() => {
     const term = recordSearch.trim().toLowerCase();
-    if (!term) return records;
+    const dateFiltered = records.filter((record) => {
+      if (!dateFrom && !dateTo && !yearFilter) return true;
+      const iso = String(record.prescribed_date || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
 
-    return records.filter((record) =>
+      if (yearFilter && Number(iso.slice(0, 4)) !== Number(yearFilter)) return false;
+      if (dateFrom && iso < dateFrom) return false;
+      if (dateTo && iso > dateTo) return false;
+      return true;
+    });
+
+    if (!term) return dateFiltered;
+
+    return dateFiltered.filter((record) =>
       [
         record.pet_name,
         record.pet_code,
@@ -409,7 +437,7 @@ export default function MedicineRecords() {
         .toLowerCase()
         .includes(term),
     );
-  }, [records, recordSearch]);
+  }, [records, recordSearch, dateFrom, dateTo, yearFilter]);
 
   const selectedPetConsultation = useMemo(() => {
     if (!form.pet_id) return null;
@@ -558,11 +586,7 @@ export default function MedicineRecords() {
   }
 
   if (loading) {
-    return (
-      <div className="page">
-        <p>Loading medicine records...</p>
-      </div>
-    );
+    return <LoadingSpinner text="Loading medicine records..." />;
   }
 
   return (
@@ -575,6 +599,7 @@ export default function MedicineRecords() {
             based on the selected medicine, and quantity is suggested automatically.
           </p>
         </div>
+        <PrintReportButton category="medicine" />
       </div>
 
       <div className="panel-card clinical-panel-card">
@@ -818,6 +843,43 @@ export default function MedicineRecords() {
           </div>
         </div>
 
+        <div className="toolbar-row toolbar-row--dates">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            aria-label="Prescription date from"
+            title="From date"
+          />
+          <span className="toolbar-range-sep">to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            aria-label="Prescription date to"
+            title="To date"
+          />
+          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} aria-label="Filter by year">
+            <option value="">All Years</option>
+            {availableYears.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          {(dateFrom || dateTo || yearFilter) && (
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => {
+                setDateFrom('');
+                setDateTo('');
+                setYearFilter('');
+              }}
+            >
+              Clear date filter
+            </button>
+          )}
+        </div>
+
         <div className="table-wrapper">
           <table className="data-table">
             <thead>
@@ -858,10 +920,12 @@ export default function MedicineRecords() {
                       <div className="table-action-group">
                         <button
                           type="button"
-                          className="btn-secondary btn-sm"
+                          className="btn-icon-action"
                           onClick={() => setSelectedRecord(record)}
+                          title="View prescription details"
+                          aria-label={`View prescription for ${record.pet_name}`}
                         >
-                          View
+                          <Eye size={15} />
                         </button>
                         <PrintIconButton
                           onClick={() => printPrescriptionSlip(record.prescription_id, records)}

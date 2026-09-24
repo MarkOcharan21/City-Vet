@@ -41,6 +41,8 @@ const STATUS_COLORS = {
 
   Overdue: "#DC2626",
 
+  "Pending Setup": "#D97706",
+
   Inactive: "#6B7280"
 
 };

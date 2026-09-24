@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import useMinLoading from '../../hooks/useMinLoading';
 import {
   Calendar,
   ChevronDown,
@@ -45,6 +46,8 @@ export default function MyPets() {
   const [editingPet, setEditingPet] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  const showLoading = useMinLoading(loading);
 
   const loadPets = () => {
     setLoading(true);
@@ -109,7 +112,7 @@ export default function MyPets() {
       .finally(() => setDeleting(false));
   }
 
-  if (loading) {
+  if (showLoading) {
     return <LoadingSpinner text="Loading your pets..." />;
   }
 

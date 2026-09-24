@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import useMinLoading from '../../hooks/useMinLoading';
 import {
   AlertTriangle,
   Calendar,
@@ -342,6 +343,7 @@ export default function PaymentHistory() {
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const showLoading = useMinLoading(loading);
   const [error, setError] = useState('');
 
   const [search, setSearch] = useState('');
@@ -394,7 +396,7 @@ export default function PaymentHistory() {
     setToDate('');
   }
 
-  if (loading) return <LoadingSpinner text="Loading payment history..." />;
+  if (showLoading) return <LoadingSpinner text="Loading payment history..." />;
 
   if (error) {
     return <ErrorState title="Unable to load payment history" message={error} onRetry={loadHistory} />;

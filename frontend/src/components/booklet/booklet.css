@@ -1306,15 +1306,16 @@
     padding: 0 !important;
     margin: 0 !important;
   }
-  html, body {
+  body:has(.booklet-sheet) {
     width: 210mm !important;
     min-width: 0 !important;
     max-width: 210mm !important;
     overflow: visible !important;
   }
   body { background: #fff !important; }
-  body * { visibility: hidden !important; }
-  .booklet-sheet, .booklet-sheet * { visibility: visible !important; }
+  body:has(.booklet-sheet) * { visibility: hidden !important; }
+  body:has(.booklet-sheet) .booklet-sheet,
+  body:has(.booklet-sheet) .booklet-sheet * { visibility: visible !important; }
   .booklet-sheet {
     position: static !important;
     left: auto; top: auto;

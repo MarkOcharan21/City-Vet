@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import api from "../../services/api";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import useMinLoading from "../../hooks/useMinLoading";
 import StatusBadge from "../../components/StatusBadge";
 import DigitalPetBooklet from "../../components/booklet/DigitalPetBooklet";
 import { resolveMediaUrl } from "../../utils/mediaUrl";
@@ -59,6 +61,7 @@ function vaccinationChip(qr) {
 export default function QrRecords() {
   const [qrCodes, setQrCodes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const showLoading = useMinLoading(loading);
   const [bookletData, setBookletData] = useState(null);
   const [bookletToken, setBookletToken] = useState(null);
   const [viewQr, setViewQr] = useState(null);
@@ -117,8 +120,8 @@ export default function QrRecords() {
           vaccinations, and clinical records.
         </p>
 
-        {loading ? (
-          <p style={{ textAlign: "center" }}>Loading...</p>
+        {showLoading ? (
+          <LoadingSpinner text="Loading QR records..." />
         ) : (
           <div className="qr-row-list">
             {qrCodes.map((qr) => {

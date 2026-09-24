@@ -5,7 +5,19 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
-import { Trash2, FileText, Download } from 'lucide-react';
+import { Trash2, FileText, Download, Sparkles, PawPrint } from 'lucide-react';
+import { REQUEST_TYPES } from '../../utils/validation';
+
+const PURPOSE_PRESETS = [
+  'Travel requirement',
+  'Pet boarding / daycare',
+  'Building or condo requirement',
+  'School or work requirement',
+  'Insurance claim',
+  'Veterinary transfer',
+  'Legal requirement',
+  'Personal records / documentation',
+];
 
 const API_ORIGIN = (import.meta.env.VITE_API_URL || "").replace("/api", "") || window.location.origin;
 
@@ -42,7 +54,7 @@ export default function RecordRequest() {
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [form, setForm] = useState({
     pet_id: '',
-    request_type: 'Vaccination Card',
+    request_types: ['Vaccination Card'],
     purpose: '',
     format: 'PDF',
     comments: '',
@@ -55,9 +67,6 @@ export default function RecordRequest() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [showAllRequests, setShowAllRequests] = useState(false);
-
-  const VISIBLE_LIMIT = 3;
 
   const numberedRequests = [...requests]
     .sort((a, b) => new Date(b.requested_date) - new Date(a.requested_date))
@@ -65,12 +74,6 @@ export default function RecordRequest() {
       ...r,
       displayNumber: arr.length - index,
     }));
-
-  const visibleRequests = showAllRequests
-    ? numberedRequests
-    : numberedRequests.slice(0, VISIBLE_LIMIT);
-
-  const hiddenCount = Math.max(numberedRequests.length - VISIBLE_LIMIT, 0);
 
   function formatRequestDate(dateStr) {
     if (!dateStr) return '';
@@ -228,6 +231,18 @@ export default function RecordRequest() {
 
   function handleChange(e) {
     const { name, value } = e.target;
+
+    if (name === 'request_types') {
+      const type = value;
+      setForm(prev => ({
+        ...prev,
+        request_types: prev.request_types.includes(type)
+          ? prev.request_types.filter((t) => t !== type)
+          : [...prev.request_types, type],
+      }));
+      return;
+    }
+
     setForm(prev => ({ ...prev, [name]: value }));
     
     // Show selected pet info when a pet is chosen
@@ -303,7 +318,7 @@ export default function RecordRequest() {
       toast.success('Request submitted successfully');
       setForm({
         pet_id: '',
-        request_type: 'Vaccination Card',
+        request_types: [],
         purpose: '',
         format: 'PDF',
         comments: '',
@@ -328,105 +343,171 @@ export default function RecordRequest() {
 
   return (
     <>
-    <div className="page page-split">
-      <div className="page-main">
-        <h1>Record Requests</h1>
-        
-        <form onSubmit={handleSubmit} className="form-card">
-          <label>Pet</label>
-          {petsLoading ? (
-            <div style={{ padding: '8px 0' }}>
-              <LoadingSpinner text="Loading your pets..." fullPage={false} />
-            </div>
-          ) : (
-            <>
-              <select name="pet_id" value={form.pet_id} onChange={handleChange} required>
-                <option value="">Select Pet</option>
-                {pets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {getPetDisplayLabel(p)}
-                  </option>
-                ))}
-              </select>
-              {pets.length === 0 && !petsLoading && (
-                <p style={{ color: '#6b7280', fontSize: '13px', marginTop: '4px' }}>
-                  No registered pets found. Register a pet first.
-                </p>
-              )}
-            </>
-          )}
+    <div className="page">
+      <h1>Record Requests</h1>
 
-          {/* Selected Pet Info Card */}
-          {selectedPetInfo && (
-            <div style={{
-              background: '#f0f9ff',
-              border: '1px solid #bae6fd',
-              borderRadius: '8px',
-              padding: '10px 14px',
-              marginTop: '8px',
-              fontSize: '13px'
-            }}>
-              <strong style={{ color: '#0369a1' }}>Selected Pet:</strong>
-              <div style={{ marginTop: '4px', color: '#334155' }}>
-                <span>{selectedPetInfo.name}</span>
-                {selectedPetInfo.species_name && (
-                  <span> — {selectedPetInfo.species_name}</span>
-                )}
-                {selectedPetInfo.breed_name && (
-                  <span> ({selectedPetInfo.breed_name})</span>
-                )}
-                {selectedPetInfo.pet_code && (
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                    Code: {selectedPetInfo.pet_code}
-                  </div>
-                )}
+      <div className="page-split">
+        <div className="page-main">
+          <form onSubmit={handleSubmit} className="form-card">
+            <div className="form-card-header">
+              <h2>Request a Record Copy</h2>
+              <p>
+                Select your pet and the record type(s) you need. Multiple record types are
+                combined into one batch.
+              </p>
+            </div>
+
+            <fieldset className="form-section">
+              <legend>Pet</legend>
+              {petsLoading ? (
+                <div className="form-loading">
+                  <LoadingSpinner text="Loading your pets..." fullPage={false} />
+                </div>
+              ) : (
+                <>
+                  <select name="pet_id" value={form.pet_id} onChange={handleChange} required>
+                    <option value="">Select Pet</option>
+                    {pets.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {getPetDisplayLabel(p)}
+                      </option>
+                    ))}
+                  </select>
+                  {pets.length === 0 && !petsLoading && (
+                    <p className="form-hint">
+                      No registered pets found. Register a pet first.
+                    </p>
+                  )}
+
+                  {selectedPetInfo && (
+                    <div className="selected-pet-info">
+                      <span className="selected-pet-info-icon" aria-hidden="true">
+                        <PawPrint size={18} />
+                      </span>
+                      <div className="selected-pet-info-body">
+                        <span className="selected-pet-info-name">
+                          {selectedPetInfo.name}
+                          {selectedPetInfo.species_name && (
+                            <span> — {selectedPetInfo.species_name}</span>
+                          )}
+                          {selectedPetInfo.breed_name && (
+                            <span> ({selectedPetInfo.breed_name})</span>
+                          )}
+                        </span>
+                        {selectedPetInfo.pet_code && (
+                          <span className="selected-pet-info-code">
+                            Code: {selectedPetInfo.pet_code}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </fieldset>
+
+            <fieldset className="form-section">
+              <legend>Request Type(s)</legend>
+              <div className="record-type-checkbox-grid">
+                {REQUEST_TYPES.map((t) => (
+                  <label
+                    key={t}
+                    className={`record-type-checkbox ${form.request_types.includes(t) ? 'active' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      name="request_types"
+                      value={t}
+                      checked={form.request_types.includes(t)}
+                      onChange={handleChange}
+                    />
+                    <span>{t}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="request-purpose-hint">
+                {form.request_types.length === 0
+                  ? 'Select at least one record type.'
+                  : `You selected ${form.request_types.length} record type${form.request_types.length === 1 ? '' : 's'}. These will be combined into one batch.`}
+              </p>
+            </fieldset>
+
+            <fieldset className="form-section">
+              <legend>Purpose</legend>
+              <div className="request-purpose-presets">
+                {PURPOSE_PRESETS.map((p) => (
+                  <button
+                    type="button"
+                    key={p}
+                    className={`request-purpose-preset ${form.purpose === p ? 'active' : ''}`}
+                    onClick={() => setForm(prev => ({ ...prev, purpose: prev.purpose === p ? '' : p }))}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+              <div className="request-purpose-input">
+                <Sparkles size={14} className="request-purpose-input-icon" aria-hidden="true" />
+                <input
+                  name="purpose"
+                  value={form.purpose}
+                  onChange={handleChange}
+                  placeholder="Or type your own purpose..."
+                />
+              </div>
+              <p className="request-purpose-hint">
+                Pick a common purpose above, or type your own reason for the request.
+              </p>
+            </fieldset>
+
+            <fieldset className="form-section">
+              <legend>Format & Comments</legend>
+              <label>Format</label>
+              <select name="format" value={form.format} onChange={handleChange}>
+                <option>PDF</option>
+                <option>Printed Copy</option>
+              </select>
+
+              <label>Additional Comments</label>
+              <textarea
+                name="comments"
+                value={form.comments}
+                onChange={handleChange}
+                rows={4}
+                placeholder="Add any extra details or requests (optional)"
+              />
+            </fieldset>
+
+            <div className="form-actions">
+              <button type="submit" className="btn-primary" disabled={submitting || !form.pet_id || petsLoading}>
+                {submitting ? 'Submitting...' : 'Submit Request'}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <aside className="page-side">
+          <div className="page-side-header">
+            <h3>My Requests</h3>
+            {numberedRequests.length > 0 && (
+              <span className="page-side-count">{numberedRequests.length}</span>
+            )}
+          </div>
+
+          {requestsLoading ? (
+            <div className="page-side-scroll">
+              <LoadingSpinner text="Loading requests..." fullPage={false} />
+            </div>
+          ) : requests.length === 0 ? (
+            <div className="page-side-scroll">
+              <div className="requests-empty">
+                <p style={{ margin: 0 }}>No requests yet.</p>
+                <p style={{ margin: '0.4rem 0 0', fontSize: '0.82rem' }}>Submit a form to request a record.</p>
               </div>
             </div>
-          )}
-
-          <label>Request Type</label>
-          <select name="request_type" value={form.request_type} onChange={handleChange}>
-            <option>Vaccination Card</option>
-            <option>Record Summary</option>
-            <option>Certificate of Registration</option>
-          </select>
-
-          <label>Purpose</label>
-          <input name="purpose" value={form.purpose} onChange={handleChange} placeholder="e.g. Travel requirement" />
-
-          <label>Format</label>
-          <select name="format" value={form.format} onChange={handleChange}>
-            <option>PDF</option>
-            <option>Printed Copy</option>
-          </select>
-
-          <label>Additional Comments</label>
-          <textarea
-            name="comments"
-            value={form.comments}
-            onChange={handleChange}
-            rows={4}
-            placeholder="Add any extra details or requests (optional)"
-          />
-
-          <button type="submit" className="btn-primary" disabled={submitting || !form.pet_id || petsLoading}>
-            {submitting ? 'Submitting...' : 'Submit Request'}
-          </button>
-        </form>
-      </div>
-
-      <aside className="page-side">
-        <h3>My Requests</h3>
-        {requestsLoading ? (
-          <LoadingSpinner text="Loading requests..." fullPage={false} />
-        ) : requests.length === 0 ? (
-          <div className="requests-empty">
-            <p style={{ margin: 0 }}>No requests yet.</p>
-            <p style={{ margin: '0.4rem 0 0', fontSize: '0.82rem' }}>Submit a form to request a record.</p>
-          </div>
-        ) : (
-          <>
-            {visibleRequests.map((r) => (
+          ) : (
+            <div className="page-side-scroll">
+              {numberedRequests.map((r) => (
               <div key={r.id} className="mini-request-card">
                 <div className="request-card-header">
                   <p className="request-card-title">
@@ -480,7 +561,7 @@ export default function RecordRequest() {
                   </div>
                 )}
 
-                {r.status === 'Open' && (
+                {r.status === 'Pending' && (
                   <div className="request-card-actions">
                     <button
                       type="button"
@@ -493,30 +574,11 @@ export default function RecordRequest() {
                   </div>
                 )}
               </div>
-            ))}
-
-            {!showAllRequests && hiddenCount > 0 && (
-              <button
-                type="button"
-                className="btn-view-more"
-                onClick={() => setShowAllRequests(true)}
-              >
-                View More ({hiddenCount} more)
-              </button>
-            )}
-
-            {showAllRequests && numberedRequests.length > VISIBLE_LIMIT && (
-              <button
-                type="button"
-                className="btn-view-more btn-view-more--less"
-                onClick={() => setShowAllRequests(false)}
-              >
-                Show Less
-              </button>
-            )}
-          </>
-        )}
-      </aside>
+              ))}
+            </div>
+          )}
+        </aside>
+      </div>
 
       {/* PDF Preview Modal */}
       {viewingPdf && (

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ScanLine,
   Search,
   Trash2,
   Eye,
-  Camera,
   User,
   Pill,
   Stethoscope,
@@ -14,18 +14,18 @@ import {
   CheckCircle2,
   AlertTriangle,
   X,
-  ImagePlus,
-  ImageUp,
-  RefreshCw,
-  Pencil,
   Plus,
   Printer,
+  PawPrint,
+  ChevronRight,
 } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { createQrDetector, decodeWithDetector } from '../../utils/pmQrScanner';
-import { ocrImage, ocrImageServer, enhanceImageForOcr, downscaleForOcr, extractPaymentDetails, parseOfficialReceipt, detectPaymentType } from '../../utils/ocrUtils';
+import { detectPaymentType } from '../../utils/ocrUtils';
+import { resolveMediaUrl } from '../../utils/mediaUrl';
+import QRCode from 'qrcode';
+import PrintReportButton from '../../components/staff/PrintReportButton';
 
 const PAYMENT_TYPES = ['Consultation', 'Vaccination', 'Medicine'];
 
@@ -35,61 +35,20 @@ const TYPE_ICON = {
   Medicine: Pill,
 };
 
-// Combine item rows from the normal and the faint-table OCR passes. Rows that
-// describe the same thing are kept once (preferring the cleaner amount); rows
-// only one pass could read are appended.
-function normalizeItemDesc(value) {
-  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
-}
-
-function hasCents(value) {
-  return /\.\d{2}$/.test(String(value || '').trim());
-}
-
-function mergeItemRows(primary, secondary) {
-  const out = [];
-  const seen = new Set();
-  const scurbDesc = (desc) =>
-    String(desc || '').replace(/\s*\|\s*\d{1,4}\s*\|\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
-  const push = (row) => {
-    const key = normalizeItemDesc(row.description);
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    out.push({ ...row, description: scurbDesc(row.description) });
-  };
-  (primary || []).forEach((row) => push(row));
-  (secondary || []).forEach((row) => {
-    const key = normalizeItemDesc(row.description);
-    const existing = out.find((ex) => {
-      const nx = normalizeItemDesc(ex.description);
-      return nx && (nx === key || nx.includes(key) || key.includes(nx));
-    });
-    if (!existing) {
-      push(row);
-    } else if (!hasCents(existing.amount) && hasCents(row.amount) && !existing.name) {
-      existing.amount = row.amount;
-    }
-  });
-  return out;
-}
-
 function formatMoney(value) {
   const num = Number(value) || 0;
   return `₱${num.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// Decide whether a second (refined) parse is better than a first one.
-function betterParse(candidate, current) {
-  if (!current || !current.or_number) return true;
-  if (!candidate) return false;
-  const curItems = current.items || [];
-  const candItems = candidate.items || [];
-  if (candItems.length > curItems.length) return true;
-  if (candItems.length < curItems.length) return false;
-  if (candidate.sum_matches === true && current.sum_matches !== true) return true;
-  if (candidate.owner_name && !current.owner_name) return true;
-  if (candidate.or_number && !current.or_number) return true;
-  return false;
+// Decide whether a catalog item should append a new row or fill the empty one.
+function findOpenItemRow(items) {
+  const emptyRow = (items || []).findIndex(
+    (item) => !item.description.trim() && !String(item.amount || '').trim() && !(item.name || '').trim()
+  );
+  if (emptyRow >= 0) return emptyRow;
+  // If row 0 only holds a payor name, it is still "open" for a description/amount.
+  if ((items || []).length === 1 && !(items[0] || {}).description && !String((items[0] || {}).amount || '').trim()) return 0;
+  return -1;
 }
 
 function formatDisplayDate(value) {
@@ -124,11 +83,21 @@ function useDebounced(callback, delay, deps) {
   }, deps);
 }
 
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function nowTime() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 function emptyOrForm() {
   return {
     or_number: '',
-    or_date: '',
-    or_time: '',
+    or_date: todayIso(),
+    or_time: nowTime(),
   };
 }
 
@@ -137,6 +106,10 @@ function newEmptyItems() {
 }
 
 function derivePaymentType(items) {
+  const cats = (items || []).map((i) => i.category).filter(Boolean);
+  if (cats.some((c) => /vaccin/i.test(c))) return 'Vaccination';
+  if (cats.some((c) => /consultat/i.test(c))) return 'Consultation';
+  if (cats.length) return 'Medicine';
   const text = (items || [])
     .map((i) => i.description)
     .filter(Boolean)
@@ -179,17 +152,13 @@ export default function PaymentMonitoring() {
   const [deleting, setDeleting] = useState(false);
 
   /* ── Scan modal state ── */
-  const [orFile, setOrFile] = useState(null);
-  const [orPreview, setOrPreview] = useState(null);
-  const [scanning, setScanning] = useState(false);
-  const [ocrRawText, setOcrRawText] = useState('');
-  const [ocrConfidence, setOcrConfidence] = useState(null);
   const [orForm, setOrForm] = useState(emptyOrForm());
   const [duplicate, setDuplicate] = useState({ checking: false, checked: false, isDuplicate: false });
   const [ownerSearch, setOwnerSearch] = useState('');
   const [ownerMatches, setOwnerMatches] = useState([]);
   const [ownerSearching, setOwnerSearching] = useState(false);
   const [selectedOwner, setSelectedOwner] = useState(null);
+  const [selectedPet, setSelectedPet] = useState(null);
   const [items, setItems] = useState(newEmptyItems());
   const [totalOverride, setTotalOverride] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -199,30 +168,21 @@ export default function PaymentMonitoring() {
   const [qrOwnerMatch, setQrOwnerMatch] = useState(null);
   const [qrReceiptMatch, setQrReceiptMatch] = useState(null);
   const [qrError, setQrError] = useState('');
+  const [qrSessionKey, setQrSessionKey] = useState(null);
+  const [qrSessionQr, setQrSessionQr] = useState('');
+  const [qrSessionUrl, setQrSessionUrl] = useState('');
+  const [qrWaiting, setQrWaiting] = useState(false);
+  const qrPollRef = useRef(null);
   const [receiptRecord, setReceiptRecord] = useState(null);
   const [lightboxImage, setLightboxImage] = useState(null);
-  const galleryInputRef = useRef(null);
-  const qrScannerRef = useRef(null);
-  const qrFileInputRef = useRef(null);
-  const qrNativeVideoRef = useRef(null);
-  const qrStreamRef = useRef(null);
-  const qrLensVideoRef = useRef(null);
-  const qrLensStreamRef = useRef(null);
-  const qrLensCanvasRef = useRef(null);
-  const qrLensTickRef = useRef(null);
-  const qrLensDecoderRef = useRef(null);
-  const [nativeQrMode, setNativeQrMode] = useState(false);
-  const [nativeQrStarting, setNativeQrStarting] = useState(false);
-  const [nativeBox, setNativeBox] = useState(null);
-  const [qrLensLive, setQrLensLive] = useState(false);
-  const [qrLensError, setQrLensError] = useState('');
-  const [qrLensFound, setQrLensFound] = useState(false);
+  const [nextOrNumber, setNextOrNumber] = useState(null);
 
-  /* ── Capture source: upload (default) | manual ── */
-  const [scanSource, setScanSource] = useState('upload');
-  const [ocrStep, setOcrStep] = useState('');
-  /* OCR review flags — set after a scan so the user can verify risky fields. */
-  const [ocrReview, setOcrReview] = useState(null);
+  /* ── Quick-pick product catalog ── */
+  const [catalog, setCatalog] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState('');
+  const [activeCategory, setActiveCategory] = useState(null);
+  const [catalogSearch, setCatalogSearch] = useState('');
 
   const byTypeMap = useMemo(() => {
     const map = {};
@@ -300,37 +260,33 @@ export default function PaymentMonitoring() {
   /* ── Open / close scan modal ── */
   function openScanModal() {
     resetScanState();
+    loadCatalog();
+    prefillNextOr();
     setModalOpen(true);
   }
 
   function resetScanState() {
-    setOrFile(null);
-    setOrPreview(null);
-    setScanning(false);
-    setOcrRawText('');
-    setOcrConfidence(null);
-    setOcrStep('');
     setOrForm(emptyOrForm());
     setDuplicate({ checking: false, checked: false, isDuplicate: false });
     setOwnerSearch('');
     setOwnerMatches([]);
     setOwnerSearching(false);
     setSelectedOwner(null);
+    setSelectedPet(null);
     setItems(newEmptyItems());
     setTotalOverride(null);
     setFieldErrors({});
-    setScanSource('upload');
     setQrScanOpen(false);
     setQrScanning(false);
     setQrOwnerMatch(null);
     setQrReceiptMatch(null);
     setQrError('');
-    stopQrScanner();
+    stopQrSession();
   }
 
   function closeScanModal() {
     if (saving) return;
-    stopQrScanner();
+    stopQrSession();
     setQrScanOpen(false);
     setQrScanning(false);
     setQrOwnerMatch(null);
@@ -339,217 +295,62 @@ export default function PaymentMonitoring() {
     setModalOpen(false);
   }
 
-  /* ── Receipt photo capture (native camera / gallery input) ── */
-  function openNativeCamera() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.setAttribute('capture', 'environment');
-    input.onchange = (e) => handleFilePicked(e.target.files ? e.target.files[0] : null);
-    input.click();
+  /* ── Quick-pick product catalog (loaded once for the modal) ── */
+  function loadCatalog() {
+    setCatalogLoading(true);
+    setCatalogError('');
+    api
+      .get('/catalog')
+      .then((res) => {
+        setCatalog(res.data.categories || []);
+        return res.data.categories || [];
+      })
+      .catch(() => setCatalogError('Could not load the product catalog.'))
+      .finally(() => setCatalogLoading(false));
   }
 
-  function switchScanSource(mode) {
-    if (scanning) return;
-    setOrFile(null);
-    setOrPreview(null);
-    setOcrRawText('');
-    setOcrConfidence(null);
-    setOcrStep('');
-    setScanSource(mode);
+  // Prefill the OR number with the next expected number (last numeric + 1) so a
+  // counter queue can just type/verify it, and default date/time to right now.
+  function prefillNextOr() {
+    api
+      .get('/payment-monitoring/last-or-number')
+      .then((res) => {
+        const last = res.data.last_or_number;
+        if (last != null && Number.isFinite(Number(last))) {
+          setOrForm((prev) => ({ ...prev, or_number: String(Number(last) + 1) }));
+          setNextOrNumber(Number(last) + 1);
+        } else {
+          setNextOrNumber(null);
+        }
+      })
+      .catch(() => setNextOrNumber(null));
   }
 
-  function clearCapture() {
-    setOrFile(null);
-    setOrPreview(null);
-    setOcrRawText('');
-    setOcrConfidence(null);
-    setScanning(false);
-    setOcrStep('');
-  }
-
-  /* ── Image selection + OCR ── */
-  function handleFilePicked(file, keepSource) {
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file (JPG, PNG or WEBP).');
-      return;
-    }
-    setScanSource(keepSource || 'upload');
-    setOrFile(file);
-    runOcr(file);
-  }
-
-  async function runOcr(source) {
-    setScanning(true);
-    setFieldErrors({});
-    toast.loading('Reading receipt...', { id: 'pm-ocr' });
-    try {
-      let prepared;
-      try {
-        setOcrStep('Preparing image…');
-        prepared = await enhanceImageForOcr(source);
-      } catch (prepErr) {
-        console.warn('Image preparation failed — OCR will use the original.', prepErr);
-        prepared = { blob: source instanceof Blob ? source : null, dataUrl: null, binBlob: null };
-      }
-
-      // Primary path — server-side PaddleOCR (accurate, runs on this machine).
-      let text = '';
-      let text2 = '';
-      let confidence = null;
-      let parsed = null;
-      let serverLines = null;
-      let engine = 'client';
-      let serverUnavailable = false;
-      try {
-        // Send the downscaled, contrast-boosted copy (≤2000 px) — a fraction of
-        // the raw phone photo's upload size and a clean image for the server.
-        const sendBlob = (prepared && prepared.blob) || (source instanceof Blob ? source : null);
-        if (sendBlob) {
-          const server = await ocrImageServer(sendBlob, (stepLabel) => setOcrStep(stepLabel));
-          if (server && server.text) {
-            text = server.text;
-            engine = server.engine || 'paddle';
-            // Paddle confidence is 0..1; the UI displays a percentage.
-            confidence = server.confidence != null ? server.confidence * 100 : null;
-            serverLines = server.lines || null;
-            parsed = parseOfficialReceipt(text, serverLines);
-
-            // Refine pass: the server re-OCR's a binarized copy of the same
-            // image and merges both passes when the first read was shaky.
-            if (prepared.binBlob || true) {
-              const needsRefine =
-                !parsed ||
-                !(parsed.items || []).length ||
-                parsed.sum_matches === false ||
-                (parsed.items || []).some((it) => !it.amount);
-              if (needsRefine) {
-                const server2 = await ocrImageServer(sendBlob, (stepLabel) => setOcrStep(stepLabel), { refine: true });
-                if (server2 && server2.text) {
-                  const parsed2 = parseOfficialReceipt(server2.text, server2.lines || null);
-                  if (parsed2 && betterParse(parsed2, parsed)) {
-                    parsed = parsed2;
-                    text = server2.text;
-                    serverLines = server2.lines || null;
-                    confidence = server2.confidence != null ? server2.confidence * 100 : confidence;
-                  }
-                }
-              }
-            }
-          } else {
-            throw new Error('Server OCR returned no text.');
-          }
-        }
-      } catch (serverErr) {
-        console.warn('[OCR] Server-side OCR failed — falling back to on-device engine.', serverErr?.message || serverErr);
-        serverUnavailable = true;
-      }
-
-      if (!text || !parsed) {
-        // Fallback — on-device Tesseract (works offline). Never feed it the raw
-        // 12–48 MP phone photo: downscale first or phones OOM mid-read.
-        setOcrStep('Reading receipt on device…');
-        let fallbackSource = (prepared && prepared.blob) || null;
-        if (!fallbackSource) {
-          fallbackSource = await downscaleForOcr(source) || (source instanceof Blob ? source : null);
-        }
-        const data = await ocrImage(fallbackSource || source);
-        text = (data.text || '') + (parsed ? '' : '');
-
-        // Pass 2 — binarized "faint table" variant (recovers very light rows).
-        if (prepared.binBlob) {
-          try {
-            const data2 = await ocrImage(prepared.binBlob);
-            text2 = (data2 && data2.text) || '';
-          } catch (secErr) {
-            console.warn('Faint-table OCR pass failed — continuing with pass 1 only.', secErr);
-          }
-        }
-        confidence = data.confidence ?? null;
-        parsed = parseOfficialReceipt(text, null);
-        if (text2) {
-          const faintItems = extractPaymentDetails(text2) || [];
-          const combined = mergeItemRows(parsed.items, faintItems);
-          if (combined.length) {
-            parsed = { ...parsed, items: combined };
-          }
-        }
-      }
-
-      setOcrStep('');
-      setOcrRawText(text);
-      setOcrConfidence(confidence);
-      if (prepared.dataUrl) {
-        setOrPreview(prepared.dataUrl);
-      }
-      if (serverUnavailable) {
-        toast.warning(
-          'OCR server unreachable — receipt was read on this device instead. Phones may be slower; reconnect to the clinic network for the fast reader.',
-          { id: 'pm-ocr' }
-        );
-      }
-
-      const mergedItems = parsed.items || [];
-      const itemSum = mergedItems.reduce((acc, it) => acc + (Number(it.amount) || 0), 0);
-      const totalNum = parsed.amount ? Number(parsed.amount) : null;
-      const sumMatches =
-        totalNum != null
-          ? Number.isFinite(itemSum) && Math.abs(itemSum - totalNum) <= 0.01
-          : parsed.sum_matches;
-      const mismatch =
-        sumMatches === false
-          ? `Item total ₱${itemSum.toFixed(2)} doesn't match Amount Paid ₱${Number(totalNum || parsed.words_total || 0).toFixed(2)} — review the highlighted rows.`
-          : null;
-
-      const displayed = mergedItems.length
-        ? mergedItems.map((item) => ({
-            name: '',
-            description: item.description || '',
-            amount: item.amount || '',
-            needs_review: !!item.needs_review,
-          }))
-        : [{ name: '', description: '', amount: '', needs_review: false }];
-      if (displayed[0]) displayed[0].name = parsed.owner_name || '';
-
-      setItems(displayed);
-      setTotalOverride(totalNum != null ? totalNum.toFixed(2) : null);
-      setOcrReview({
-        or_number: !!parsed.or_needs_review && !!parsed.or_number,
-        date: !!parsed.date_needs_review && !!parsed.date,
-        owner: !!parsed.owner_needs_review && !!parsed.owner_name,
-        items: displayed.map((it) => it.needs_review),
-        amountMissing: !!parsed.amount_missing,
-        sumMismatch: sumMatches === false,
-        message: mismatch,
-      });
-
-      if (parsed.owner_name) {
-        setOwnerSearch(parsed.owner_name);
-      }
-
-      setOrForm((prev) => ({
-        or_number: parsed.or_number || prev.or_number,
-        or_date: parsed.date || prev.or_date,
-        or_time: parsed.time || prev.or_time,
-      }));
-
-      if (!parsed.or_number) {
-        toast('Could not read the OR number. Please review or type it manually.', { id: 'pm-ocr', icon: 'ℹ️' });
-      } else if (sumMatches === false) {
-        toast.warning('Amount Paid doesn\'t match the item totals — review the highlighted rows.', { id: 'pm-ocr' });
-      } else if (parsed.or_number && sumMatches === true && mergedItems.length >= 1 && !(parsed.items || []).some((it) => it.needs_review)) {
-        toast.success('Receipt read successfully — details and items were filled in automatically.', { id: 'pm-ocr' });
+  // Clicking a catalog product adds a filled row to the payment items.
+  function addCatalogItem(product, category) {
+    setFieldErrors((prev) => ({ ...prev, or_amount: undefined, items: undefined }));
+    const species = product.species && product.species !== 'General' ? ` · ${product.species}` : '';
+    const unit = product.unit ? ` (${product.unit})` : '';
+    const description = `${product.name}${species}${unit}`;
+    setItems((prev) => {
+      const next = [...prev];
+      const openRow = findOpenItemRow(next);
+      const row = {
+        name: '',
+        description,
+        amount: product.price != null ? String(product.price) : '',
+        needs_review: false,
+        catalog_id: product.id || null,
+        category,
+      };
+      if (openRow >= 0) {
+        next[openRow] = { ...next[openRow], ...row, name: next[openRow].name || '' };
       } else {
-        toast('Receipt partly read — please review the details below.', { id: 'pm-ocr', icon: '✏️' });
+        next.push(row);
       }
-    } catch (err) {
-      console.error('OCR error:', err);
-      toast.error('Could not read the receipt image. You can enter the details manually.', { id: 'pm-ocr' });
-    } finally {
-      setScanning(false);
-      setOcrStep('');
-    }
+      return next;
+    });
+    setTotalOverride(null);
   }
 
   /* ── Duplicate OR check ── */
@@ -602,23 +403,12 @@ export default function PaymentMonitoring() {
   function handleOrFieldChange(name, value) {
     setOrForm((prev) => ({ ...prev, [name]: value }));
     setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
-    setOcrReview((prev) => (prev ? { ...prev, [name === 'or_number' ? 'or_number' : name === 'or_date' || name === 'or_time' ? 'date' : name]: false } : prev));
   }
 
   function updateItem(index, field, value) {
     setFieldErrors((prev) => ({ ...prev, or_amount: undefined, items: undefined }));
     setItems((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value, needs_review: false } : item)));
     if (field === 'amount') setTotalOverride(null);
-    setOcrReview((prev) =>
-      prev
-        ? {
-            ...prev,
-            items: (prev.items || []).map((flag, i) => (i === index ? false : flag)),
-            sumMismatch: false,
-            message: null,
-          }
-        : prev,
-    );
   }
 
   function addItem() {
@@ -626,338 +416,77 @@ export default function PaymentMonitoring() {
     if (last && !last.description.trim() && !String(last.amount).trim() && !(last.name || '').trim()) return;
     setItems((prev) => [...prev, { name: '', description: '', amount: '', needs_review: false }]);
     setTotalOverride(null);
-    setOcrReview((prev) => (prev ? { ...prev, items: [...(prev.items || []), false] } : prev));
   }
 
   function removeItem(index) {
     setItems((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
     setTotalOverride(null);
-    setOcrReview((prev) =>
-      prev
-        ? {
-            ...prev,
-            items: (prev.items || []).filter((_, i) => i !== index),
-            sumMismatch: false,
-            message: null,
-          }
-        : prev,
-    );
   }
 
-  function pickOwner(owner) {
+  function pickOwner(owner, pet) {
     setSelectedOwner(owner);
+    if (pet) setSelectedPet(pet);
+    else if (!pet && owner.pets && owner.pets.length === 1) setSelectedPet(owner.pets[0]);
     setOwnerSearch(owner.full_name);
     setFieldErrors((prev) => ({ ...prev, owner: undefined }));
     setItems((prev) => prev.map((item, i) => (i === 0 ? { ...item, name: owner.full_name } : item)));
   }
 
-  /* ── Pet owner QR scan (matches the owner from a pet QR) ── */
-  function stopQrScanner() {
-    const scanner = qrScannerRef.current;
-    qrScannerRef.current = null;
-    if (scanner) {
-      scanner.stop().catch(() => {});
+  /* ── Phone QR scan session ──
+     The counter shows a QR on the PC screen. The staff scans it with a phone,
+     which opens the system scanner page; the phone then reads the pet's /
+     receipt's QR and the decoded text lands back here automatically. */
+  function stopQrSession() {
+    if (qrPollRef.current) {
+      clearInterval(qrPollRef.current);
+      qrPollRef.current = null;
     }
-    stopQrLens();
+    setQrWaiting(false);
+    setQrSessionKey(null);
+    setQrSessionQr('');
+    setQrSessionUrl('');
   }
 
-  /* ── Google-Lens-style viewfinder scan (works on every browser). ──
-     Live camera + dimmed guide frame + LIVE dot. Parses frames continuously
-     and reads the code automatically as soon as the QR is pointed at the
-     frame ("tapat, basa agad"). The Scan button stays as a manual fallback. */
-  function stopQrLens() {
-    if (qrLensTickRef.current) {
-      clearInterval(qrLensTickRef.current);
-      qrLensTickRef.current = null;
-    }
-    const stream = qrLensStreamRef.current;
-    qrLensStreamRef.current = null;
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop());
-    }
-    setQrLensLive(false);
-    setQrLensFound(false);
-  }
-
-  // Lazy reusable Html5Qrcode bound to the hidden pm-qr-lens-region div, so the
-  // silent auto-read loop never collides with the manual "Choose QR image"
-  // pipeline (which uses pm-qr-file-region).
-  async function getLensDecoder() {
-    if (!qrLensDecoderRef.current) {
-      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
-      qrLensDecoderRef.current = new Html5Qrcode('pm-qr-lens-region', {
-        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-        verbose: false,
-      });
-    }
-    return qrLensDecoderRef.current;
-  }
-
-  // Silent in-memory QR decode (no UI flicker): BarcodeDetector on the canvas
-  // first, then html5-qrcode scanFile on a small JPEG. Never throws.
-  async function readQrFrameSilent(canvas) {
+  async function startQrSession() {
+    stopQrSession();
+    setQrError('');
+    const key =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setQrSessionKey(key);
+    setQrWaiting(true);
     try {
-      const detector = createQrDetector();
-      if (detector) {
-        const raw = await decodeWithDetector(canvas, detector);
-        if (raw) return raw;
-      }
-      const w = canvas.width;
-      const h = canvas.height;
-      if (w < 40 || h < 40) return null;
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82));
-      if (!blob) return null;
-      const file = new File([blob], 'qr-frame.jpg', { type: 'image/jpeg' });
-      try {
-        const decoder = await getLensDecoder();
-        return await decoder.scanFile(file, false);
-      } catch (_) {
-        return null;
-      }
+      await api.post('/payment-monitoring/scan-board', { key });
     } catch (_) {
-      return null;
+      setQrError('Could not open the phone scan session. Please try again.');
     }
-  }
 
-  async function startQrLens() {
-    if (qrLensStreamRef.current || !qrLensVideoRef.current) return;
-    setQrLensError('');
+    let base = '';
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
-      qrLensStreamRef.current = stream;
-      const video = qrLensVideoRef.current;
-      video.srcObject = stream;
-      await video.play();
-      setQrLensLive(true);
-
-      // Continuous auto-read: grab a frame every ~220ms and decode it silently.
-      // Two consecutive identical reads commit the code (stable, no flicker).
-      let last = '';
-      let stable = 0;
-      let busy = false;
-      let committed = false;
-      const canvas = qrLensCanvasRef.current;
-      const W = 420;
-      const H = 320;
-      if (canvas) {
-        canvas.width = W;
-        canvas.height = H;
-      }
-      qrLensTickRef.current = setInterval(async () => {
-        if (committed || busy || !qrLensStreamRef.current || !canvas) return;
-        if (video.readyState < 2 || !video.videoWidth) return;
-        busy = true;
-        try {
-          const ctx = canvas.getContext('2d', { willReadFrequently: false });
-          ctx.drawImage(video, 0, 0, W, H);
-          const raw = await readQrFrameSilent(canvas);
-          if (raw) {
-            if (raw === last) stable += 1;
-            else {
-              last = raw;
-              stable = 1;
-            }
-            if (stable >= 2 && !committed) {
-              committed = true;
-              clearInterval(qrLensTickRef.current);
-              qrLensTickRef.current = null;
-              setQrLensFound(true);
-              const text = raw;
-              // Brief green "found" flash before switching to the reading view.
-              setTimeout(() => {
-                stopQrLens();
-                handleQrText(text);
-              }, 500);
-            }
-          } else {
-            last = '';
-            stable = 0;
-          }
-        } catch (_) {
-          last = '';
-          stable = 0;
-        } finally {
-          busy = false;
-        }
-      }, 220);
-    } catch (err) {
-      console.warn('Viewfinder camera start failed:', err);
-      stopQrLens();
-      setQrLensError(
-        'The camera could not start. Allow camera access for this site (use HTTPS), or use "Open Phone Camera" / "Choose image" instead.'
-      );
+      const h = await api.get('/health');
+      const lanIp = h.data && h.data.lanIp ? h.data.lanIp : '';
+      const port = h.data && h.data.port ? h.data.port : '5000';
+      base = lanIp ? `http://${lanIp}:${port}` : '';
+      if (!base) base = `${window.location.protocol}//${window.location.hostname}:${port}`;
+    } catch (_) {
+      base = `${window.location.protocol}//${window.location.hostname}:5000`;
     }
-  }
-
-  async function shootQrLens() {
-    const video = qrLensVideoRef.current;
-    const canvas = qrLensCanvasRef.current;
-    if (!video || !canvas || !qrLensLive) return;
-    const w = video.videoWidth || 640;
-    const h = video.videoHeight || 480;
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d', { willReadFrequently: false });
-    ctx.drawImage(video, 0, 0, w, h);
-    canvas.toBlob((blob) => decodeQrFile(blob), 'image/png');
-  }
-
-  function openNativeQrCamera() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.setAttribute('capture', 'environment');
-    input.onchange = (e) => decodeQrFile(e.target.files ? e.target.files[0] : null);
-    input.click();
-  }
-
-  async function decodeQrFile(file) {
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setQrError('Please choose an image file that contains the QR code.');
-      return;
-    }
-    setQrScanning(true);
-    setQrError('');
-    // html5-qrcode scanFile requires a File instance — normalize blobs.
-    const toFile = (b) => (b instanceof File ? b : new File([b], 'qr-image.jpg', { type: b.type || 'image/jpeg' }));
-    let send = toFile(file);
-    const decode = async (blob) => {
-      // Native engine first (BarcodeDetector on Android Chrome) — fast and precise.
-      const detector = createQrDetector();
-      if (detector) {
-        const nativeText = await decodeWithDetector(blob, detector);
-        if (nativeText) return nativeText;
-      }
-      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
-      const reader = new Html5Qrcode('pm-qr-file-region', {
-        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-        verbose: false,
-      });
-      return reader.scanFile(blob, false);
-    };
+    const url = `${base}/phone-scan?k=${encodeURIComponent(key)}`;
+    setQrSessionUrl(url);
     try {
-      let text;
-      try {
-        text = await decode(send);
-      } catch (firstErr) {
-        // Phone photos are often slightly soft — retry on the enhanced image
-        // (contrast + sharpen), then on the high-contrast binarized variant.
-        let prepared = null;
-        try {
-          prepared = await enhanceImageForOcr(send);
-        } catch (_) {}
-        const variants = [prepared && prepared.blob, prepared && prepared.binBlob].filter(Boolean);
-        let decoded = false;
-        for (const variant of variants) {
-          try {
-            text = await decode(toFile(variant));
-            decoded = true;
-            break;
-          } catch (retryErr) {
-            console.warn('QR retry variant failed:', retryErr);
-          }
-        }
-        if (!decoded) throw firstErr;
-      }
-      await handleQrText(text);
-    } catch (err) {
-      console.warn('QR file decode failed:', err);
-      setQrError('Could not read the QR code in that image. Keep the code flat and well-lit, hold the phone closer, or tap "Choose QR image" to pick a clearer photo.');
-    } finally {
-      setQrScanning(false);
-    }
-  }
-
-  /* ── Native QR scan (BarcodeDetector — fullscreen overlay). ── */
-  function stopNativeQrScan() {
-    const stream = qrStreamRef.current;
-    qrStreamRef.current = null;
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop());
-    }
-    setNativeQrStarting(false);
-    setNativeBox(null);
-  }
-
-  async function startNativeQrScan() {
-    if (qrStreamRef.current || !qrNativeVideoRef.current) return;
-    const detector = createQrDetector();
-    if (!detector) {
-      setQrError('This browser has no native QR engine. Use "Choose QR image" or the phone camera instead.');
-      return;
-    }
-    setNativeQrStarting(true);
-    setQrError('');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
+      const dataUrl = await QRCode.toDataURL(url, {
+        width: 320,
+        margin: 1,
+        color: { dark: '#241416', light: '#ffffff' },
       });
-      qrStreamRef.current = stream;
-      const video = qrNativeVideoRef.current;
-      video.srcObject = stream;
-      await video.play();
-      setNativeQrStarting(false);
-
-      let stopped = false;
-      let last = '';
-      let stable = 0;
-      let fired = false;
-      const tick = async () => {
-        if (stopped) return;
-        requestAnimationFrame(tick);
-        try {
-          const codes = await detector.detect(video);
-          const code = (codes || []).find((c) => String(c.rawValue || '').trim());
-          if (code) {
-            const raw = String(code.rawValue).trim();
-            const box = code.boundingBox;
-            if (box && video.videoWidth > 0 && video.videoHeight > 0) {
-              setNativeBox({
-                x: box.x / video.videoWidth,
-                y: box.y / video.videoHeight,
-                w: box.width / video.videoWidth,
-                h: box.height / video.videoHeight,
-              });
-            }
-            if (raw === last) stable += 1;
-            else {
-              last = raw;
-              stable = 1;
-            }
-            if (!fired && stable >= 4) {
-              fired = true;
-              stopNativeQrScan();
-              setNativeQrMode(false);
-              handleQrText(raw);
-            }
-          } else {
-            last = '';
-            stable = 0;
-            setNativeBox(null);
-          }
-        } catch (_) {}
-      };
-      tick();
-    } catch (err) {
-      console.warn('Native QR scan start failed:', err);
-      stopNativeQrScan();
-      setNativeQrMode(false);
-      setQrError('Could not start the camera. Allow camera access, or tap "Choose QR image" instead.');
+      setQrSessionQr(dataUrl);
+    } catch (_) {
+      setQrError('Could not build the phone scan QR. Please try again.');
     }
   }
 
-  async function handleQrText(text) {
+async function handleQrText(text) {
     const trimmed = String(text || '').trim();
     if (!trimmed) {
       setQrError('No QR content was detected.');
@@ -976,7 +505,7 @@ export default function PaymentMonitoring() {
         const receipt = res.data.receipt;
         if (!receipt) throw new Error('empty receipt response');
         setQrReceiptMatch(receipt);
-        stopQrScanner();
+        stopQrSession();
         toast.success(`Exact receipt match: OR ${receipt.or_number} — review then fill.`);
       } catch (err) {
         setQrError(
@@ -1004,7 +533,7 @@ export default function PaymentMonitoring() {
       const owner = res.data.owner;
       if (!owner) throw new Error('empty owner response');
       setQrOwnerMatch(owner);
-      stopQrScanner();
+      stopQrSession();
       toast.success(`Pet matched: ${owner.pet_name}. Verify the owner, then confirm.`);
     } catch (err) {
       setQrError(
@@ -1050,68 +579,86 @@ export default function PaymentMonitoring() {
       barangay: receipt.barangay || '',
       pet_count: receipt.pet_count ?? 0,
     });
+    if (receipt.pet_id) {
+      setSelectedPet({
+        pet_id: receipt.pet_id,
+        pet_name: receipt.pet_name || '',
+        pet_code: receipt.pet_code || '',
+        pet_sex: receipt.pet_sex || '',
+        pet_photo: receipt.pet_photo || '',
+        pet_species: receipt.pet_species || '',
+        pet_breed: receipt.pet_breed || '',
+      });
+    } else {
+      setSelectedPet(null);
+    }
     setOwnerSearch(receipt.owner_name || '');
     setQrReceiptMatch(null);
     setQrScanOpen(false);
     setQrError('');
-    stopQrScanner();
+    stopQrSession();
     toast.success(`OR ${receipt.or_number} filled exactly from the receipt QR. Review, then save.`);
   }
 
   function toggleQrScan() {
     setQrError('');
-    if (qrScanOpen) {
-      setQrScanOpen(false);
-      setQrOwnerMatch(null);
-      setQrReceiptMatch(null);
-      setNativeQrMode(false);
-      stopQrScanner();
-      stopNativeQrScan();
-      return;
-    }
     setQrOwnerMatch(null);
     setQrReceiptMatch(null);
-    setQrScanOpen(true);
-    setQrLensError('');
-    if (createQrDetector()) {
-      // Native BarcodeDetector engine available — fullscreen auto-detect overlay.
-      setNativeQrMode(true);
+    if (qrScanOpen) {
+      stopQrSession();
+      setQrScanOpen(false);
+      return;
     }
+    setQrScanOpen(true);
+    startQrSession();
   }
 
   function confirmQrOwner() {
     if (!qrOwnerMatch) return;
-    pickOwner(qrOwnerMatch);
+    const pet = {
+      pet_id: qrOwnerMatch.pet_id,
+      pet_name: qrOwnerMatch.pet_name || '',
+      pet_code: qrOwnerMatch.pet_code || '',
+      pet_sex: qrOwnerMatch.pet_sex || '',
+      pet_photo: qrOwnerMatch.pet_photo || '',
+      pet_species: qrOwnerMatch.pet_species || '',
+      pet_breed: qrOwnerMatch.pet_breed || '',
+    };
+    pickOwner(qrOwnerMatch, pet);
     setQrOwnerMatch(null);
     setQrScanOpen(false);
     setQrError('');
-    stopQrScanner();
+    stopQrSession();
   }
 
+  /* Poll the scan board until the phone delivers the pet/receipt text, then
+     auto-populate the owner match card the same way as a direct camera read. */
   useEffect(() => {
-    if (qrScanOpen && !nativeQrMode && !qrOwnerMatch && !qrReceiptMatch && !qrScanning) {
-      const timer = setTimeout(() => startQrLens(), 150);
-      return () => {
-        clearTimeout(timer);
-        stopQrLens();
-      };
-    }
-    return undefined;
+    if (!qrScanOpen || !qrSessionKey) return undefined;
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.get(`/payment-monitoring/scan-board/${encodeURIComponent(qrSessionKey)}`);
+        const board = res.data;
+        if (!board || board.status !== 'ok') return;
+        stopQrSession();
+        if (board.value) handleQrText(board.value);
+      } catch (_) {
+        /* keep polling */
+      }
+    }, 1500);
+    qrPollRef.current = interval;
+    return () => {
+      if (qrPollRef.current) {
+        clearInterval(qrPollRef.current);
+        qrPollRef.current = null;
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrScanOpen, nativeQrMode, qrOwnerMatch, qrReceiptMatch, qrScanning]);
+  }, [qrScanOpen, qrSessionKey]);
 
-  useEffect(() => {
-    if (qrScanOpen && nativeQrMode) {
-      const timer = setTimeout(() => startNativeQrScan(), 150);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrScanOpen, nativeQrMode]);
+  useEffect(() => () => stopQrSession(), []);
 
-  useEffect(() => () => { stopQrScanner(); stopNativeQrScan(); }, []);
-
-  function handleSave() {
+  function handleSave(mode = 'close') {
     const errors = {};
 
     const number = orForm.or_number.trim();
@@ -1147,17 +694,36 @@ export default function PaymentMonitoring() {
     if (description) formData.append('or_description', description);
     formData.append('payment_items', JSON.stringify(items));
     formData.append('pet_owner_id', selectedOwner.owner_id);
+    if (selectedPet?.pet_id) formData.append('pet_id', selectedPet.pet_id);
     formData.append('payment_type', derivedType);
-    if (ocrRawText) formData.append('ocr_text', ocrRawText);
-    if (ocrConfidence != null) formData.append('ocr_confidence', Number(ocrConfidence).toFixed(2));
-    if (orFile) formData.append('or_photo', orFile);
 
     api
       .post('/payment-monitoring', formData)
       .then((res) => {
         toast.success(res.data.message || 'Payment record saved.');
-        setModalOpen(false);
-        resetScanState();
+        if (mode === 'next') {
+          // Stay open for the next entry in the queue: keep date/time, advance the OR.
+          const nextNumber = /^\d+$/.test(number) ? String(Number(number) + 1) : '';
+          setOrForm((prev) => ({ ...prev, or_number: nextNumber }));
+          setNextOrNumber(nextNumber ? Number(nextNumber) : null);
+          setDuplicate({ checking: false, checked: false, isDuplicate: false });
+          setOwnerSearch('');
+          setOwnerMatches([]);
+          setOwnerSearching(false);
+          setSelectedOwner(null);
+          setSelectedPet(null);
+          setItems(newEmptyItems());
+          setTotalOverride(null);
+          setFieldErrors({});
+          setQrOwnerMatch(null);
+          setQrReceiptMatch(null);
+          setQrScanOpen(false);
+          stopQrSession();
+          toast.success('Saved — next OR ready. Enter the details, then save again.');
+        } else {
+          setModalOpen(false);
+          resetScanState();
+        }
         return Promise.all([loadRecords(), loadSummary()]);
       })
       .catch((err) => {
@@ -1197,14 +763,17 @@ export default function PaymentMonitoring() {
         <div>
           <h1>Payment Monitoring</h1>
           <p className="page-intro">
-            Scan Treasury-issued Official Receipts, verify duplicate OR numbers, and keep a reliable
+            Record Treasury-issued Official Receipts, verify duplicate OR numbers, and keep a reliable
             record of which pet owners have paid.
           </p>
         </div>
-        <button type="button" className="btn-primary pm-scan-btn" onClick={openScanModal}>
-          <ScanLine size={18} aria-hidden="true" />
-          Scan OR
-        </button>
+        <div className="page-header-actions">
+          <PrintReportButton category="payments" />
+          <button type="button" className="btn-primary pm-scan-btn" onClick={openScanModal}>
+            <ScanLine size={18} aria-hidden="true" />
+            Record Payment
+          </button>
+        </div>
       </div>
 
       <div className="summary-grid">
@@ -1234,7 +803,7 @@ export default function PaymentMonitoring() {
         <div className="table-header-row">
           <div>
             <h2>Payment Records</h2>
-            <p>Every scanned Treasury OR appears here with its pet owner match.</p>
+            <p>Every recorded Treasury OR appears here with its pet owner match.</p>
           </div>
           <div className="table-meta">{filteredClientRecords.length} records</div>
         </div>
@@ -1290,7 +859,7 @@ export default function PaymentMonitoring() {
                   <td colSpan="6" className="empty-state-cell">
                     {searchTerm || typeFilter !== 'All' || fromDate || toDate
                       ? 'No payment records match your filters.'
-                      : 'No payments recorded yet. Click "Scan OR" to start.'}
+                      : 'No payments recorded yet. Click "Record Payment" to start.'}
                   </td>
                 </tr>
               ) : (
@@ -1312,6 +881,12 @@ export default function PaymentMonitoring() {
                         {record.barangay && (
                           <div className="cell-muted" style={{ fontSize: '12px' }}>{record.barangay}</div>
                         )}
+                        {record.pet_name && (
+                          <div className="cell-muted" style={{ fontSize: '12px', marginTop: '2px' }}>
+                            <PawPrint size={12} style={{ verticalAlign: 'middle', marginRight: 3 }} aria-hidden="true" />
+                            {record.pet_name}{record.pet_code ? ` · ${record.pet_code}` : ''}
+                          </div>
+                        )}
                       </td>
                       <td data-label="Payment Type / Services">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1328,22 +903,26 @@ export default function PaymentMonitoring() {
                         <strong style={{ fontSize: '15px', color: '#1f2937' }}>{formatMoney(record.or_amount)}</strong>
                       </td>
                       <td style={{ whiteSpace: "nowrap" }}>
-                        <button
-                          type="button"
-                          className="btn-primary btn-sm"
-                          onClick={() => setDetailRecord(record)}
-                          style={{ 
-                            display: "inline-flex", 
-                            alignItems: "center", 
-                            gap: "4px", 
-                            padding: "0.4rem 0.9rem", 
-                            fontSize: "13px", 
-                            height: "34px",
-                            borderRadius: "6px"
-                          }}
-                        >
-                          <Eye size={14} aria-hidden="true" /> View Details
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <button
+                            type="button"
+                            className="btn-icon-action"
+                            onClick={() => setDetailRecord(record)}
+                            aria-label={`View details for ${record.or_number}`}
+                            title="View details"
+                          >
+                            <Eye size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-icon-action btn-icon-action--print"
+                            onClick={() => setReceiptRecord(record)}
+                            aria-label={`Print receipt for ${record.or_number}`}
+                            title="Print receipt"
+                          >
+                            <Printer size={15} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1365,7 +944,7 @@ export default function PaymentMonitoring() {
                 </div>
                 <div>
                   <h3 id="pm-modal-title">Record Treasury Official Receipt</h3>
-                  <p>Scan with the camera or upload a photo — OCR reads the receipt and fills in the details for you.</p>
+                  <p>Enter the OR details and pick the products/services from the catalog — the amount fills automatically.</p>
                 </div>
               </div>
               <button type="button" className="barangay-modal-close" onClick={closeScanModal} aria-label="Close">
@@ -1374,111 +953,94 @@ export default function PaymentMonitoring() {
             </div>
 
             <div className="pm-modal-body">
-              {/* Receipt capture */}
+              {/* Quick-pick catalog */}
               <section className="pm-section">
                 <div className="pm-section-label">
-                  <span>1</span> Official Receipt
-                  {scanSource === 'manual' ? (
-                    <em className="pm-auto-badge pm-badge-neutral">manual entry — no photo needed</em>
-                  ) : (
-                    <em className="pm-auto-badge">photo optional</em>
-                  )}
+                  <span>1</span> Quick Pick —
+                  <em className="pm-auto-badge">tap a product to add it to the payment</em>
                 </div>
-
-                {scanSource !== 'manual' && (
-                  <div className="pm-section-toolbar">
-                    <span className="pm-source-note">
-                      <ImageUp size={14} aria-hidden="true" /> Take a photo with your phone camera or choose an image
-                    </span>
-                    <button
-                      type="button"
-                      className="pm-manual-link"
-                      onClick={() => switchScanSource('manual')}
-                      disabled={scanning}
-                    >
-                      <Pencil size={13} aria-hidden="true" />
-                      Enter details manually
-                    </button>
+                {catalogLoading && (
+                  <div className="pm-catalog-loading">
+                    <Loader2 size={16} className="spin" aria-hidden="true" /> Loading products…
                   </div>
                 )}
-
-                {scanSource === 'manual' && (
-                  <div className="pm-manual-banner">
-                    <Pencil size={16} aria-hidden="true" />
-                    <span>No image required — the details below will be saved without a photo.</span>
-                    <button type="button" className="btn-secondary btn-sm" onClick={() => switchScanSource('upload')}>
-                      <ImageUp size={14} aria-hidden="true" /> Scan instead
-                    </button>
-                  </div>
+                {catalogError && !catalogLoading && (
+                  <p className="field-error">{catalogError}</p>
                 )}
-
-                {!orPreview && scanSource !== 'manual' && (
-                  <div className="or-upload-zone">
-                    <ImagePlus size={30} aria-hidden="true" />
-                    <div className="or-upload-head">
-                      <strong>{scanning ? 'Reading receipt...' : 'Get the receipt photo'}</strong>
-                      <span>JPG, PNG or WEBP — hold the receipt steady and well-lit for best results</span>
-                    </div>
-                    <div className="or-upload-actions">
-                      <button type="button" className="btn-primary btn-sm" onClick={openNativeCamera} disabled={scanning}>
-                        <Camera size={15} aria-hidden="true" /> Take photo
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary btn-sm"
-                        onClick={() => galleryInputRef.current?.click()}
-                        disabled={scanning}
-                      >
-                        <ImageUp size={15} aria-hidden="true" /> Choose image
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {scanning && ocrStep && (
-                  <div className="pm-ocr-progress" role="status" aria-live="polite">
-                    <Loader2 size={22} className="spin" aria-hidden="true" />
-                    <span>{ocrStep}</span>
-                  </div>
-                )}
-
-                {orPreview && (
-                  <div className="or-preview-wrap">
-                    <img src={orPreview} alt="Prepared receipt" className="or-preview-img" />
-                    <div className="or-preview-actions">
-                      <button type="button" className="btn-secondary btn-sm" onClick={clearCapture} disabled={scanning}>
-                        <RefreshCw size={14} aria-hidden="true" /> New scan
-                      </button>
-                      <button type="button" className="btn-secondary btn-sm" onClick={() => runOcr(orFile)} disabled={scanning}>
-                        {scanning ? <Loader2 size={14} className="spin" aria-hidden="true" /> : <ScanLine size={14} aria-hidden="true" />}
-                        {scanning ? 'Reading...' : 'Re-run OCR'}
-                      </button>
-                    </div>
-                    {ocrConfidence != null && (
-                      <div className={`ocr-confidence ocr-confidence-${ocrConfidence >= 70 ? 'good' : ocrConfidence >= 40 ? 'ok' : 'low'}`}>
-                        {ocrConfidence >= 70 ? <CheckCircle2 size={13} aria-hidden="true" /> : <AlertTriangle size={13} aria-hidden="true" />}
-                        OCR confidence: {Number(ocrConfidence).toFixed(0)}%
+                {!catalogLoading && catalog.length > 0 && (
+                  <div className="pm-catalog">
+                    <div className="pm-catalog-toolbar">
+                      <div className="pm-catalog-tabs">
+                        {catalog.map((group) => (
+                          <button
+                            key={group.name}
+                            type="button"
+                            className={`pm-cat-chip ${activeCategory === group.name ? 'active' : ''}`}
+                            onClick={() => setActiveCategory(group.name === activeCategory ? null : group.name)}
+                          >
+                            {group.name}
+                          </button>
+                        ))}
                       </div>
-                    )}
+                      <div className="pm-catalog-search">
+                        <Search size={14} aria-hidden="true" />
+                        <input
+                          type="text"
+                          value={catalogSearch}
+                          onChange={(e) => setCatalogSearch(e.target.value)}
+                          placeholder="Search product…"
+                        />
+                      </div>
+                    </div>
+                    <div className="pm-catalog-products">
+                      {catalog.map((group) => {
+                        const isVisible = !activeCategory || activeCategory === group.name;
+                        if (!isVisible) return null;
+                        const q = catalogSearch.trim().toLowerCase();
+                        const products = q
+                          ? group.products.filter(
+                              (p) => `${p.name} ${p.species || ''} ${p.subcategory || ''}`.toLowerCase().includes(q)
+                            )
+                          : group.products;
+                        if (!products.length) return null;
+                        return (
+                          <div className="pm-catalog-group" key={group.name}>
+                            <div className="pm-catalog-group-head">
+                              <strong>{group.name}</strong>
+                              <span className="cell-muted">{group.payment_type}</span>
+                            </div>
+                            <div className="pm-catalog-grid">
+                              {products.map((product) => (
+                                <button
+                                  key={`${group.name}-${product.id}`}
+                                  type="button"
+                                  className="pm-cat-product"
+                                  onClick={() => addCatalogItem(product, group.name)}
+                                  title={product.subcategory ? `${product.subcategory}${product.species && product.species !== 'General' ? ` · ${product.species}` : ''}` : ''}
+                                >
+                                  <span className="pm-cat-product-name">{product.name}</span>
+                                  {product.species !== 'General' && (
+                                    <span className="pm-cat-product-species">{product.species} · {product.unit || 'dose'}</span>
+                                  )}
+                                  <span className="pm-cat-product-price">{formatMoney(product.price)}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {catalogSearch.trim() && !catalog.some((g) => g.products.some((p) => p.name.toLowerCase().includes(catalogSearch.trim().toLowerCase()))) && (
+                        <p className="field-hint">No products match "{catalogSearch}". You can still type the row manually below.</p>
+                      )}
+                    </div>
                   </div>
                 )}
-
-                <input
-                  ref={galleryInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  hidden
-                  onChange={(e) => {
-                    handleFilePicked(e.target.files?.[0]);
-                    e.target.value = '';
-                  }}
-                />
               </section>
 
               {/* Receipt details (spreadsheet) */}
               <section className="pm-section">
                 <div className="pm-section-label">
-                  <span>2</span> Receipt Details {ocrRawText && <em className="pm-auto-badge">auto-filled by OCR — edit if needed</em>}
+                  <span>2</span> Receipt Details
                 </div>
 
                 <div className="pm-receipt-card">
@@ -1489,10 +1051,10 @@ export default function PaymentMonitoring() {
                         <input
                           id="pm-or-number"
                           type="text"
-                          className={ocrReview?.or_number ? 'pm-needs-review' : ''}
                           value={orForm.or_number}
                           onChange={(e) => handleOrFieldChange('or_number', e.target.value)}
                           placeholder="e.g. 7439418"
+                          autoFocus
                         />
                         {orForm.or_number.trim().length >= 3 && (
                           <span className={`pm-or-status ${duplicate.isDuplicate ? 'dup' : 'ok'}`}>
@@ -1515,7 +1077,6 @@ export default function PaymentMonitoring() {
                       <input
                         id="pm-date"
                         type="date"
-                        className={ocrReview?.date ? 'pm-needs-review' : ''}
                         value={orForm.or_date}
                         onChange={(e) => handleOrFieldChange('or_date', e.target.value)}
                       />
@@ -1543,12 +1104,12 @@ export default function PaymentMonitoring() {
                     </span>
                   </div>
 
-                  {ocrReview?.sumMismatch && ocrReview.message && (
+                  {items.some((it) => it.needs_review) && (
                     <div className="pm-ocr-mismatch" role="alert">
                       <AlertTriangle size={16} aria-hidden="true" />
                       <div>
-                        <strong>Check the payment details.</strong>
-                        <span>{ocrReview.message}</span>
+                        <strong>Review the highlighted rows.</strong>
+                        <span>Some amounts were not confirmed — verify each before saving.</span>
                       </div>
                     </div>
                   )}
@@ -1562,7 +1123,7 @@ export default function PaymentMonitoring() {
                     </div>
 
                     {(items || []).map((item, index) => (
-                      <div className={`pm-items-row ${ocrReview?.items?.[index] || item.needs_review ? 'pm-row-review' : ''}`} key={index}>
+                      <div className={`pm-items-row ${item.needs_review ? 'pm-row-review' : ''}`} key={index}>
                         <div className="pm-cell pm-cell-name">
                           {index === 0 ? (
                             <input
@@ -1629,18 +1190,12 @@ export default function PaymentMonitoring() {
                   </div>
                   {fieldErrors.or_amount && <p className="field-error">{fieldErrors.or_amount}</p>}
                   {fieldErrors.items && <p className="field-error">{fieldErrors.items}</p>}
-
-                  {(ocrReview?.sumMismatch || (ocrReview?.items || []).some(Boolean)) && (
-                    <p className="pm-items-hint pm-row-review-hint">
-                      <AlertTriangle size={12} aria-hidden="true" /> Highlighted rows weren't read with full confidence — verify each amount before saving.
-                    </p>
-                  )}
                   <div className="pm-items-actions">
                     <button type="button" className="btn-secondary btn-sm" onClick={addItem}>
                       <Plus size={14} aria-hidden="true" /> Add payment item
                     </button>
                     <span className="pm-items-hint">
-                      Click any cell to edit. Filled from the "Payment Details" part of the OR — fix or add rows the scanner missed.
+                      Click any cell to edit. Pick products from "Quick Pick" above, or type each payment row manually.
                     </span>
                   </div>
                 </div>
@@ -1670,7 +1225,7 @@ export default function PaymentMonitoring() {
                       type="button"
                       className={`pm-qr-scan-btn ${qrScanOpen ? 'active' : ''}`}
                       onClick={toggleQrScan}
-                      disabled={scanning}
+                      disabled={qrScanning}
                     >
                       {qrScanning ? <Loader2 size={15} className="spin" aria-hidden="true" /> : <ScanLine size={15} aria-hidden="true" />}
                       {qrScanOpen ? 'Close QR Scanner' : 'Scan Pet QR'}
@@ -1728,10 +1283,10 @@ export default function PaymentMonitoring() {
                           </div>
 
                           <div className="pm-qr-match-actions">
-                            <button type="button" className="btn-primary btn-sm" onClick={confirmQrOwner} disabled={scanning}>
+                            <button type="button" className="btn-primary btn-sm" onClick={confirmQrOwner} disabled={qrScanning}>
                               <CheckCircle2 size={15} aria-hidden="true" /> Confirm & Use
                             </button>
-                            <button type="button" className="btn-secondary btn-sm" onClick={() => setQrOwnerMatch(null)} disabled={scanning}>
+                            <button type="button" className="btn-secondary btn-sm" onClick={() => setQrOwnerMatch(null)} disabled={qrScanning}>
                               <X size={15} aria-hidden="true" /> Not this pet
                             </button>
                           </div>
@@ -1767,75 +1322,54 @@ export default function PaymentMonitoring() {
                           <p className="pm-items-hint">These are the exact details saved for OR {qrReceiptMatch.or_number}. Fill the form with them, or search a different receipt.</p>
 
                           <div className="pm-qr-match-actions">
-                            <button type="button" className="btn-primary btn-sm" onClick={confirmQrReceipt} disabled={scanning}>
+                            <button type="button" className="btn-primary btn-sm" onClick={confirmQrReceipt} disabled={qrScanning}>
                               <CheckCircle2 size={15} aria-hidden="true" /> Fill Form & Confirm
                             </button>
-                            <button type="button" className="btn-secondary btn-sm" onClick={() => setQrReceiptMatch(null)} disabled={scanning}>
+                            <button type="button" className="btn-secondary btn-sm" onClick={() => setQrReceiptMatch(null)} disabled={qrScanning}>
                               <X size={15} aria-hidden="true" /> Not this receipt
                             </button>
                           </div>
                         </div>
                       ) : qrScanning ? (
                         <div className="pm-qr-scanning">
-                          <Loader2 size={20} className="spin" aria-hidden="true" /> Reading QR code...
+                          <Loader2 size={20} className="spin" aria-hidden="true" /> Checking the scanned code...
                         </div>
                       ) : (
-                        <div className="pm-qr-desktop">
-                          <div className="pm-camera-box">
-                            <div className="pm-camera-stage">
-                              <div className="pm-camera-viewport">
-                                <video ref={qrLensVideoRef} className="pm-camera-video" playsInline muted />
-                                <div className="pm-camera-guide">
-                                  <div className={`pm-camera-guide-frame${qrLensFound ? ' found' : ''}`}>
-                                    {qrLensFound && (
-                                      <span className="pm-camera-found">
-                                        <CheckCircle2 size={18} aria-hidden="true" /> QR Found!
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="pm-camera-guide-text">
-                                    Point the pet's QR inside the frame — it reads automatically. Press Scan only if it's slow.
-                                  </p>
-                                </div>
-                              </div>
-
-                              {qrLensError ? (
-                                <div className="pm-camera-error">
-                                  <span className="pm-camera-error-icon">
-                                    <AlertTriangle size={22} aria-hidden="true" />
-                                  </span>
-                                  <p>{qrLensError}</p>
-                                  <div className="pm-camera-error-actions">
-                                    <button type="button" className="pm-camera-shoot" onClick={openNativeQrCamera} disabled={scanning}>
-                                      <Camera size={16} aria-hidden="true" /> Open Phone Camera
-                                    </button>
-                                    <button type="button" className="btn-secondary btn-sm" onClick={() => qrFileInputRef.current?.click()} disabled={scanning}>
-                                      <ImageUp size={15} aria-hidden="true" /> Choose image
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="pm-camera-controls">
-                                  <span className={`pm-camera-live ${qrLensLive ? 'on' : ''}`}>
-                                    <ScanLine size={14} aria-hidden="true" />
-                                    {qrLensLive ? 'Live' : 'Starting camera…'}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="pm-camera-shoot"
-                                    onClick={shootQrLens}
-                                    disabled={!qrLensLive || scanning}
-                                  >
-                                    <ScanLine size={16} aria-hidden="true" /> {scanning ? 'Reading…' : 'Scan QR'}
-                                  </button>
-                                </div>
-                              )}
-                              <canvas ref={qrLensCanvasRef} className="pm-capture-canvas" />
+                        <div className="pm-qr-session">
+                          <div className="pm-qr-session-card">
+                            <span className="pm-qr-session-label">Step 1 — Scan this QR with your phone</span>
+                            {qrSessionQr ? (
+                              <img className="pm-qr-session-img" src={qrSessionQr} alt="Phone scan session QR" />
+                            ) : (
+                              <div className="pm-qr-session-loading">
+                                <Loader2 size={18} className="spin" aria-hidden="true" /> Preparing...
                             </div>
+                            )}
                           </div>
-                          <span className="pm-items-hint">
-                            Point the camera at the pet's QR code — system receipts (pm-receipt QRs) are matched too.
-                          </span>
+                          <ol className="pm-qr-session-steps">
+                            <li>Open your phone's camera and scan the QR above — it opens the system's QR scanner.</li>
+                            <li>Point the phone at the pet's QR code (or a payment-receipt QR).</li>
+                            <li>The match appears here automatically — verify, then <strong>Confirm &amp; Use</strong>.</li>
+                          </ol>
+                          <div className="pm-qr-session-status">
+                            {qrWaiting ? (
+                              <Loader2 size={14} className="spin" aria-hidden="true" />
+                            ) : null}
+                            <span>Waiting for the phone...</span>
+                            {qrSessionUrl && (
+                              <small title={qrSessionUrl}>
+                                {qrSessionUrl}
+                              </small>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn-secondary btn-sm"
+                            onClick={startQrSession}
+                            disabled={qrScanning}
+                          >
+                            Refresh QR
+                          </button>
                         </div>
                       )}
                       {qrError && (
@@ -1843,64 +1377,6 @@ export default function PaymentMonitoring() {
                           <AlertTriangle size={14} aria-hidden="true" /> {qrError}
                         </p>
                       )}
-                      <input
-                        ref={qrFileInputRef}
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        hidden
-                        aria-label="Choose a QR code image"
-                        onChange={(e) => {
-                          decodeQrFile(e.target.files?.[0]);
-                          e.target.value = '';
-                        }}
-                      />
-                      <div id="pm-qr-file-region" hidden aria-hidden="true" />
-                      <div id="pm-qr-lens-region" hidden aria-hidden="true" />
-                    </div>
-                  )}
-
-                  {nativeQrMode && (
-                    <div
-                      className="pm-native-overlay"
-                      onClick={() => {
-                        stopNativeQrScan();
-                        setNativeQrMode(false);
-                        setQrScanOpen(false);
-                      }}
-                    >
-                      <video ref={qrNativeVideoRef} className="pm-native-video" playsInline muted />
-                      <div className="pm-native-frame">
-                        <span className="pm-native-corner tl" />
-                        <span className="pm-native-corner tr" />
-                        <span className="pm-native-corner bl" />
-                        <span className="pm-native-corner br" />
-                        {nativeBox && nativeBox.w > 0 && nativeBox.h > 0 && (
-                          <span
-                            className="pm-native-guide"
-                            style={{
-                              left: `${nativeBox.x * 100}%`,
-                              top: `${nativeBox.y * 100}%`,
-                              width: `${nativeBox.w * 100}%`,
-                              height: `${nativeBox.h * 100}%`,
-                            }}
-                          />
-                        )}
-                      </div>
-                      <p className="pm-native-hint">{nativeQrStarting ? 'Starting camera...' : 'Point at the pet QR code'}</p>
-                      <div className="pm-native-topbar">
-                        <button
-                          type="button"
-                          className="btn-secondary btn-sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            stopNativeQrScan();
-                            setNativeQrMode(false);
-                            setQrScanOpen(false);
-                          }}
-                        >
-                          <X size={15} aria-hidden="true" /> Close
-                        </button>
-                      </div>
                     </div>
                   )}
 
@@ -1915,21 +1391,54 @@ export default function PaymentMonitoring() {
                         ownerMatches.map((owner) => {
                           const isSelected = selectedOwner?.owner_id === owner.owner_id;
                           return (
-                            <button
-                              type="button"
-                              key={owner.owner_id}
-                              className={`owner-match-item ${isSelected ? 'selected' : ''}`}
-                              onClick={() => pickOwner(owner)}
-                            >
-                              <User size={16} aria-hidden="true" />
-                              <span className="owner-match-main">
-                                <strong>{owner.full_name}</strong>
-                                <span className="owner-match-sub">
-                                  Brgy. {owner.barangay || '—'} · {owner.pet_count} pet(s)
+                            <div key={owner.owner_id} className={`owner-match-group ${isSelected ? 'selected' : ''}`}>
+                              <button
+                                type="button"
+                                className="owner-match-item"
+                                onClick={() => pickOwner(owner)}
+                              >
+                                <User size={16} aria-hidden="true" />
+                                <span className="owner-match-main">
+                                  <strong>{owner.full_name}</strong>
+                                  <span className="owner-match-sub">
+                                    Brgy. {owner.barangay || '—'} · {owner.pet_count} pet(s)
+                                  </span>
                                 </span>
-                              </span>
-                              <span className="owner-match-contact">{owner.contact_number || '—'}</span>
-                            </button>
+                                <span className="owner-match-contact">{owner.contact_number || '—'}</span>
+                              </button>
+                              {Array.isArray(owner.pets) && owner.pets.length > 0 && (
+                                <div className="owner-pets-list">
+                                  {owner.pets.map((pet) => (
+                                    <button
+                                      type="button"
+                                      key={pet.pet_id}
+                                      className={`owner-pet-item ${selectedPet?.pet_id === pet.pet_id ? 'selected' : ''}`}
+                                      onClick={() => pickOwner(owner, pet)}
+                                    >
+                                      {pet.pet_photo ? (
+                                        <img
+                                          className="owner-pet-thumb"
+                                          src={resolveMediaUrl(pet.pet_photo)}
+                                          alt={pet.pet_name || 'Pet'}
+                                        />
+                                      ) : (
+                                        <span className="owner-pet-thumb owner-pet-thumb-icon">
+                                          <PawPrint size={13} aria-hidden="true" />
+                                        </span>
+                                      )}
+                                      <span className="owner-pet-main">
+                                        <strong>{pet.pet_name || 'Pet'}</strong>
+                                        <span className="owner-match-sub">
+                                          {[pet.pet_species, pet.pet_breed, pet.pet_sex].filter(Boolean).join(' · ') || '—'}
+                                          {pet.pet_code ? ` · ${pet.pet_code}` : ''}
+                                        </span>
+                                      </span>
+                                      <span className="owner-pet-pick">Pick pet</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           );
                         })
                       )}
@@ -1953,6 +1462,33 @@ export default function PaymentMonitoring() {
                       </button>
                     </div>
                   )}
+
+                  {selectedPet && (
+                    <div className="pm-pet-card">
+                      {selectedPet.pet_photo ? (
+                        <img
+                          className="pm-pet-thumb"
+                          src={resolveMediaUrl(selectedPet.pet_photo)}
+                          alt={selectedPet.pet_name || 'Pet'}
+                        />
+                      ) : (
+                        <span className="pm-pet-thumb pm-pet-thumb-icon">
+                          <PawPrint size={16} aria-hidden="true" />
+                        </span>
+                      )}
+                      <span className="owner-match-main">
+                        <span className="owner-match-sub">Pet details</span>
+                        <strong>{selectedPet.pet_name || 'Registered pet'}</strong>
+                        <span className="owner-match-sub">
+                          {[selectedPet.pet_species, selectedPet.pet_breed, selectedPet.pet_sex].filter(Boolean).join(' · ') || '—'}
+                          {selectedPet.pet_code ? ` · ${selectedPet.pet_code}` : ''}
+                        </span>
+                      </span>
+                      <button type="button" className="pm-remove-owner" onClick={() => setSelectedPet(null)} aria-label="Change pet">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </section>
             </div>
@@ -1961,7 +1497,18 @@ export default function PaymentMonitoring() {
               <button type="button" className="btn-secondary" onClick={closeScanModal} disabled={saving}>
                 Cancel
               </button>
-              <button type="button" className="btn-primary" onClick={handleSave} disabled={saving || duplicate.checking}>
+              <button type="button" className="btn-secondary" onClick={() => handleSave('next')} disabled={saving || duplicate.checking}>
+                {saving ? (
+                  <>
+                    <Loader2 size={16} className="spin" aria-hidden="true" /> Saving...
+                  </>
+                ) : (
+                  <>
+                    <ChevronRight size={16} aria-hidden="true" /> Save & Next
+                  </>
+                )}
+              </button>
+              <button type="button" className="btn-primary" onClick={() => handleSave('close')} disabled={saving || duplicate.checking}>
                 {saving ? (
                   <>
                     <Loader2 size={16} className="spin" aria-hidden="true" /> Saving...
@@ -2165,64 +1712,69 @@ export default function PaymentMonitoring() {
       )}
 
       {/* ───────────────────── PRINT RECEIPT MODAL ───────────────────── */}
-      {receiptRecord && (
-        <div className="logout-modal-overlay pm-receipt-overlay" onClick={() => setReceiptRecord(null)}>
-          <div className="pm-receipt-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="pm-receipt-title">
-            <div className="pm-receipt-actions">
-              <div>
-                <h3 id="pm-receipt-title">Payment Receipt · OR {receiptRecord.or_number}</h3>
-                <p>A printable copy for the pet owner. Scanning its QR reopens the exact record.</p>
-              </div>
-              <div className="pm-receipt-actions-buttons">
-                <button type="button" className="btn-primary btn-sm" onClick={() => window.print()}>
-                  <Printer size={14} aria-hidden="true" /> Print Receipt
-                </button>
-                <button type="button" className="btn-secondary btn-sm" onClick={() => setReceiptRecord(null)}>
-                  <X size={14} aria-hidden="true" /> Close
-                </button>
-              </div>
-            </div>
-
-            <div className="qr-print-area pm-receipt-sheet qr-print-header">
-              <div className="pm-receipt-brand">
+      {receiptRecord &&
+        createPortal(
+          <div className="logout-modal-overlay pm-receipt-overlay" onClick={() => setReceiptRecord(null)}>
+            <div className="pm-receipt-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="pm-receipt-title">
+              <div className="pm-receipt-actions">
                 <div>
-                  <strong>City of Cabuyao</strong>
-                  <span>City Veterinary Office — Official Payment Receipt</span>
+                  <h3 id="pm-receipt-title">Payment Receipt · OR {receiptRecord.or_number}</h3>
+                  <p>A printable copy for the pet owner.</p>
                 </div>
-                <span className="pm-receipt-no">OR {receiptRecord.or_number}</span>
+                <div className="pm-receipt-actions-buttons">
+                  <button type="button" className="btn-primary btn-sm" onClick={() => window.print()}>
+                    <Printer size={14} aria-hidden="true" /> Print Receipt
+                  </button>
+                </div>
               </div>
 
-              <div className="pm-receipt-meta-grid">
-                <div className="clinical-detail-item">
-                  <span>OR Number</span>
+              <div className="qr-print-area pm-receipt-sheet">
+              <div className="pm-receipt-head">
+                <div className="pm-receipt-head-brand">
+                  <img className="pm-receipt-head-logo" src="/assets/logo.png.jpg" alt="City Veterinary Office" />
+                  <div className="pm-receipt-head-title">
+                    <span className="pm-receipt-head-city">City of Cabuyao</span>
+                    <strong className="pm-receipt-head-office">City Veterinary Office</strong>
+                    <small className="pm-receipt-head-sub">Official Payment Receipt</small>
+                  </div>
+                </div>
+                <div className="pm-receipt-orbox">
+                  <span>Official Receipt No.</span>
                   <strong>{receiptRecord.or_number}</strong>
                 </div>
-                <div className="clinical-detail-item">
-                  <span>Date of Payment</span>
+              </div>
+
+              <div className="pm-receipt-meta">
+                <div className="pm-receipt-meta-row">
+                  <span className="pm-receipt-meta-label">Date of Payment</span>
                   <strong>{formatDisplayDate(receiptRecord.or_date)}{receiptRecord.or_time ? ` · ${formatTime(receiptRecord.or_time)}` : ''}</strong>
                 </div>
-                <div className="clinical-detail-item">
-                  <span>Payment Type</span>
+                <div className="pm-receipt-meta-row">
+                  <span className="pm-receipt-meta-label">Payment Type</span>
                   <strong>{receiptRecord.payment_type}</strong>
                 </div>
-                <div className="clinical-detail-item">
-                  <span>Amount</span>
-                  <strong>{formatMoney(receiptRecord.or_amount)}</strong>
-                </div>
-                <div className="clinical-detail-item">
-                  <span>Pet Owner</span>
+                <div className="pm-receipt-meta-row">
+                  <span className="pm-receipt-meta-label">Pet Owner</span>
                   <strong>{receiptRecord.owner_name}</strong>
                 </div>
-                <div className="clinical-detail-item">
-                  <span>Contact</span>
+                <div className="pm-receipt-meta-row">
+                  <span className="pm-receipt-meta-label">Pet</span>
+                  <strong>
+                    {receiptRecord.pet_name
+                      ? `${receiptRecord.pet_name}${receiptRecord.pet_code ? ` · ${receiptRecord.pet_code}` : ''}`
+                      : '—'}
+                  </strong>
+                </div>
+                <div className="pm-receipt-meta-row">
+                  <span className="pm-receipt-meta-label">Contact</span>
                   <strong>{receiptRecord.contact_number || '—'}</strong>
                 </div>
-                <div className="clinical-detail-item">
-                  <span>Address</span>
+                <div className="pm-receipt-meta-row">
+                  <span className="pm-receipt-meta-label">Address</span>
                   <strong>{[receiptRecord.address, receiptRecord.barangay].filter(Boolean).join(', ') || '—'}</strong>
                 </div>
-                <div className="clinical-detail-item">
-                  <span>Recorded By</span>
+                <div className="pm-receipt-meta-row pm-receipt-meta-row--full">
+                  <span className="pm-receipt-meta-label">Recorded By</span>
                   <strong>{receiptRecord.recorded_by_name || `Staff #${receiptRecord.recorded_by}`}</strong>
                 </div>
               </div>
@@ -2231,25 +1783,22 @@ export default function PaymentMonitoring() {
                 const detailItems = parseDetailItems(receiptRecord);
                 if (detailItems) {
                   return (
-                    <div className="pm-receipt-items-wrap">
-                      <div className="pm-detail-items pm-detail-items-r">
-                        <div className="pm-detail-items-row pm-detail-items-head">
-                          <span>Name</span>
-                          <span>Payment for</span>
-                          <span>Amount</span>
+                    <div className="pm-receipt-items">
+                      <div className="pm-receipt-items-head">
+                        <span>Item</span>
+                        <span>Payment for</span>
+                        <span>Amount</span>
+                      </div>
+                      {detailItems.map((item, index) => (
+                        <div className="pm-receipt-items-row" key={index}>
+                          <span>{index === 0 && item.name ? item.name : '—'}</span>
+                          <span>{item.description || '—'}</span>
+                          <span>{item.amount ? formatMoney(item.amount) : '—'}</span>
                         </div>
-                        {detailItems.map((item, index) => (
-                          <div className="pm-detail-items-row" key={index}>
-                            <span>{index === 0 && item.name ? item.name : ''}</span>
-                            <span>{item.description || '—'}</span>
-                            <span>{item.amount ? formatMoney(item.amount) : '—'}</span>
-                          </div>
-                        ))}
-                        <div className="pm-detail-items-row pm-detail-items-total">
-                          <span />
-                          <span>Total</span>
-                          <span>{formatMoney(receiptRecord.or_amount)}</span>
-                        </div>
+                      ))}
+                      <div className="pm-receipt-items-total">
+                        <span>Total</span>
+                        <strong>{formatMoney(receiptRecord.or_amount)}</strong>
                       </div>
                     </div>
                   );
@@ -2260,26 +1809,18 @@ export default function PaymentMonitoring() {
               })()}
 
               <div className="pm-receipt-foot">
-                <div className="pm-receipt-qr">
-                  {receiptRecord.receipt_qr_path ? (
-                    <>
-                      <img src={receiptRecord.receipt_qr_path} alt={`Receipt QR ${receiptRecord.pm_token || ''}`} />
-                      <span>Scan to re-open this receipt</span>
-                    </>
-                  ) : (
-                    <span className="pm-receipt-noqr">No receipt QR generated.</span>
-                  )}
-                </div>
-                <div className="pm-receipt-stamp">
-                  <strong>City Veterinary Office</strong>
-                  <span>Cabuyao, Laguna</span>
-                  <span>{receiptRecord.pm_token || '—'}</span>
+                <div className="pm-receipt-sign">
+                  <span className="pm-receipt-sign-label">Prepared by</span>
+                  <strong>{receiptRecord.recorded_by_name || `Staff #${receiptRecord.recorded_by}`}</strong>
+                  <span className="pm-receipt-sign-role">City Veterinary Office · Cabuyao, Laguna</span>
+                  <span className="pm-receipt-sign-token">{receiptRecord.pm_token || '—'}</span>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       <ConfirmDialog
         open={!!deleteTarget}

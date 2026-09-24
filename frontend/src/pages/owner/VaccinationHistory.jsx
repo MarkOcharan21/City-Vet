@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import useMinLoading from '../../hooks/useMinLoading';
 import {
   AlertTriangle,
   Calendar,
@@ -17,8 +18,8 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import StatusBadge from '../../components/StatusBadge';
-import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import ErrorState from '../../components/ui/ErrorState';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 
 // ─── helpers ────────────────────────────────────────────────
 
@@ -979,6 +980,7 @@ function StatusLegend() {
 export default function VaccinationHistory() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const showLoading = useMinLoading(loading);
   const [error, setError] = useState('');
 
   const [selectedPet, setSelectedPet] = useState('all');
@@ -1008,18 +1010,28 @@ export default function VaccinationHistory() {
     [records],
   );
 
-  // Filtered records based on pet, search, status
+  // Filtered records based on pet, search, status (priority: Overdue → Due Soon → Updated)
   const filteredRecords = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return records.filter((r) => {
-      if (selectedPet !== 'all' && r.pet_name !== selectedPet) return false;
-      if (statusFilter !== 'all' && computeStatus(r.next_due_date) !== statusFilter) return false;
-      if (q) {
-        const hay = [r.vaccine_name, r.pet_name, r.comments].filter(Boolean).join(' ').toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
+    const rank = { Overdue: 0, 'Due Soon': 1, Updated: 2 };
+    return records
+      .filter((r) => {
+        if (selectedPet !== 'all' && r.pet_name !== selectedPet) return false;
+        if (statusFilter !== 'all' && computeStatus(r.next_due_date) !== statusFilter) return false;
+        if (q) {
+          const hay = [r.vaccine_name, r.pet_name, r.comments].filter(Boolean).join(' ').toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const ra = rank[computeStatus(a.next_due_date)] ?? 3;
+        const rb = rank[computeStatus(b.next_due_date)] ?? 3;
+        if (ra !== rb) return ra - rb;
+        const da = a.next_due_date ? new Date(a.next_due_date).getTime() : Infinity;
+        const db = b.next_due_date ? new Date(b.next_due_date).getTime() : Infinity;
+        return da - db;
+      });
   }, [records, selectedPet, search, statusFilter]);
 
   // Summary card records: filtered by pet only (not search/status)
@@ -1037,7 +1049,7 @@ export default function VaccinationHistory() {
 
   // ── Render states ──────────────────────────────────────────
 
-  if (loading) return <LoadingSpinner text="Loading vaccination records..." />;
+  if (showLoading) return <LoadingSpinner text="Loading vaccination records..." />;
 
   if (error) {
     return (
@@ -1181,9 +1193,9 @@ export default function VaccinationHistory() {
         {filteredRecords.length > 0 ? (
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))',
-              gap: '1.15rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.9rem',
             }}
           >
             {filteredRecords.map((record) => (

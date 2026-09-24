@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import useMinLoading from '../../hooks/useMinLoading';
 import {
   AlertTriangle,
   Calendar,
@@ -598,9 +599,21 @@ function MedicineSection({ records }) {
         title="Active Medications"
         count={filteredActive.length}
         accentColor="var(--color-success)"
+        background="var(--color-success-tint)"
       />
       {filteredActive.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '1.1rem', marginBottom: '2rem' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.9rem',
+            marginBottom: '2rem',
+            background: 'var(--color-success-tint)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 14,
+            padding: '1.1rem',
+          }}
+        >
           {filteredActive.map((r) => (
             <MedicineCard key={r.id} record={r} onViewDetails={setDetailRecord} />
           ))}
@@ -617,9 +630,21 @@ function MedicineSection({ records }) {
         title="Medication History"
         count={filteredHistory.length}
         accentColor="var(--color-text-muted)"
+        background="var(--color-accent-tint)"
       />
       {filteredHistory.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '1.1rem', marginBottom: '1rem' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.9rem',
+            marginBottom: '1rem',
+            background: 'var(--color-accent-tint)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 14,
+            padding: '1.1rem',
+          }}
+        >
           {filteredHistory.map((r) => (
             <MedicineCard key={r.id} record={r} onViewDetails={setDetailRecord} />
           ))}
@@ -1115,17 +1140,31 @@ function ClinicalSection({ records }) {
 //  SHARED SECTION HEADING
 // ═══════════════════════════════════════════════════════════════
 
-function SectionHeading({ icon, title, count, accentColor }) {
+function SectionHeading({ icon, title, count, accentColor, background }) {
   return (
     <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.65rem',
-        marginBottom: '1rem',
-        paddingBottom: '0.6rem',
-        borderBottom: `2px solid ${accentColor || 'var(--color-border)'}`,
-      }}
+      style={
+        background
+          ? {
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.65rem',
+              margin: '0 0 0.9rem',
+              padding: '0.7rem 1rem',
+              borderRadius: 12,
+              background,
+              border: '1px solid var(--color-border)',
+              borderBottom: `2px solid ${accentColor || 'var(--color-border)'}`,
+            }
+          : {
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.65rem',
+              marginBottom: '1rem',
+              paddingBottom: '0.6rem',
+              borderBottom: `2px solid ${accentColor || 'var(--color-border)'}`,
+            }
+      }
     >
       {icon}
       <h2 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--color-ink)' }}>
@@ -1141,6 +1180,7 @@ function SectionHeading({ icon, title, count, accentColor }) {
           fontSize: '0.78rem',
           fontWeight: 700,
           color: 'var(--color-text-muted)',
+          flexShrink: 0,
         }}
       >
         {count}
@@ -1226,6 +1266,7 @@ export default function ClinicalMedicineRecords() {
   const [clinicalRecords, setClinicalRecords] = useState([]);
   const [medicineRecords, setMedicineRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const showLoading = useMinLoading(loading);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('medicine');
 
@@ -1248,7 +1289,7 @@ export default function ClinicalMedicineRecords() {
 
   useEffect(() => { load(); }, []);
 
-  if (loading) return <LoadingSpinner text="Loading records..." />;
+  if (showLoading) return <LoadingSpinner text="Loading records..." />;
 
   if (error) {
     return <ErrorState title="Unable to load records" message={error} onRetry={load} />;
@@ -1268,7 +1309,9 @@ export default function ClinicalMedicineRecords() {
           }}
         >
           <div>
-            <h1 style={{ marginBottom: '0.35rem' }}>Consultation &amp; Medicine Records</h1>
+            <h1 style={{ marginBottom: '0.35rem' }}>
+  Consultation <span style={{ fontSize: '0.72em', fontWeight: 400, verticalAlign: '0.08em' }}>&amp;</span> Medicine Records
+</h1>
             <p className="page-intro" style={{ margin: 0 }}>
               View your pet's consultation records and prescribed medications.
             </p>

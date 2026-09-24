@@ -7,10 +7,10 @@ import PasswordInput from "../../components/PasswordInput";
 
 export default function StaffLogin() {
 
-  const [email,setEmail]=useState("");
-  const [password,setPassword]=useState("");
-  const [error,setError]=useState("");
-  const [loading,setLoading]=useState(false);
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
 
   const {login}=useAuth();
@@ -36,7 +36,7 @@ export default function StaffLogin() {
     try{
 
       const res=await api.post("/auth/login",{
-        email,
+        identifier,
         password
       });
 
@@ -116,13 +116,13 @@ Back
 
 <form onSubmit={handleSubmit}>
 
-<label>Email</label>
+<label>Account ID or Email</label>
 
 <input
-type="email"
-placeholder="Enter your email"
-value={email}
-onChange={(e)=>setEmail(e.target.value)}
+type="text"
+placeholder="e.g. STF-2026-0001 or staff@cityvet.gov.ph"
+value={identifier}
+onChange={(e)=>setIdentifier(e.target.value)}
 required
 />
 

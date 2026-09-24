@@ -94,6 +94,22 @@ export function getPrintStyles() {
       line-height: 1.4;
     }
 
+    .print-date {
+      margin-left: auto;
+      text-align: right;
+      font-size: 0.78rem;
+      color: ${PRINT_THEME.textMuted};
+      line-height: 1.4;
+      align-self: flex-start;
+      white-space: nowrap;
+    }
+
+    .print-date strong {
+      color: ${PRINT_THEME.primaryDark};
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
     .report-title {
       margin: 0 0 10px;
       font-size: 1.1rem;
@@ -102,6 +118,14 @@ export function getPrintStyles() {
       border-bottom: 2px solid ${PRINT_THEME.primary};
       padding-bottom: 5px;
       page-break-after: avoid;
+    }
+
+    .report-title--center {
+      text-align: center;
+    }
+
+    .report-meta--center {
+      text-align: center;
     }
 
     .report-meta {
@@ -180,6 +204,36 @@ export function getPrintStyles() {
     }
 
     tbody tr:nth-child(even) td {
+      background: ${PRINT_THEME.rowAlt};
+    }
+
+    .staff-report-table {
+      table-layout: fixed;
+      width: 100%;
+      font-size: 0.72rem;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .staff-report-table th,
+    .staff-report-table td {
+      padding: 5px 6px;
+      font-size: 0.72rem;
+      line-height: 1.35;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .staff-report-table thead {
+      display: table-header-group;
+    }
+
+    .staff-report-table tr {
+      page-break-inside: auto;
+      page-break-after: auto;
+    }
+
+    .staff-report-table tbody tr:nth-child(even) td {
       background: ${PRINT_THEME.rowAlt};
     }
 
@@ -397,14 +451,19 @@ export function getPrintWatermark() {
   `;
 }
 
-export function getPrintHeader(reportTitle = '') {
+export function getPrintHeader(reportTitle = '', dateGenerated = '') {
   return `
     <div class="print-header">
       <img src="${LOGO_URL}" alt="City of Cabuyao Logo" />
       <div class="print-header-text">
-        <h1>City Veterinary Animal Clinic</h1>
-        <div class="subtitle">Cabuyao City, Laguna · City Government of Cabuyao</div>
+        <h1>Cabuyao City Veterinary Office</h1>
+        <div class="subtitle">Southville Road, Barangay Marinig, City of Cabuyao, Laguna 4025</div>
       </div>
+      ${
+        dateGenerated
+          ? `<div class="print-date"><strong>Date Generated:</strong><br>${dateGenerated}</div>`
+          : ''
+      }
     </div>
     ${reportTitle ? `<h2 class="report-title">${reportTitle}</h2>` : ''}
   `;

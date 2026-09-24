@@ -4,6 +4,7 @@ import { io } from "socket.io-client";
 import api from "../../services/api";
 import toast from "react-hot-toast";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import useMinLoading from "../../hooks/useMinLoading";
 import { resolveMediaUrl } from "../../utils/mediaUrl";
 import { getSocketOrigin } from "../../utils/socketOrigin";
 import {
@@ -39,6 +40,7 @@ export default function AdminAnnouncements() {
   const highlightId = searchParams.get("highlight");
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
+  const showLoading = useMinLoading(loading);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);

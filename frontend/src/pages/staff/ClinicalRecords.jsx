@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import useMinLoading from '../../hooks/useMinLoading';
 import FieldError from '../../components/ui/FieldError';
 import PetSearchSelect from '../../components/PetSearchSelect';
 import { validateClinicalRecord } from '../../utils/validation';
+import PrintReportButton from '../../components/staff/PrintReportButton';
 
 const formatDate = (value) => {
   if (!value) return '—';
@@ -18,6 +21,7 @@ export default function ClinicalRecords() {
   const [records, setRecords] = useState([]);
   const [selectedPet, setSelectedPet] = useState(null);
   const [loading, setLoading] = useState(true);
+  const showLoading = useMinLoading(loading);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     pet_id: '',
@@ -27,6 +31,9 @@ export default function ClinicalRecords() {
     follow_up_date: '',
   });
   const [recordSearch, setRecordSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -96,12 +103,33 @@ export default function ClinicalRecords() {
       .finally(() => setLoading(false));
   }, []);
 
+  const availableYears = useMemo(() => {
+    const years = new Set();
+    records.forEach((r) => {
+      const raw = r.consultation_date;
+      if (!raw) return;
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) years.add(d.getFullYear());
+    });
+    return [...years].sort((a, b) => b - a);
+  }, [records]);
+
   const filteredRecords = useMemo(() => {
     const term = recordSearch.trim().toLowerCase();
+    const dateFiltered = records.filter((record) => {
+      if (!dateFrom && !dateTo && !yearFilter) return true;
+      const iso = String(record.consultation_date || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
 
-    if (!term) return records;
+      if (yearFilter && Number(iso.slice(0, 4)) !== Number(yearFilter)) return false;
+      if (dateFrom && iso < dateFrom) return false;
+      if (dateTo && iso > dateTo) return false;
+      return true;
+    });
 
-    return records.filter((record) =>
+    if (!term) return dateFiltered;
+
+    return dateFiltered.filter((record) =>
       [
         record.pet_name,
         record.pet_code,
@@ -115,7 +143,7 @@ export default function ClinicalRecords() {
         .toLowerCase()
         .includes(term),
     );
-  }, [records, recordSearch]);
+  }, [records, recordSearch, dateFrom, dateTo, yearFilter]);
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -155,12 +183,8 @@ export default function ClinicalRecords() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="page">
-        <p>Loading consultation records...</p>
-      </div>
-    );
+  if (showLoading) {
+    return <LoadingSpinner text="Loading consultation records..." />;
   }
 
   return (
@@ -172,6 +196,7 @@ export default function ClinicalRecords() {
             Document consultations and review the consultation log for each pet.
           </p>
         </div>
+        <PrintReportButton category="clinical" />
       </div>
 
       <div className="panel-card clinical-panel-card">
@@ -337,6 +362,43 @@ export default function ClinicalRecords() {
               aria-label="Search consultation records"
             />
           </div>
+        </div>
+
+        <div className="toolbar-row toolbar-row--dates">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            aria-label="Consultation date from"
+            title="From date"
+          />
+          <span className="toolbar-range-sep">to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            aria-label="Consultation date to"
+            title="To date"
+          />
+          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} aria-label="Filter by year">
+            <option value="">All Years</option>
+            {availableYears.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          {(dateFrom || dateTo || yearFilter) && (
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => {
+                setDateFrom('');
+                setDateTo('');
+                setYearFilter('');
+              }}
+            >
+              Clear date filter
+            </button>
+          )}
         </div>
 
         <div className="table-wrapper">

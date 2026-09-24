@@ -177,7 +177,7 @@ export default function StaffLayout() {
 
           <NavLink to="/staff/issue-records" onClick={() => setMobileOpen(false)}>
             <FileOutput size={16} />
-            <span className="sidebar-label">Issue Requested Record</span>
+            <span className="sidebar-label">Issue Requested Records</span>
           </NavLink>
 
           <NavLink to="/staff/payment-monitoring" onClick={() => setMobileOpen(false)}>

@@ -6,6 +6,7 @@ import FieldError from '../../components/ui/FieldError';
 import PetSearchSelect from '../../components/PetSearchSelect';
 import PetVaccinationCard from '../../components/staff/PetVaccinationCard';
 import { validateVaccinationRecord } from '../../utils/validation';
+import PrintReportButton from '../../components/staff/PrintReportButton';
 
 const STATUS_PRIORITY = {
   Overdue: 1,
@@ -71,6 +72,9 @@ export default function VaccinationMonitoring() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [periodFilter, setPeriodFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
 
   const totalVaccinated = records.filter((r) => r.status === 'Updated').length;
   const dueSoon = records.filter((r) => r.status === 'Due Soon').length;
@@ -80,6 +84,17 @@ export default function VaccinationMonitoring() {
     const today = new Date().toDateString();
     return new Date(r.date_administered).toDateString() === today;
   }).length;
+
+  const availableYears = useMemo(() => {
+    const years = new Set();
+    records.forEach((r) => {
+      const raw = r.date_administered || r.created_at;
+      if (!raw) return;
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) years.add(d.getFullYear());
+    });
+    return [...years].sort((a, b) => b - a);
+  }, [records]);
 
   const speciesId = selectedPet?.species_id;
 
@@ -152,6 +167,19 @@ export default function VaccinationMonitoring() {
       }
     };
 
+    const matchesDateRange = (record) => {
+      if (!dateFrom && !dateTo && !yearFilter) return true;
+      const raw = record.date_administered || record.created_at;
+      if (!raw) return false;
+      const iso = String(raw).slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+
+      if (yearFilter && Number(iso.slice(0, 4)) !== Number(yearFilter)) return false;
+      if (dateFrom && iso < dateFrom) return false;
+      if (dateTo && iso > dateTo) return false;
+      return true;
+    };
+
     return [...records]
       .filter((record) => {
         const matchesStatus = statusFilter === 'All' ? true : record.status === statusFilter;
@@ -163,7 +191,7 @@ export default function VaccinationMonitoring() {
               .toLowerCase()
               .includes(normalizedSearch);
 
-        return matchesStatus && matchesPeriod(record) && matchesSearch;
+        return matchesStatus && matchesPeriod(record) && matchesDateRange(record) && matchesSearch;
       })
       .sort((a, b) => {
         const aPriority = STATUS_PRIORITY[a.status] ?? 99;
@@ -176,7 +204,7 @@ export default function VaccinationMonitoring() {
 
         return aDate - bDate;
       });
-  }, [records, searchTerm, statusFilter, periodFilter]);
+  }, [records, searchTerm, statusFilter, periodFilter, dateFrom, dateTo, yearFilter]);
 
   function loadRecords() {
     api.get('/vaccinations').then((res) => setRecords(res.data.records));
@@ -328,13 +356,16 @@ export default function VaccinationMonitoring() {
           <h1>Vaccination Monitoring</h1>
           <p className="page-intro">Track vaccine updates, pending due dates, and urgent follow-ups for each pet.</p>
         </div>
-        <button
-          type="button"
-          className="btn-primary btn-sm"
-          onClick={openAddModal}
-        >
-          Add Vaccination Record
-        </button>
+        <div className="page-header-actions">
+          <PrintReportButton category="vaccinations" />
+          <button
+            type="button"
+            className="btn-primary btn-sm"
+            onClick={openAddModal}
+          >
+            Add Vaccination Record
+          </button>
+        </div>
       </div>
 
       <div className="summary-grid">
@@ -415,14 +446,15 @@ export default function VaccinationMonitoring() {
             <form onSubmit={handleSubmit} className="vaccination-modal-form">
               <div className="vaccination-modal-body">
                 <div className="field-group">
-                  <label htmlFor="vaccination-pet-display">Pet</label>
-                  <input
-                    id="vaccination-pet-display"
-                    type="text"
-                    value={selectedPet?.name || '—'}
-                    readOnly
-                    className="vaccination-readonly"
+                  <label htmlFor="vaccination-pet-input">Pet</label>
+                  <PetSearchSelect
+                    id="vaccination-pet-input"
+                    value={selectedPet}
+                    onChange={handlePetSelect}
+                    placeholder="Search pet by name, code, or owner..."
+                    required
                   />
+                  <FieldError message={fieldErrors.pet_id} />
                 </div>
 
                 <div className="vaccination-form-row">
@@ -562,6 +594,46 @@ export default function VaccinationMonitoring() {
           </select>
         </div>
 
+        <div className="toolbar-row toolbar-row--dates">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            aria-label="Vaccination date from"
+            title="From date"
+          />
+          <span className="toolbar-range-sep">to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            aria-label="Vaccination date to"
+            title="To date"
+          />
+          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} aria-label="Filter by year">
+            <option value="">All Years</option>
+            {availableYears.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          {(dateFrom || dateTo || yearFilter) && (
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => {
+                setDateFrom('');
+                setDateTo('');
+                setYearFilter('');
+              }}
+            >
+              Clear date filter
+            </button>
+          )}
+          <span className="toolbar-range-hint">
+            Filters last vaccination by any date or year.
+          </span>
+        </div>
+
         <div className="table-wrapper">
           <table className="data-table">
             <thead>
@@ -574,7 +646,7 @@ export default function VaccinationMonitoring() {
                 <th>Next Due</th>
               </tr>
             </thead>
-            <tbody key={`${statusFilter}|${periodFilter}|${searchTerm}`}>
+            <tbody key={`${statusFilter}|${periodFilter}|${searchTerm}|${dateFrom}|${dateTo}|${yearFilter}`}>
               {filteredRecords.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="empty-state-cell">No vaccination records match your search.</td>
