@@ -9,6 +9,7 @@
     "seed": "node src/utils/seedAdmin.js",
     "demo:prep": "node auto-detect-url.js",
     "demo:seed": "node src/utils/seedDemoData.js",
+    "seed:bulk": "node src/utils/seedBulkData.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {

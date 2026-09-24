@@ -118,7 +118,7 @@ async function notifyUsersByRoles(
 
   const placeholders = roles.map(() => "?").join(", ");
   const [users] = await db.query(
-    `SELECT id FROM users WHERE role IN (${placeholders})`,
+    `SELECT id FROM users WHERE status = 'active' AND role IN (${placeholders})`,
     roles
   );
 

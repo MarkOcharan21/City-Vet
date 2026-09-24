@@ -218,6 +218,38 @@ function drawFooter(doc, y, logoAsset) {
   doc.text('This is a computer-generated document.', 105, y, { align: 'center' });
 }
 
+function drawSignatureArea(doc, y, logoAsset) {
+  y = ensurePageSpace(doc, y, logoAsset, 245);
+  y += 4;
+
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...THEME.primaryDark);
+  doc.text('CERTIFICATION', 14, y);
+  doc.setDrawColor(...THEME.primary);
+  doc.setLineWidth(0.5);
+  doc.line(14, y + 1.5, 196, y + 1.5);
+  y += 9;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...THEME.ink);
+  const statement =
+    'This document is issued by the City Veterinary Animal Clinic and certifies that the information contained herein is true and correct based on official records on file.';
+  const lines = doc.splitTextToSize(statement, 170);
+  doc.text(lines, 16, y);
+  y += lines.length * 5 + 12;
+
+  doc.setFontSize(9.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text('Prepared by: ____________________________', 16, y);
+  doc.text('Date: ____________________', 150, y);
+  y += 18;
+  doc.text('Reviewed / Approved by: ____________________________', 16, y);
+  doc.text('Date: ____________________', 150, y);
+  return y + 12;
+}
+
 module.exports = {
   THEME,
   getLogoAsset,
@@ -231,4 +263,5 @@ module.exports = {
   drawEmptyState,
   drawTableRow,
   drawFooter,
+  drawSignatureArea,
 };

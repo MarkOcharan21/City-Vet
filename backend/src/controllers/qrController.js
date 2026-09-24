@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { logAudit } = require('../middleware/auditMiddleware');
+const { vetNameExpr } = require('../utils/vetNameFormat');
 
 // GET /api/qr/pet/:petId  (Staff/Admin/Vet - fetch QR token for a pet)
 async function getQrByPet(req, res) {
@@ -162,11 +163,12 @@ async function scanQrToken(req, res) {
     const [consultations] = await db.query(
     `SELECT
         c.id,
+        c.complaint,
         c.diagnosis,
         c.treatment_plan,
         c.consultation_date,
         c.follow_up_date,
-        u.email AS veterinarian
+        ${vetNameExpr('veterinarian')}
     FROM consultation_records c
     LEFT JOIN users u
     ON c.vet_id = u.id
@@ -193,7 +195,9 @@ async function scanQrToken(req, res) {
 
     pi.duration,
 
-    pi.instructions
+    pi.instructions,
+
+    ${vetNameExpr('prescribed_by')}
 
     FROM prescriptions p
 
@@ -205,6 +209,9 @@ async function scanQrToken(req, res) {
 
     JOIN consultation_records c
     ON p.consultation_id = c.id
+
+    LEFT JOIN users u
+    ON c.vet_id = u.id
 
     WHERE c.pet_id = ?
 

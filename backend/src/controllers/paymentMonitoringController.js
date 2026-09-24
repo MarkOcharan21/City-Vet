@@ -2,6 +2,7 @@ const db = require("../config/db");
 const fs = require("fs");
 const { generatePmToken, writeReceiptQrImage } = require("../utils/qrReceipt");
 const { ocrReceiptFile } = require("../utils/paddleOcr");
+const { uploadLocalFile, isAbsoluteUrl } = require("../utils/cloudUpload");
 const { logAudit } = require("../middleware/auditMiddleware");
 
 const PAYMENT_TYPES = ["Consultation", "Vaccination", "Medicine"];
@@ -53,6 +54,7 @@ async function createRecord(req, res) {
     or_description,
     payment_items,
     pet_owner_id,
+    pet_id,
     payment_type,
     medicine_id,
     medicine_quantity,
@@ -63,13 +65,36 @@ async function createRecord(req, res) {
   } = req.body;
 
   const recordedBy = req.user.id;
-  const orPhotoPath = req.file ? `/uploads/payments/${req.file.filename}` : null;
+  let orPhotoPath = req.file ? `/uploads/payments/${req.file.filename}` : null;
+
+  // On cloud deployments the receipt photo must live in object storage
+  // (Cloudinary) so it survives redeploys; local dev keeps the local path.
+  if (orPhotoPath && req.file) {
+    try {
+      const uploaded = await uploadLocalFile(req.file.path, "pet-vet/payments");
+      if (isAbsoluteUrl(uploaded)) orPhotoPath = uploaded;
+    } catch (photoErr) {
+      console.warn("Receipt photo upload to Cloudinary failed, keeping local path:", photoErr.message);
+    }
+  }
 
   if (!or_number || !String(or_number).trim()) {
     return res.status(400).json({ success: false, message: "OR number is required." });
   }
 
-  if (!PAYMENT_TYPES.includes(payment_type)) {
+  // The frontend always sends payment_type, but keep a safety net: when the
+  // detail rows carry a catalog category, classify from that instead of a stale value.
+  let effectiveType = payment_type;
+  if (!PAYMENT_TYPES.includes(effectiveType)) {
+    try {
+      const rows = payment_items ? JSON.parse(payment_items) : [];
+      const cats = (rows || []).map((r) => r.category).filter(Boolean);
+      if (cats.some((c) => /vaccin/i.test(c))) effectiveType = 'Vaccination';
+      else if (cats.some((c) => /consultat/i.test(c))) effectiveType = 'Consultation';
+      else if (cats.length) effectiveType = 'Medicine';
+    } catch (_) {}
+  }
+  if (!PAYMENT_TYPES.includes(effectiveType)) {
     return res.status(400).json({ success: false, message: "A valid payment type is required." });
   }
 
@@ -99,14 +124,24 @@ async function createRecord(req, res) {
       return res.status(400).json({ success: false, message: "Pet owner not found." });
     }
 
+    // If a pet was selected, make sure it actually belongs to the chosen owner.
+    let linkedPetId = null;
+    if (pet_id) {
+      const [[pet]] = await db.query("SELECT id FROM pets WHERE id = ? AND pet_owner_id = ?", [Number(pet_id), Number(pet_owner_id)]);
+      if (!pet) {
+        return res.status(400).json({ success: false, message: "The selected pet does not belong to this pet owner." });
+      }
+      linkedPetId = Number(pet.id);
+    }
+
     const pmToken = generatePmToken();
 
     const [result] = await db.query(
       `INSERT INTO payment_monitoring
         (or_number, or_amount, or_date, or_time, or_description, payment_items, or_photo_path,
-         ocr_text, ocr_confidence, pet_owner_id, payment_type, medicine_id,
+         ocr_text, ocr_confidence, pet_owner_id, pet_id, payment_type, medicine_id,
          medicine_quantity, medicine_total, recorded_by, remarks, pm_token)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         String(or_number).trim(),
         amount.toFixed(2),
@@ -118,7 +153,8 @@ async function createRecord(req, res) {
         ocr_text || null,
         ocr_confidence || null,
         Number(pet_owner_id),
-        payment_type,
+        linkedPetId,
+        effectiveType,
         Number(medicine_id) || null,
         medicine_quantity || null,
         Number(medicine_total) || null,
@@ -149,8 +185,8 @@ async function createRecord(req, res) {
       action: 'CREATE',
       entity_type: 'payment',
       entity_id: result.insertId,
-      new_value: { or_number: String(or_number).trim(), or_amount: amount.toFixed(2), payment_type },
-      description: `Recorded payment OR ${String(or_number).trim()} — ₱${amount.toFixed(2)} (${payment_type})`
+      new_value: { or_number: String(or_number).trim(), or_amount: amount.toFixed(2), payment_type: effectiveType },
+      description: `Recorded payment OR ${String(or_number).trim()} — ₱${amount.toFixed(2)} (${effectiveType})`
     });
   } catch (error) {
     console.error("Create payment monitoring error:", error);
@@ -186,15 +222,25 @@ async function getReceiptByToken(req, res) {
         pm.ocr_confidence,
         pm.payment_type,
         pm.pet_owner_id,
+        pm.pet_id,
         pm.created_at,
         po.full_name AS owner_name,
         po.contact_number,
         po.address,
         po.barangay,
         (SELECT COUNT(*) FROM pets p2 WHERE p2.pet_owner_id = po.id) AS pet_count,
+        p.name AS pet_name,
+        p.pet_code AS pet_code,
+        p.sex AS pet_sex,
+        p.photo AS pet_photo,
+        s.species_name AS pet_species,
+        COALESCE(b.breed_name, p.breed_custom) AS pet_breed,
         ru.full_name AS recorded_by_name
       FROM payment_monitoring pm
       JOIN pet_owners po ON pm.pet_owner_id = po.id
+      LEFT JOIN pets p ON pm.pet_id = p.id
+      LEFT JOIN species s ON p.species_id = s.id
+      LEFT JOIN breeds b ON p.breed_id = b.id
       LEFT JOIN users ru ON pm.recorded_by = ru.id
       WHERE pm.pm_token = ?`,
       [String(token).trim()]
@@ -292,10 +338,17 @@ async function listRecords(req, res) {
         po.contact_number,
         po.address,
         po.barangay,
+        p.name AS pet_name,
+        p.pet_code AS pet_code,
+        s.species_name AS pet_species,
+        COALESCE(b.breed_name, p.breed_custom) AS pet_breed,
         m.medicine_name,
         ru.full_name AS recorded_by_name
       FROM payment_monitoring pm
       JOIN pet_owners po ON pm.pet_owner_id = po.id
+      LEFT JOIN pets p ON pm.pet_id = p.id
+      LEFT JOIN species s ON p.species_id = s.id
+      LEFT JOIN breeds b ON p.breed_id = b.id
       LEFT JOIN medicines m ON pm.medicine_id = m.id
       LEFT JOIN users ru ON pm.recorded_by = ru.id
       ${whereClause}
@@ -372,6 +425,35 @@ async function searchOwners(req, res) {
       [`%${term}%`]
     );
 
+    // Attach each owner's pets so staff can pick the exact pet for the payment.
+    if (rows.length) {
+      const ownerIds = rows.map((r) => r.owner_id);
+      const [petRows] = await db.query(
+        `SELECT
+          p.id AS pet_id,
+          p.pet_owner_id AS owner_id,
+          p.name AS pet_name,
+          p.pet_code AS pet_code,
+          p.sex AS pet_sex,
+          p.photo AS pet_photo,
+          s.species_name AS pet_species,
+          COALESCE(b.breed_name, p.breed_custom) AS pet_breed
+        FROM pets p
+        LEFT JOIN species s ON p.species_id = s.id
+        LEFT JOIN breeds b ON p.breed_id = b.id
+        WHERE p.pet_owner_id IN (?)
+        ORDER BY p.name ASC`,
+        [ownerIds]
+      );
+      const petsByOwner = {};
+      petRows.forEach((pet) => {
+        (petsByOwner[pet.owner_id] = petsByOwner[pet.owner_id] || []).push(pet);
+      });
+      rows.forEach((row) => {
+        row.pets = petsByOwner[row.owner_id] || [];
+      });
+    }
+
     res.json({ success: true, owners: rows });
   } catch (error) {
     console.error("Search owners error:", error);
@@ -394,6 +476,24 @@ async function getMedicines(req, res) {
   } catch (error) {
     console.error("Get medicines error:", error);
     res.status(500).json({ success: false, message: "Could not load medicines.", error: error.message });
+  }
+}
+
+// =========================================
+// LAST OR NUMBER (for "Save & Next" quick-entry)
+// =========================================
+
+async function getLastOrNumber(req, res) {
+  try {
+    const [[row]] = await db.query(
+      `SELECT MAX(CAST(or_number AS UNSIGNED)) AS last_or
+       FROM payment_monitoring
+       WHERE or_number REGEXP '^[0-9]+$'`
+    );
+    res.json({ success: true, last_or_number: row && row.last_or != null ? Number(row.last_or) : null });
+  } catch (error) {
+    console.error("Get last OR number error:", error);
+    res.status(500).json({ success: false, message: "Could not load the last OR number.", error: error.message });
   }
 }
 
@@ -426,6 +526,56 @@ async function deleteRecord(req, res) {
   }
 }
 
+// =========================================
+// PHONE QR SCAN BOARD (in-memory)
+// The counter modal shows a QR the phone scans. The phone reads the pet's /
+// receipt's QR and posts the raw text here; the modal polls until it lands.
+// =========================================
+
+const scanBoard = new Map();
+const SCAN_BOARD_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+function pruneScanBoard() {
+  const now = Date.now();
+  for (const [key, entry] of scanBoard) {
+    if (entry.expiresAt < now) scanBoard.delete(key);
+  }
+}
+
+// POST /api/payment-monitoring/scan-board  (auth) — register a fresh session.
+async function registerScanBoard(req, res) {
+  const { key } = req.body || {};
+  if (!key || typeof key !== 'string' || key.length > 128) {
+    return res.status(400).json({ success: false, message: 'A session key is required.' });
+  }
+  scanBoard.set(key, { status: 'waiting', value: null, expiresAt: Date.now() + SCAN_BOARD_TTL_MS });
+  res.json({ success: true, status: 'waiting' });
+}
+
+// POST /api/payment-monitoring/scan-board/value  (phone, no auth) — deliver a scan.
+async function submitScanBoard(req, res) {
+  const { key, value } = req.body || {};
+  const entry = key ? scanBoard.get(key) : null;
+  if (!entry) {
+    return res.status(404).json({ success: false, message: 'Scan session not found or expired. Scan the counter QR again.' });
+  }
+  entry.status = 'ok';
+  entry.value = String(value || '').trim();
+  entry.expiresAt = Date.now() + SCAN_BOARD_TTL_MS;
+  res.json({ success: true, status: 'ok' });
+}
+
+// GET /api/payment-monitoring/scan-board/:key  (auth) — poll for the result.
+async function pollScanBoard(req, res) {
+  pruneScanBoard();
+  const { key } = req.params;
+  const entry = key ? scanBoard.get(key) : null;
+  if (!entry) {
+    return res.json({ success: true, status: 'expired', value: null });
+  }
+  res.json({ success: true, status: entry.status, value: entry.status === 'ok' ? entry.value : null });
+}
+
 module.exports = {
   createRecord,
   checkOrNumber,
@@ -434,6 +584,10 @@ module.exports = {
   getSummary,
   searchOwners,
   getMedicines,
+  getLastOrNumber,
   deleteRecord,
   ocrReceipt,
+  registerScanBoard,
+  submitScanBoard,
+  pollScanBoard,
 };

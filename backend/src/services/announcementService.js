@@ -35,18 +35,19 @@ async function sendAnnouncement(
         ]
     );
 
-    // Find recipients
+    // Find recipients — only active accounts so unverified/pending users are skipped
     let sql = `
         SELECT
             id
         FROM users
+        WHERE status = 'active'
     `;
 
     const params = [];
 
     if (audience !== "All") {
 
-        sql += " WHERE role = ?";
+        sql += " AND role = ?";
 
         params.push(audience);
 

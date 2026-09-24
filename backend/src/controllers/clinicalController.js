@@ -6,15 +6,17 @@ const {
   validateClinicalRecord,
 } = require('../utils/validation');
 const { logAudit } = require('../middleware/auditMiddleware');
+const { vetNameExpr } = require('../utils/vetNameFormat');
 
 // GET /api/clinical/my-records  (Pet Owner view)
 async function getMyClinicalRecords(req, res) {
   try {
     const [rows] = await db.query(
-      `SELECT cr.*, p.name AS pet_name
+      `SELECT cr.*, p.name AS pet_name, ${vetNameExpr('vet_name')}
        FROM consultation_records cr
        JOIN pets p ON cr.pet_id = p.id
        JOIN pet_owners po ON p.pet_owner_id = po.id
+       LEFT JOIN users u ON cr.vet_id = u.id
        WHERE po.user_id = ?
        ORDER BY cr.consultation_date DESC`,
       [req.user.id]
@@ -33,7 +35,7 @@ async function getAllClinicalRecords(req, res) {
               p.name AS pet_name,
               p.pet_code,
               po.full_name AS owner_name,
-              COALESCE(u.full_name, u.email) AS vet_name
+              ${vetNameExpr('vet_name')}
        FROM consultation_records cr
        JOIN pets p ON cr.pet_id = p.id
        JOIN pet_owners po ON p.pet_owner_id = po.id

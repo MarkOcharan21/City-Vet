@@ -5,6 +5,7 @@ node_modules/
 # NEVER commit local env files (backend/.env holds the real
 # Gmail app password + LAN URLs). Keep .env.example tracked.
 **/.env
+**/.env.*
 !**/.env.example
 
 # ── Build output ─────────────────────────────────────────
@@ -32,3 +33,9 @@ Thumbs.db
 # ── Throwaway QA scripts / screenshots ──────────────────
 test-*.mjs
 carousel-*.png
+.vercel
+
+# ── Throwaway deployment/setup scripts (not app code) ───
+backend/_*.cjs
+backend/_*.js
+backend/_*.py

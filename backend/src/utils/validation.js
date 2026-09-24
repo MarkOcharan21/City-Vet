@@ -1,9 +1,21 @@
 const { CABUYAO_BARANGAYS } = require('../constants/cabuyaoBarangays');
 
-const REQUEST_TYPES = ['Vaccination Card', 'Record Summary', 'Certificate of Registration'];
+const REQUEST_TYPES = [
+  'Vaccination Card',
+  'Record Summary',
+  'Certificate of Registration',
+  'Health Certificate',
+  'Medical Record',
+  'Prescription Record',
+  'Payment Record',
+  'Pet Transfer Certificate',
+];
 const REQUEST_FORMATS = ['PDF', 'Printed Copy'];
 const PET_SEX_VALUES = ['Male', 'Female'];
 const STAFF_ROLES = ['Staff', 'Veterinarian', 'Admin'];
+// Only Staff and Veterinarian accounts can be created via the Admin User Directory.
+// There is exactly one Admin account in the system (seeded), so it is not creatable here.
+const CREATABLE_STAFF_ROLES = ['Staff', 'Veterinarian'];
 const ANNOUNCEMENT_AUDIENCES = ['All', 'Owner', 'Staff', 'Veterinarian', 'Admin'];
 
 function trim(value) {
@@ -150,14 +162,23 @@ function validateStaffUserCreation(data) {
   const errors = {};
   const full_name = trim(data.full_name);
   const email = trim(data.email);
-  const password = data.password || '';
   const role_name = trim(data.role_name);
 
   if (getFullNameError(full_name)) errors.full_name = getFullNameError(full_name);
   if (!isValidEmail(email)) errors.email = 'Enter a valid email address.';
+  if (!CREATABLE_STAFF_ROLES.includes(role_name)) errors.role_name = 'Select a valid role.';
+
+  return { valid: Object.keys(errors).length === 0, errors, message: 'Please correct the highlighted fields.' };
+}
+
+function validateAccountSetup(data) {
+  const errors = {};
+  const password = data.password || '';
+  const confirmPassword = data.confirmPassword || '';
+
   const passwordError = getPasswordError(password);
   if (passwordError) errors.password = passwordError;
-  if (!STAFF_ROLES.includes(role_name)) errors.role_name = 'Select a valid role.';
+  if (password !== confirmPassword) errors.confirmPassword = 'Passwords do not match.';
 
   return { valid: Object.keys(errors).length === 0, errors, message: 'Please correct the highlighted fields.' };
 }
@@ -289,7 +310,19 @@ function validatePayment(data) {
 function validateRecordRequest(data) {
   const errors = {};
   if (!isPositiveInt(data.pet_id)) errors.pet_id = 'Select a pet.';
-  if (!REQUEST_TYPES.includes(trim(data.request_type))) errors.request_type = 'Select a valid request type.';
+
+  const rawTypes = Array.isArray(data.request_types)
+    ? data.request_types
+    : data.request_type
+      ? [data.request_type]
+      : [];
+  const types = [...new Set(rawTypes.filter(Boolean).map((t) => trim(t)))];
+  if (types.length === 0) {
+    errors.request_type = 'Select at least one request type.';
+  } else if (types.some((t) => !REQUEST_TYPES.includes(t))) {
+    errors.request_type = 'Select valid request types.';
+  }
+
   if (data.format && !REQUEST_FORMATS.includes(trim(data.format))) errors.format = 'Select a valid format.';
 
   return { valid: Object.keys(errors).length === 0, errors, message: 'Please correct the highlighted fields.' };
@@ -323,6 +356,7 @@ module.exports = {
   validateOwnerRegistration,
   validateStaffUserCreation,
   validateResetPassword,
+  validateAccountSetup,
   getPetNameError,
   getPetColorError,
   validatePetRegistration,

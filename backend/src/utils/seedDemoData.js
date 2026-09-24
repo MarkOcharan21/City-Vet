@@ -1062,13 +1062,13 @@ async function seedTask4() {
     ownerId: o1.id, petId: snow,
     requestType: "Vaccination Certificate", purpose: "Travel requirement for pet taxi",
     format: "Printed", comments: "Need a certified copy of Snow's 5-in-1 vaccination record.",
-    status: "Open", requestedDate: new Date(Date.now() - 2 * 864e5),
+    status: "Pending", requestedDate: new Date(Date.now() - 2 * 864e5),
   });
   await ensureRecordRequest({
     ownerId: o2.id, petId: thor,
     requestType: "Medical Records", purpose: "For local dog show registration",
     format: "PDF", comments: "Requesting Thor's complete medical history from the last year.",
-    status: "Open", requestedDate: new Date(Date.now() - 864e5),
+    status: "Pending", requestedDate: new Date(Date.now() - 864e5),
   });
   await ensureRecordRequest({
     ownerId: o1.id, petId: minggay,

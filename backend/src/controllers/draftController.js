@@ -3,6 +3,7 @@ const {
   RegistrationError,
   registerPetForOwner,
 } = require("../services/petRegistrationService");
+const { uploadLocalFile, isAbsoluteUrl } = require("../utils/cloudUpload");
 
 function parseDraftPayload(value) {
   if (!value) return {};
@@ -180,7 +181,17 @@ async function submitDraft(req, res) {
     }
 
     const storedForm = parseDraftPayload(draft.payload || draft.temp_reg_info);
-    const photo = req.file ? `/uploads/pets/${req.file.filename}` : storedForm.photo || null;
+    let photo = req.file ? `/uploads/pets/${req.file.filename}` : storedForm.photo || null;
+
+    // Cloud deployments: push the submitted photo to object storage so it
+    // survives redeploys (Cloudinary when configured, local path otherwise).
+    if (req.file) {
+      try {
+        const uploaded = await uploadLocalFile(req.file.path, "pet-vet/pets");
+        if (isAbsoluteUrl(uploaded)) photo = uploaded;
+      } catch (_) {}
+    }
+
     const formData = { ...storedForm, ...req.body, photo };
     const result = await registerPetForOwner(req.user.id, formData);
 

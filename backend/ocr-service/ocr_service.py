@@ -256,6 +256,10 @@ def ocr_image():
 
 if __name__ == "__main__":
     warm_up()
-    port = int(os.environ.get("OCR_SERVICE_PORT", "5001"))
-    print(f"Starting PaddleOCR service on http://127.0.0.1:{port}", flush=True)
-    app.run(host="127.0.0.1", port=port, threaded=True)
+    # Container/cloud deploys (Koyeb) pass OCR_SERVICE_HOST=0.0.0.0 and PORT
+    # so the Flask sidecar can be reached on the platform network. Defaults keep
+    # the old loopback-only behaviour for local XAMPP use.
+    host = os.environ.get("OCR_SERVICE_HOST", "127.0.0.1")
+    port = int(os.environ.get("OCR_SERVICE_PORT") or os.environ.get("PORT") or "5001")
+    print(f"Starting PaddleOCR service on http://{host}:{port}", flush=True)
+    app.run(host=host, port=port, threaded=True)

@@ -2,6 +2,7 @@ const express = require("express");
 const cors =require("cors");
 const path = require("path");
 const http = require("http");
+const os = require("os");
 const { Server } = require("socket.io");
 const bcrypt = require("bcryptjs");
 
@@ -45,12 +46,14 @@ const medicineRoutes = require("./src/routes/medicineRoutes");
 const paymentRoutes = require("./src/routes/paymentRoutes");
 const officialReceiptRoutes = require("./src/routes/officialReceiptRoutes");
 const paymentMonitoringRoutes = require("./src/routes/paymentMonitoringRoutes");
+const catalogRoutes = require("./src/routes/catalogRoutes");
 const paymentHistoryRoutes = require("./src/routes/paymentHistoryRoutes");
 const outreachRoutes = require("./src/routes/outreachRoutes");
 const dashboardRoutes = require("./src/routes/dashboardRoutes");
 const recordRequestRoutes = require("./src/routes/recordRequestRoutes");
 const userRoutes = require("./src/routes/userRoutes");
 const analyticsRoutes = require("./src/routes/analyticsRoutes");
+const reportRoutes = require("./src/routes/reportRoutes");
 const notificationRoutes = require("./src/routes/notificationRoutes");
 const announcementRoutes = require("./src/routes/announcementRoutes");
 const auditRoutes = require("./src/routes/auditRoutes");
@@ -74,6 +77,190 @@ const {
 
 const app = express();
 
+// The phone-scan QR points the phone at the backend on the local network, so
+// the staff can scan the pet's sticker with their phone and the result lands
+// back on the counter PC. This picks the machine's LAN IPv4 for that link.
+function getLanIp() {
+  try {
+    const nets = os.networkInterfaces();
+    const ips = [];
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name] || []) {
+        if (net.family === "IPv4" && !net.internal) ips.push(net.address);
+      }
+    }
+    if (!ips.length) return "localhost";
+    const privateIp = ips.find((ip) =>
+      /^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[0-1])\./.test(ip)
+    );
+    return privateIp || ips[0];
+  } catch {
+    return "localhost";
+  }
+}
+
+const LAN_IP = getLanIp();
+const API_PORT = Number(process.env.PORT || 5000);
+
+const PHONE_SCAN_PAGE = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>QR Scanner · City Veterinary Office</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #7a0c1e; color: #fff; display: flex; flex-direction: column; }
+  header { padding: 14px 18px; text-align: center; background: rgba(0,0,0,.18); }
+  header h1 { margin: 0; font-size: 15px; letter-spacing: .02em; }
+  header p { margin: 4px 0 0; font-size: 12px; opacity: .8; }
+  main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 18px; gap: 16px; }
+  #stage { width: 100%; max-width: 400px; }
+  #reader { width: 100%; border-radius: 16px; overflow: hidden; background: #000; }
+  #reader video { border-radius: 16px !important; }
+  .fallback { display: none; width: 100%; max-width: 400px; flex-direction: column; align-items: center; gap: 12px; padding: 18px; background: rgba(0,0,0,.22); border-radius: 16px; text-align: center; }
+  .btn { border: 0; border-radius: 12px; padding: 14px 22px; font-size: 15px; font-weight: 700; cursor: pointer; width: 100%; max-width: 300px; }
+  .btn-phone { background: #fff; color: #7a0c1e; }
+  #status { min-height: 46px; text-align: center; font-size: 13px; line-height: 1.55; max-width: 400px; }
+  .ok { color: #c9f4c8; }
+  .err { color: #ffd8d8; }
+  .hint { font-size: 12px; opacity: .78; max-width: 400px; text-align: center; line-height: 1.5; margin: 0; }
+  input[type=file] { display: none; }
+  .spinner { width: 18px; height: 18px; border: 3px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: -4px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>City Veterinary Office · QR Scanner</h1>
+  <p id="sub">Scans the pet's QR code — or a payment receipt QR</p>
+</header>
+<main>
+  <div id="stage">
+    <div id="reader"></div>
+  </div>
+  <div class="fallback" id="fallback">
+    <p class="hint">The live camera could not start on this connection. Tap the button below to open your phone's camera instead, then point it at the QR once.</p>
+    <button type="button" id="openCam" class="btn btn-phone">Open phone camera</button>
+  </div>
+  <div id="status" class="hint"><span class="spinner"></span>Ready.<br/>Point the camera at the pet's QR code — it reads automatically.</div>
+  <p class="hint">The result appears automatically on the counter screen. You can close this page afterwards.</p>
+</main>
+<input type="file" id="file" accept="image/*" capture="environment" />
+<script src="/vendor/html5-qrcode.min.js"></script>
+<script>
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var key = (params.get('k') || '').trim();
+  var statusEl = document.getElementById('status');
+  var fallbackEl = document.getElementById('fallback');
+  var openCamBtn = document.getElementById('openCam');
+  var fileInput = document.getElementById('file');
+  var subEl = document.getElementById('sub');
+  var sent = false;
+
+  if (!key) {
+    statusEl.className = 'err';
+    statusEl.innerHTML = 'This scanner link is missing its session. Go back and scan the QR shown on the counter screen again.';
+    return;
+  }
+
+  subEl.textContent = 'Session active · scan the pet QR once';
+
+  function status(html, cls) {
+    statusEl.className = cls || '';
+    statusEl.innerHTML = html;
+  }
+
+  function submit(text) {
+    if (sent) return;
+    var trimmed = String(text || '').trim();
+    if (!trimmed) return;
+    sent = true;
+    status('<span class="spinner"></span>Sending to the counter\u2026');
+    fetch('/api/payment-monitoring/scan-board/value', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: key, value: trimmed }),
+    }).then(function (resp) {
+      if (!resp.ok) {
+        if (resp.status === 404) throw new Error('expired');
+        throw new Error('failed');
+      }
+      return resp.json();
+    }).then(function () {
+      status('\\u2713 Sent — the pet details are now on the counter screen. You can close this page.', 'ok');
+      stopCamera();
+    }).catch(function (err) {
+      status('Could not reach the counter session. Ask the staff to re-scan the QR on screen, then scan the pet again.', 'err');
+      sent = false;
+    });
+  }
+
+  var html5Qr = null;
+
+  function stopCamera() {
+    try {
+      if (html5Qr && html5Qr.isScanning) { html5Qr.stop().catch(function () {}); }
+    } catch (e) {}
+  }
+
+  function startCamera() {
+    try {
+      html5Qr = new Html5Qrcode('reader', {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        verbose: false,
+      });
+      html5Qr.start(
+        { facingMode: 'environment' },
+        { fps: 8, qrbox: { width: 230, height: 230 } },
+        function (decodedText) { submit(decodedText); },
+        function () {}
+      ).then(function () {
+        status('Live — point the camera at the pet\\'s QR code.', 'ok');
+      }).catch(function () {
+        showFallback();
+      });
+    } catch (e) {
+      showFallback();
+    }
+  }
+
+  function showFallback() {
+    try { stopCamera(); } catch (e) {}
+    document.getElementById('reader').style.display = 'none';
+    fallbackEl.style.display = 'flex';
+    status('Tap the button and point the phone at the pet\\'s QR code.', '');
+  }
+
+  openCamBtn.addEventListener('click', function () { fileInput.click(); });
+
+  fileInput.addEventListener('change', function () {
+    var file = fileInput.files ? fileInput.files[0] : null;
+    if (!file) return;
+    status('<span class="spinner"></span>Reading the QR\u2026');
+    try {
+      var dec = new Html5Qrcode('reader', { formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE], verbose: false });
+      dec.scanFile(file, false).then(function (text) {
+        submit(text);
+      }).catch(function () {
+        status('Could not read a QR in that photo. Point the camera closer and try again.', 'err');
+        sent = false;
+      }).finally(function () {
+        fileInput.value = '';
+      });
+    } catch (e) {
+      status('Scanner is not available on this browser. Try Chrome on Android or Safari on iPhone.', 'err');
+    }
+  });
+
+  startCamera();
+})();
+</script>
+</body>
+</html>`;
+
 
 app.use(cors({
   origin: (origin, callback) => callback(null, isAllowedOrigin(origin)),
@@ -88,6 +275,12 @@ app.use(normalizeInputMiddleware);
 app.use(
     "/uploads",
     express.static(path.join(__dirname, "uploads"))
+);
+
+// Standalone phone QR-scanner page assets (html5-qrcode UMD bundle).
+app.use(
+    "/vendor",
+    express.static(path.join(__dirname, "public", "vendor"))
 );
 
 app.get("/qr/:token", (req, res) => {
@@ -118,7 +311,20 @@ app.get("/pm-receipt/:token", (req, res) => {
 // Lightweight health check used by the frontend heartbeat to tell whether the
 // API is reachable. No auth needed — returns 200 whenever the server is up.
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, message: "ok", timestamp: new Date().toISOString() });
+  res.json({
+    success: true,
+    message: "ok",
+    timestamp: new Date().toISOString(),
+    lanIp: LAN_IP,
+    port: API_PORT,
+  });
+});
+
+// Phone QR-scan page. The counter modal shows a QR encoding this URL with the
+// session key; scanning it on the phone opens a camera scanner for the pet's /
+// receipt's QR, whose decoded text is POSTed to the scan board above.
+app.get("/phone-scan", (req, res) => {
+  res.type("text/html").send(PHONE_SCAN_PAGE);
 });
 
 app.use("/api/auth", authRoutes);
@@ -141,6 +347,10 @@ app.use("/api/official-receipts", officialReceiptRoutes);
 
 app.use("/api/payment-monitoring", paymentMonitoringRoutes);
 
+app.use("/api/catalog", catalogRoutes);
+
+
+
 app.use("/api/payment-history", paymentHistoryRoutes);
 
 app.use("/api/outreach", outreachRoutes);
@@ -152,6 +362,8 @@ app.use("/api/record-requests", recordRequestRoutes);
 app.use("/api/users", userRoutes);
 
 app.use("/api/analytics", analyticsRoutes);
+
+app.use("/api/reports", reportRoutes);
 
 app.use("/api/notifications", notificationRoutes);
 
@@ -241,8 +453,10 @@ io.on("connection", (socket) => {
 // Start schedulers after database is ready
 async function startSchedulers() {
   await ensureResetColumns();
+  await ensureVerifyColumns();
   await ensureUserIdentityColumns();
   await ensureStatusColumn();
+  await ensureAccountColumns();
   await ensureStaffNameColumn();
   await ensureAnnouncementColumns();
   await ensureNotificationTypes();
@@ -256,6 +470,8 @@ async function startSchedulers() {
   await ensureDefaultMedicines();
   await ensureTableAutoIncrement('payments');
   await ensurePaymentMonitoringTable();
+  await db.query("DROP TABLE IF EXISTS pm_capture_sessions").catch((e) => console.warn('⚠️ Drop pm_capture_sessions:', e.message));
+  await ensureCatalogTable();
   await ensureOutreachTables();
 
   startNotificationScheduler();
@@ -315,6 +531,24 @@ async function ensureResetColumns() {
   }
 }
 
+// Start updater: verify_code columns for Owner registration OTP
+async function ensureVerifyColumns() {
+  try {
+    const [columns] = await db.query("SHOW COLUMNS FROM users LIKE 'verify_code'");
+    if (columns.length === 0) {
+      await db.query(
+        `ALTER TABLE users
+         ADD COLUMN verify_code VARCHAR(10) DEFAULT NULL AFTER reset_code_expiry,
+         ADD COLUMN verify_code_expiry DATETIME DEFAULT NULL AFTER verify_code,
+         ADD COLUMN verify_sent_at DATETIME DEFAULT NULL AFTER verify_code_expiry`
+      );
+      console.log('✅ Added verify_code columns to users table.');
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to ensure verify_code columns:', error.message);
+  }
+}
+
 async function ensureStatusColumn() {
   try {
     const [columns] = await db.query("SHOW COLUMNS FROM users LIKE 'status'");
@@ -350,6 +584,75 @@ async function ensureStaffNameColumn() {
     `);
   } catch (error) {
     console.warn('⚠️ Failed to ensure staff_name column:', error.message);
+  }
+}
+
+// One-time account setup columns for Staff/Veterinarian accounts
+// (account_id, setup token, last login) plus backfill of existing users.
+async function ensureAccountColumns() {
+  try {
+    const [columns] = await db.query("SHOW COLUMNS FROM users");
+    const names = columns.map((c) => c.Field);
+
+    if (!names.includes('account_id')) {
+      await db.query("ALTER TABLE users ADD COLUMN account_id VARCHAR(20) DEFAULT NULL");
+      await db.query(
+        "ALTER TABLE users ADD UNIQUE KEY `uk_users_account_id` (`account_id`)"
+      );
+      console.log('✅ Added account_id column to users table.');
+    }
+
+    if (!names.includes('setup_token')) {
+      await db.query("ALTER TABLE users ADD COLUMN setup_token VARCHAR(64) DEFAULT NULL");
+    }
+    if (!names.includes('setup_token_expiry')) {
+      await db.query("ALTER TABLE users ADD COLUMN setup_token_expiry DATETIME DEFAULT NULL");
+    }
+    if (!names.includes('last_login')) {
+      await db.query("ALTER TABLE users ADD COLUMN last_login DATETIME DEFAULT NULL");
+    }
+
+    // Allow pending accounts (created without a password)
+    const pwCol = columns.find((c) => c.Field === 'password');
+    if (pwCol && pwCol.Null === 'NO') {
+      await db.query("ALTER TABLE users MODIFY password VARCHAR(255) DEFAULT NULL");
+      console.log('✅ Made users.password nullable for pending accounts.');
+    }
+
+    // Extend status enum with 'pending' (preserving existing active/inactive rows)
+    const statusCol = columns.find((c) => c.Field === 'status');
+    if (statusCol && !/pending/.test(statusCol.Type || '')) {
+      await db.query(
+        "ALTER TABLE users MODIFY status ENUM('pending','active','inactive') DEFAULT 'active'"
+      );
+      console.log('✅ Added pending status to users table.');
+    }
+
+    // Backfill account IDs for existing Staff / Vet / Admin users
+    const [pendingIds] = await db.query(
+      `SELECT id, role FROM users
+       WHERE role IN ('Staff','Veterinarian','Admin') AND (account_id IS NULL OR account_id = '')
+       ORDER BY id ASC`
+    );
+    for (const u of pendingIds) {
+      const prefix = u.role === 'Veterinarian' ? 'VET' : u.role === 'Admin' ? 'ADM' : 'STF';
+      const year = new Date().getFullYear();
+      const [[{ maxSeq }]] = await db.query(
+        `SELECT COALESCE(MAX(CAST(SUBSTRING_INDEX(account_id, '-', -1) AS UNSIGNED)), 0) AS maxSeq
+         FROM users WHERE account_id LIKE ?`,
+        [`${prefix}-${year}-%`]
+      );
+      const seq = Number(maxSeq || 0) + 1;
+      await db.query(
+        "UPDATE users SET account_id = ? WHERE id = ?",
+        [`${prefix}-${year}-${String(seq).padStart(4, '0')}`, u.id]
+      );
+    }
+    if (pendingIds.length > 0) {
+      console.log(`✅ Backfilled account IDs for ${pendingIds.length} existing Staff/Vet/Admin users.`);
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to ensure account columns:', error.message);
   }
 }
 
@@ -675,9 +978,150 @@ async function ensurePaymentMonitoringTable() {
       console.log('✅ receipt_qr_path column added to payment_monitoring.');
     }
 
+    // Migrate existing installations: pet_id column (payments linked to a pet).
+    const [[petIdCol]] = await db.query(
+      `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'payment_monitoring'
+         AND COLUMN_NAME = 'pet_id'`
+    );
+    if (!petIdCol || Number(petIdCol.c) === 0) {
+      await db.query(
+        `ALTER TABLE payment_monitoring
+         ADD COLUMN pet_id INT(11) NULL AFTER pet_owner_id,
+         ADD KEY idx_pm_pet (pet_id),
+         ADD CONSTRAINT fk_pm_pet FOREIGN KEY (pet_id) REFERENCES pets (id) ON DELETE SET NULL`
+      );
+      console.log('✅ pet_id column added to payment_monitoring.');
+    }
+
     console.log('✅ payment_monitoring table verified.');
   } catch (error) {
     console.warn('⚠️ Failed to ensure payment_monitoring table:', error.message);
+  }
+}
+
+const CATALOG_CATEGORIES = [
+  'Vaccines',
+  'Dewormers / Antiparasitics',
+  'Vitamins / Supplements',
+  'Common Medicines',
+  'Topical / Wound Care',
+  'Other Supplies',
+  'Consultation',
+];
+
+// Seeded from cvo_sample_veterinary_products_complete.txt — placeholder prices,
+// to be replaced with the official CVO/Treasury schedule via the admin catalog page.
+const CATALOG_SEED = [
+  // Vaccines
+  { category: 'Vaccines', name: 'Anti-Rabies Vaccine', species: 'Dog', price: 100, unit: 'dose', sub: 'Rabies' },
+  { category: 'Vaccines', name: 'Anti-Rabies Vaccine', species: 'Cat', price: 100, unit: 'dose', sub: 'Rabies' },
+  { category: 'Vaccines', name: '3-in-1 / FVRCP Vaccine', species: 'Cat', price: 500, unit: 'dose', sub: 'Core' },
+  { category: 'Vaccines', name: '4-in-1 / FVRCP Vaccine', species: 'Cat', price: 600, unit: 'dose', sub: 'Core' },
+  { category: 'Vaccines', name: '5-in-1 Vaccine', species: 'Dog', price: 500, unit: 'dose', sub: 'Core' },
+  { category: 'Vaccines', name: '6-in-1 Vaccine', species: 'Dog', price: 600, unit: 'dose', sub: 'Core' },
+  { category: 'Vaccines', name: '8-in-1 Vaccine', species: 'Dog', price: 750, unit: 'dose', sub: 'Core' },
+  { category: 'Vaccines', name: 'Kennel Cough / Bordetella Vaccine', species: 'Dog', price: 800, unit: 'dose', sub: 'Respiratory' },
+  // Dewormers / Antiparasitics
+  { category: 'Dewormers / Antiparasitics', name: 'Dewormer', species: 'General', price: 50, unit: null, sub: 'Internal Parasites' },
+  { category: 'Dewormers / Antiparasitics', name: 'Broad-Spectrum Dewormer', species: 'General', price: 100, unit: null, sub: 'Internal Parasites' },
+  { category: 'Dewormers / Antiparasitics', name: 'Flea and Tick Medication', species: 'General', price: 150, unit: null, sub: 'External Parasites' },
+  { category: 'Dewormers / Antiparasitics', name: 'Flea/Tick Topical Treatment', species: 'General', price: 150, unit: null, sub: 'External Parasites' },
+  { category: 'Dewormers / Antiparasitics', name: 'Ear Mite Treatment', species: 'General', price: 100, unit: null, sub: 'Ear Mites' },
+  // Vitamins / Supplements
+  { category: 'Vitamins / Supplements', name: 'Multivitamins', species: 'General', price: 50, unit: null, sub: 'General Supplement' },
+  { category: 'Vitamins / Supplements', name: 'Vitamin B Complex', species: 'General', price: 50, unit: null, sub: 'Vitamin Supplement' },
+  { category: 'Vitamins / Supplements', name: 'Vitamin C Supplement', species: 'General', price: 50, unit: null, sub: 'Supplement' },
+  { category: 'Vitamins / Supplements', name: 'Calcium Supplement', species: 'General', price: 80, unit: null, sub: 'Bone/Calcium Support' },
+  { category: 'Vitamins / Supplements', name: 'Appetite/Recovery Supplement', species: 'General', price: 100, unit: null, sub: 'Nutritional Support' },
+  { category: 'Vitamins / Supplements', name: 'Nutritional Supplement', species: 'General', price: 100, unit: null, sub: 'General Nutritional Support' },
+  { category: 'Vitamins / Supplements', name: 'Puppy/Kitten Multivitamins', species: 'General', price: 100, unit: null, sub: 'Growth Support' },
+  { category: 'Vitamins / Supplements', name: 'Senior Pet Supplement', species: 'General', price: 150, unit: null, sub: 'Senior Pet Support' },
+  // Common Medicines
+  { category: 'Common Medicines', name: 'Antibiotic', species: 'General', price: 100, unit: null, sub: 'Bacterial Infection' },
+  { category: 'Common Medicines', name: 'Anti-inflammatory', species: 'General', price: 50, unit: null, sub: 'Pain/Inflammation' },
+  { category: 'Common Medicines', name: 'Antihistamine', species: 'General', price: 50, unit: null, sub: 'Allergy' },
+  { category: 'Common Medicines', name: 'Pain Reliever / Analgesic', species: 'General', price: 50, unit: null, sub: 'Pain Management' },
+  { category: 'Common Medicines', name: 'Topical Antiseptic', species: 'General', price: 50, unit: null, sub: 'Wound Care' },
+  { category: 'Common Medicines', name: 'Wound Ointment', species: 'General', price: 80, unit: null, sub: 'Minor Wounds' },
+  { category: 'Common Medicines', name: 'Ear Medication', species: 'General', price: 100, unit: null, sub: 'Ear Infection/Care' },
+  { category: 'Common Medicines', name: 'Eye Medication', species: 'General', price: 100, unit: null, sub: 'Eye Care' },
+  { category: 'Common Medicines', name: 'Skin Medication', species: 'General', price: 100, unit: null, sub: 'Skin Conditions' },
+  { category: 'Common Medicines', name: 'Gastrointestinal Medication', species: 'General', price: 100, unit: null, sub: 'Digestive Problems' },
+  { category: 'Common Medicines', name: 'Anti-diarrheal Medication', species: 'General', price: 50, unit: null, sub: 'Diarrhea' },
+  { category: 'Common Medicines', name: 'Anti-emetic Medication', species: 'General', price: 100, unit: null, sub: 'Vomiting/Nausea' },
+  // Topical / Wound Care
+  { category: 'Topical / Wound Care', name: 'Antiseptic Solution', species: 'General', price: 50, unit: null, sub: 'Wound Cleaning' },
+  { category: 'Topical / Wound Care', name: 'Wound Spray', species: 'General', price: 100, unit: null, sub: 'Wound Care' },
+  { category: 'Topical / Wound Care', name: 'Wound Ointment', species: 'General', price: 80, unit: null, sub: 'Wound Care' },
+  { category: 'Topical / Wound Care', name: 'Healing/Protective Cream', species: 'General', price: 100, unit: null, sub: 'Skin/Wound Care' },
+  { category: 'Topical / Wound Care', name: 'Ear Cleaning Solution', species: 'General', price: 100, unit: null, sub: 'Ear Hygiene' },
+  { category: 'Topical / Wound Care', name: 'Eye Cleaning Solution', species: 'General', price: 100, unit: null, sub: 'Eye Hygiene' },
+  // Other Common Veterinary Supplies
+  { category: 'Other Supplies', name: 'Oral Syringe', species: 'General', price: 10, unit: null, sub: 'Medication Administration' },
+  { category: 'Other Supplies', name: 'Disposable Syringe', species: 'General', price: 5, unit: null, sub: 'Medication/Procedure' },
+  { category: 'Other Supplies', name: 'Gauze', species: 'General', price: 10, unit: null, sub: 'Wound Care' },
+  { category: 'Other Supplies', name: 'Cotton / Cotton Balls', species: 'General', price: 10, unit: null, sub: 'Wound Care' },
+  { category: 'Other Supplies', name: 'Disposable Gloves', species: 'General', price: 5, unit: null, sub: 'Veterinary Procedure' },
+  { category: 'Other Supplies', name: 'Bandage', species: 'General', price: 20, unit: null, sub: 'Wound Care' },
+  { category: 'Other Supplies', name: 'Alcohol / Disinfectant', species: 'General', price: 30, unit: null, sub: 'Cleaning' },
+  // Consultation (added so the most common service is one click away)
+  { category: 'Consultation', name: 'Consultation Fee', species: 'General', price: 250, unit: null, sub: 'Check-up' },
+  { category: 'Consultation', name: 'Repeat Consultation', species: 'General', price: 150, unit: null, sub: 'Follow-up' },
+];
+
+async function ensureCatalogTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS catalog_products (
+        id INT(11) NOT NULL AUTO_INCREMENT,
+        category VARCHAR(60) NOT NULL,
+        product_name VARCHAR(150) NOT NULL,
+        species ENUM('Dog','Cat','General') DEFAULT 'General',
+        unit VARCHAR(60) DEFAULT NULL,
+        subcategory VARCHAR(150) DEFAULT NULL,
+        price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        active TINYINT(1) NOT NULL DEFAULT 1,
+        sort_order INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_catalog_category (category),
+        KEY idx_catalog_active (active)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+
+    // Idempotent seed — only runs when the table is empty so admin edits survive restarts.
+    const [[{ n: count }]] = await db.query("SELECT COUNT(*) AS n FROM catalog_products");
+    if (Number(count) === 0) {
+      const values = [];
+      const placeholders = [];
+      for (let i = 0; i < CATALOG_SEED.length; i++) {
+        const p = CATALOG_SEED[i];
+        placeholders.push('(?, ?, ?, ?, ?, ?, ?)');
+        values.push(
+          p.category,
+          p.name,
+          p.species || 'General',
+          p.unit || null,
+          p.sub || null,
+          Number(p.price).toFixed(2),
+          i + 1
+        );
+      }
+      await db.query(
+        `INSERT INTO catalog_products
+          (category, product_name, species, unit, subcategory, price, sort_order)
+         VALUES ${placeholders.join(', ')}`,
+        values
+      );
+      console.log(`✅ catalog_products seeded with ${CATALOG_SEED.length} products (sample prices).`);
+    } else {
+      console.log('✅ catalog_products table verified.');
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to ensure catalog_products table:', error.message);
   }
 }
 

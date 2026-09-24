@@ -5,6 +5,7 @@ const {
   validatePrescription,
 } = require('../utils/validation');
 const { logAudit } = require('../middleware/auditMiddleware');
+const { vetNameExpr } = require('../utils/vetNameFormat');
 
 // GET /api/medicines/list  (dropdown data)
 async function getMedicineList(req, res) {
@@ -20,13 +21,14 @@ async function getMedicineList(req, res) {
 async function getMyMedicineRecords(req, res) {
   try {
     const [rows] = await db.query(
-      `SELECT pi.*, m.medicine_name, pr.prescribed_date, p.name AS pet_name
+      `SELECT pi.*, m.medicine_name, pr.prescribed_date, p.name AS pet_name, ${vetNameExpr('vet_name')}
        FROM prescription_items pi
        JOIN medicines m ON pi.medicine_id = m.id
        JOIN prescriptions pr ON pi.prescription_id = pr.id
        JOIN consultation_records cr ON pr.consultation_id = cr.id
        JOIN pets p ON cr.pet_id = p.id
        JOIN pet_owners po ON p.pet_owner_id = po.id
+       LEFT JOIN users u ON cr.vet_id = u.id
        WHERE po.user_id = ?
        ORDER BY pr.prescribed_date DESC`,
       [req.user.id]
@@ -50,7 +52,7 @@ async function getAllMedicineRecords(req, res) {
               po.full_name AS owner_name,
               cr.consultation_date,
               cr.diagnosis,
-              COALESCE(u.full_name, u.email) AS vet_name
+              ${vetNameExpr('vet_name')}
        FROM prescription_items pi
        JOIN medicines m ON pi.medicine_id = m.id
        JOIN prescriptions pr ON pi.prescription_id = pr.id

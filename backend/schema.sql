@@ -335,6 +335,7 @@ CREATE TABLE `payment_monitoring` (
   `ocr_text` mediumtext DEFAULT NULL,
   `ocr_confidence` decimal(5,2) DEFAULT NULL,
   `pet_owner_id` int(11) NOT NULL,
+  `pet_id` int(11) DEFAULT NULL,
   `payment_type` enum('Consultation','Vaccination','Medicine') NOT NULL,
   `medicine_id` int(11) DEFAULT NULL,
   `medicine_quantity` varchar(50) DEFAULT NULL,
@@ -348,15 +349,41 @@ CREATE TABLE `payment_monitoring` (
   UNIQUE KEY `uk_pm_or_number` (`or_number`),
   UNIQUE KEY `uk_pm_token` (`pm_token`),
   KEY `pet_owner_id` (`pet_owner_id`),
+  KEY `idx_pm_pet` (`pet_id`),
   KEY `medicine_id` (`medicine_id`),
   KEY `recorded_by` (`recorded_by`),
   CONSTRAINT `fk_pm_medicine` FOREIGN KEY (`medicine_id`) REFERENCES `medicines` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_pm_owner` FOREIGN KEY (`pet_owner_id`) REFERENCES `pet_owners` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_pm_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_pm_recorded_by` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `catalog_products`
+--
+
+DROP TABLE IF EXISTS `catalog_products`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `catalog_products` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `category` varchar(60) NOT NULL,
+  `product_name` varchar(150) NOT NULL,
+  `species` enum('Dog','Cat','General') DEFAULT 'General',
+  `unit` varchar(60) DEFAULT NULL,
+  `subcategory` varchar(150) DEFAULT NULL,
+  `price` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  `sort_order` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_catalog_category` (`category`),
+  KEY `idx_catalog_active` (`active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
 -- Table structure for table `payment_types`
 --
 
@@ -582,16 +609,18 @@ CREATE TABLE `record_requests` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `pet_owner_id` int(11) NOT NULL,
   `pet_id` int(11) NOT NULL,
+  `request_group_id` int(11) DEFAULT NULL,
   `request_type` varchar(100) DEFAULT NULL,
   `purpose` varchar(255) DEFAULT NULL,
   `format` varchar(50) DEFAULT NULL,
   `comments` text DEFAULT NULL,
-  `status` enum('Open','Issued') DEFAULT 'Open',
+  `status` enum('Pending','Issued') DEFAULT 'Pending',
   `requested_date` timestamp NOT NULL DEFAULT current_timestamp(),
   `issued_date` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `pet_owner_id` (`pet_owner_id`),
-  KEY `pet_id` (`pet_id`)
+  KEY `pet_id` (`pet_id`),
+  KEY `idx_req_group` (`request_group_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -631,15 +660,20 @@ DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `email` varchar(255) NOT NULL,
-  `password` varchar(255) NOT NULL,
+  `password` varchar(255) DEFAULT NULL,
   `role` varchar(50) DEFAULT 'Owner',
-  `status` enum('active','inactive') DEFAULT 'active',
+  `status` enum('pending','active','inactive') DEFAULT 'active',
   `full_name` varchar(255) DEFAULT NULL,
+  `account_id` varchar(20) DEFAULT NULL,
+  `setup_token` varchar(64) DEFAULT NULL,
+  `setup_token_expiry` datetime DEFAULT NULL,
+  `last_login` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `reset_code` varchar(10) DEFAULT NULL,
   `reset_code_expiry` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `email` (`email`)
+  UNIQUE KEY `email` (`email`),
+  UNIQUE KEY `uk_users_account_id` (`account_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=220 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

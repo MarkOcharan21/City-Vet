@@ -31,13 +31,15 @@ test.afterEach(() => {
 
 test('owner cannot report another owner\'s pet as lost', async () => {
   db.query = async (sql) => {
-    if (sql.includes('UPDATE pets')) return [{ affectedRows: 0 }];
+    if (sql.includes('JOIN pet_owners')) {
+      return [[{ id: 99, name: 'Luna', is_lost: 0, user_id: 2 }]];
+    }
     throw new Error(`Unexpected query: ${sql}`);
   };
 
   const res = response();
   await petController.reportLost(
-    { params: { id: '99' }, body: { last_seen: 'Pulo', reward: null }, user: { id: 1 } },
+    { params: { id: '99' }, body: { last_seen: 'Pulo', reward: null }, user: { id: 1, role: 'Owner' } },
     res,
   );
 
@@ -122,31 +124,52 @@ test('staff check-in records the authenticated registered name', async () => {
   assert.equal(res.body.staff_name, 'Registered Staff');
 });
 
-test('user directory creates an active staff account usable by staff login', async () => {
+test('user directory creates a staff account requiring activation via setup link', async () => {
+  const originalEnv = {
+    EMAIL_HOST: process.env.EMAIL_HOST,
+    EMAIL_USER: process.env.EMAIL_USER,
+    EMAIL_PASS: process.env.EMAIL_PASS,
+  };
+  process.env.EMAIL_HOST = '';
+  process.env.EMAIL_USER = '';
+  process.env.EMAIL_PASS = '';
+
   const queries = [];
   db.query = async (sql, params) => {
     queries.push({ sql, params });
     if (sql.includes('SELECT id, role, full_name FROM users')) return [[]];
+    if (sql.includes('SUBSTRING_INDEX(account_id')) return [[{ maxSeq: 0 }]];
+    if (sql.includes('INSERT INTO audit_logs')) return [{ affectedRows: 1 }];
     if (sql.includes('INSERT INTO users')) return [{ insertId: 20 }];
     throw new Error(`Unexpected query: ${sql}`);
   };
 
-  const res = response();
-  await userController.createStaffUser(
-    {
-      body: {
-        full_name: 'Mark Lawrence Ocharan',
-        email: 'mark.staff@example.com',
-        password: 'ValidPass1!',
-        role_name: 'Staff',
+  try {
+    const res = response();
+    await userController.createStaffUser(
+      {
+        body: {
+          full_name: 'Mark Lawrence Ocharan',
+          email: 'mark.staff@example.com',
+          role_name: 'Staff',
+        },
+        headers: { origin: 'http://localhost:5178' },
       },
-    },
-    res,
-  );
+      res,
+    );
 
-  const insert = queries.find(({ sql }) => sql.includes('INSERT INTO users'));
-  assert.equal(insert.params[0], 'Staff');
-  assert.equal(insert.params[3], 'Mark Lawrence Ocharan');
-  assert.equal(insert.params[4], 'active');
-  assert.equal(res.statusCode, 201);
+    const insert = queries.find(({ sql }) => sql.includes('INSERT INTO users'));
+    assert.ok(insert, 'expected an INSERT of a new user');
+    assert.equal(insert.params[0], 'Staff');
+    assert.equal(insert.params[1], 'mark.staff@example.com');
+    assert.equal(insert.params[2], 'Mark Lawrence Ocharan');
+    assert.ok(/status,\s*account_id,\s*setup_token/.test(insert.sql), 'INSERT must set up the pending/setup flow');
+    assert.equal(res.statusCode, 201);
+    assert.match(res.body.account_id, /^STF-20\d\d-/);
+    assert.match(res.body.setup_url, /account-setup\?token=/);
+  } finally {
+    process.env.EMAIL_HOST = originalEnv.EMAIL_HOST;
+    process.env.EMAIL_USER = originalEnv.EMAIL_USER;
+    process.env.EMAIL_PASS = originalEnv.EMAIL_PASS;
+  }
 });
