@@ -24,6 +24,8 @@ import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import api from "../../services/api";
 import { ALL_CABUYAO_BARANGAYS } from "../../data/cabuyaoBarangays";
+import PrintReportButton from "../../components/staff/PrintReportButton";
+import { resolveMediaUrl } from "../../utils/mediaUrl";
 
 const STATUS_COLORS = {
   Submitted: "#2563eb",
@@ -94,6 +96,8 @@ export default function OutreachMonitoring() {
   const [statusFilter, setStatusFilter] = useState("");
   const [barangayFilter, setBarangayFilter] = useState("");
   const [q, setQ] = useState("");
+  const [programSearch, setProgramSearch] = useState("");
+  const [programStatusFilter, setProgramStatusFilter] = useState("");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -198,6 +202,17 @@ export default function OutreachMonitoring() {
     [summary, barangayFilter]
   );
 
+  const shownPrograms = useMemo(() => {
+    const term = programSearch.trim().toLowerCase();
+    return programs.filter((p) => {
+      if (programStatusFilter && p.status !== programStatusFilter) return false;
+      if (!term) return true;
+      return [p.program_name, p.venue, p.barangay, p.notes]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(term));
+    });
+  }, [programs, programSearch, programStatusFilter]);
+
   const shownTransactions = useMemo(
     () => (barangayFilter ? transactions.filter((t) => t.barangay === barangayFilter) : transactions),
     [transactions, barangayFilter]
@@ -262,6 +277,10 @@ export default function OutreachMonitoring() {
       setCreateOpen(false);
       await loadPrograms();
       await loadAllSummary();
+      if (response.data.id) {
+        setSelectedId(response.data.id);
+        await selectProgram(response.data.id);
+      }
     } catch (err) {
       setFormError(err.response?.data?.message || "Could not create the program.");
     } finally {
@@ -625,8 +644,9 @@ export default function OutreachMonitoring() {
   }
 
   const selectedRecord = selectedId ? programs.find((p) => String(p.id) === String(selectedId)) : null;
-  const programQrPath = (freshQr && freshQr.qrImagePath) || program?.qr_image_path || null;
-  const programQrToken = (freshQr && freshQr.qrToken) || program?.qr_token || "";
+  const programQrPath = (freshQr && freshQr.qrImagePath) || program?.qr_image_path || selectedRecord?.qr_image_path || null;
+  const resolvedProgramQrPath = programQrPath ? resolveMediaUrl(programQrPath) : null;
+  const programQrToken = (freshQr && freshQr.qrToken) || program?.qr_token || selectedRecord?.qr_token || "";
 
   return (
     <div className="page">
@@ -638,12 +658,12 @@ export default function OutreachMonitoring() {
             confirm their services by scanning it with their phone.
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <div className="page-header-actions">
+          <PrintReportButton category="outreach" />
           {selectedId && (
             <button
               className="btn-secondary"
               onClick={() => setQrOpen(true)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.55rem 1rem", fontSize: 14, margin: 0, height: "36px" }}
             >
               <QrCode size={15} /> Program QR
             </button>
@@ -651,7 +671,6 @@ export default function OutreachMonitoring() {
           <button
             className="btn-primary"
             onClick={openCreateProgram}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.55rem 1rem", fontSize: 14, margin: 0, height: "36px" }}
           >
             <Plus size={15} /> Create Program
           </button>
@@ -678,7 +697,36 @@ export default function OutreachMonitoring() {
                 : "Select a program to open its monitoring panel."}
             </p>
           </div>
-          <div className="table-meta">{programs.length} programs</div>
+          <div className="table-meta">
+            {programs.length === shownPrograms.length
+              ? `${programs.length} programs`
+              : `${shownPrograms.length} of ${programs.length} programs`}
+          </div>
+        </div>
+
+        <div className="toolbar-row" style={{ marginBottom: 12 }}>
+          <div className="search-wrap">
+            <Search size={14} className="search-icon" />
+            <input
+              type="text"
+              value={programSearch}
+              onChange={(e) => setProgramSearch(e.target.value)}
+              placeholder="Search program, venue, barangay..."
+              aria-label="Search outreach programs"
+            />
+          </div>
+          <select
+            value={programStatusFilter}
+            onChange={(e) => setProgramStatusFilter(e.target.value)}
+            aria-label="Filter programs by status"
+            className="toolbar-select--wide"
+          >
+            <option value="">All Statuses</option>
+            <option value="Setup">Setup</option>
+            <option value="Ongoing">Ongoing</option>
+            <option value="Completed">Completed</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
         </div>
 
         {selectedRecord &&
@@ -690,7 +738,7 @@ export default function OutreachMonitoring() {
                   <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
                     {p.qr_image_path && (
                       <img
-                        src={p.qr_image_path}
+                        src={resolveMediaUrl(p.qr_image_path)}
                         alt="Program QR"
                         style={{
                           width: 74,
@@ -787,14 +835,16 @@ export default function OutreachMonitoring() {
               </tr>
             </thead>
             <tbody>
-              {programs.length === 0 ? (
+              {shownPrograms.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="empty-state-cell">
-                    No outreach programs yet. Click "Create Program" to get started.
+                    {programs.length === 0
+                      ? 'No outreach programs yet. Click "Create Program" to get started.'
+                      : "No programs match your filters."}
                   </td>
                 </tr>
               ) : (
-                programs.map((p) => (
+                shownPrograms.map((p) => (
                   <tr
                     key={p.id}
                     onClick={() => selectProgram(p.id)}
@@ -919,6 +969,19 @@ export default function OutreachMonitoring() {
                 <option value="Submitted">Pending Payment</option>
                 <option value="Verified">Paid</option>
                 <option value="Rejected">Rejected</option>
+              </select>
+              <select
+                value={barangayFilter}
+                onChange={(e) => setBarangayFilter(e.target.value)}
+                aria-label="Filter transactions by barangay"
+                className="toolbar-select--barangay"
+              >
+                <option value="">All Barangays</option>
+                {ALL_CABUYAO_BARANGAYS.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="table-wrapper">
@@ -1138,7 +1201,7 @@ export default function OutreachMonitoring() {
       )}
 
       {/* ---------- PROGRAM QR MODAL ---------- */}
-      {qrOpen && program && (
+      {qrOpen && (program || selectedRecord) && (
         <Overlay onClose={() => setQrOpen(false)}>
           <div style={{ maxWidth: 520, width: "100%", maxHeight: "90vh", overflow: "auto", background: "#fff", borderRadius: 14, padding: 22, textAlign: "center" }}>
             <h2 style={{ marginTop: 0 }}>Program QR</h2>
@@ -1150,7 +1213,7 @@ export default function OutreachMonitoring() {
             {programQrPath ? (
               <>
                 <img
-                  src={programQrPath}
+                  src={resolvedProgramQrPath}
                   alt="Program QR"
                   style={{ width: 220, height: 220, border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}
                 />
@@ -1158,10 +1221,10 @@ export default function OutreachMonitoring() {
                   {programQrToken}
                 </p>
                 <div className="form-actions" style={{ justifyContent: "center" }}>
-                  <a href={programQrPath} download className="btn-secondary btn-sm">
+                  <a href={resolvedProgramQrPath} download className="btn-secondary btn-sm">
                     <Download size={14} /> Download
                   </a>
-                  <button className="btn-primary btn-sm" onClick={() => printProgramQr(programQrPath, program.program_name)}>
+                  <button className="btn-primary btn-sm" onClick={() => printProgramQr(resolvedProgramQrPath, (program || selectedRecord)?.program_name || "Outreach Program")}>
                     <Printer size={14} /> Print Sticker
                   </button>
                 </div>

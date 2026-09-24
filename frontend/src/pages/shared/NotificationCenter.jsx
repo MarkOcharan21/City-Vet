@@ -40,6 +40,10 @@ export default function NotificationCenter() {
     const socket = io(getSocketOrigin(), {
       transports: ["websocket", "polling"],
       reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 800,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
     });
 
     const joinRoom = () => {

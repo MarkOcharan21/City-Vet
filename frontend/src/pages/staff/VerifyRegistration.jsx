@@ -1,8 +1,11 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Trash2, CheckCircle, AlertTriangle, X, MapPin, Eye, ChevronDown, ChevronRight } from 'lucide-react';
 import api from '../../services/api';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import useMinLoading from '../../hooks/useMinLoading';
 import StatusBadge from '../../components/StatusBadge';
 import toast from 'react-hot-toast';
+import PrintReportButton from '../../components/staff/PrintReportButton';
 
 export default function VerifyRegistration() {
   const [pets, setPets]       = useState([]);
@@ -28,6 +31,7 @@ export default function VerifyRegistration() {
   const [viewPetId, setViewPetId]       = useState(null);
   const [viewPet, setViewPet]           = useState(null);
   const [viewLoading, setViewLoading]   = useState(false);
+  const [verifying, setVerifying]       = useState(false);
 
   function loadPets() {
     setLoading(true);
@@ -40,28 +44,43 @@ export default function VerifyRegistration() {
   useEffect(() => { loadPets(); }, []);
 
   async function handleVerify(id) {
+    setVerifying(true);
     try {
       await api.put(`/pets/${id}/verify`);
       toast.success('Pet registration verified successfully');
+      setViewPetId(null);
       loadPets();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to verify registration');
+    } finally {
+      setVerifying(false);
     }
   }
 
   async function openViewModal(id) {
+    // Use the row data already loaded in the list so the details modal opens
+    // instantly and still works even if the detail fetch fails or is slow.
+    const fromList = pets.find((p) => p.id === id) || null;
     setViewPetId(id);
-    setViewPet(null);
+    setViewPet(fromList);
     setViewLoading(true);
     try {
       const res = await api.get(`/pets/${id}`);
-      setViewPet(res.data.pet || null);
+      setViewPet(res.data.pet || fromList);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to load pet details');
-      setViewPetId(null);
+      // Keep the modal open with the list-row fallback instead of silently
+      // closing it, so the View button never appears "broken" on a poor link.
+      toast.error(err.response?.data?.message || 'Failed to load full pet details');
     } finally {
       setViewLoading(false);
     }
+  }
+
+  function formatDate(value) {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   async function handleDeleteConfirm() {
@@ -153,10 +172,15 @@ export default function VerifyRegistration() {
     <div className="page">
       {/* Header */}
       <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ marginBottom: '0.35rem' }}>Verify Registration</h1>
-        <p style={{ margin: 0, color: 'var(--color-text-muted)' }}>
-          Review new pet records and verify or remove them from the queue.
-        </p>
+        <div className="page-header-row">
+          <div>
+            <h1 style={{ marginBottom: '0.35rem' }}>Verify Registration</h1>
+            <p style={{ margin: 0, color: 'var(--color-text-muted)' }}>
+              Review new pet records and verify or remove them from the queue.
+            </p>
+          </div>
+          <PrintReportButton category="pets" />
+        </div>
       </div>
 
       <div className="toolbar-row" style={{ marginBottom: '1.25rem' }}>
@@ -199,8 +223,8 @@ export default function VerifyRegistration() {
 
       {/* Table */}
       {loading ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-          Loading registrations...
+        <div style={{ padding: '3rem', textAlign: 'center' }}>
+          <LoadingSpinner text="Loading registrations..." fullPage={false} />
         </div>
       ) : (
         <div className="table-wrapper">
@@ -249,7 +273,7 @@ export default function VerifyRegistration() {
                   <td data-label="Owner">{p.owner_name || '—'}</td>
                   <td data-label="Registered Barangay">{p.barangay || '—'}</td>
                   <td data-label="Registered" style={{ fontSize: '0.88rem', color: 'var(--color-text-muted)' }}>
-                    {p.created_at ? new Date(p.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                    {formatDate(p.created_at)}
                   </td>
                   <td data-label="QR Code">
                     <span style={{
@@ -287,29 +311,6 @@ export default function VerifyRegistration() {
                         <Eye size={14} />
                         View
                       </button>
-                      {p.status !== 'Verified' && (
-                        <button
-                          onClick={() => handleVerify(p.id)}
-                          title="Verify registration"
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: '0.35rem',
-                            padding: '0.45rem 0.85rem',
-                            background: 'var(--color-success-tint)',
-                            color: 'var(--color-success)',
-                            border: '1.5px solid var(--color-success)',
-                            borderRadius: 7,
-                            fontWeight: 700,
-                            fontSize: '0.82rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s',
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.background = '#c6efd7'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'var(--color-success-tint)'}
-                        >
-                          <CheckCircle size={14} />
-                          Verify
-                        </button>
-                      )}
                       <button
                         onClick={() => setDeleteTarget({ id: p.id, name: p.name })}
                         title="Delete registration"
@@ -382,11 +383,7 @@ export default function VerifyRegistration() {
               </button>
             </div>
 
-            {viewLoading ? (
-              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                Loading pet details...
-              </div>
-            ) : viewPet ? (
+            {viewPet ? (
               <div>
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem',
@@ -405,11 +402,11 @@ export default function VerifyRegistration() {
                     ['Breed', viewPet.breed_name || '—'],
                     ['Sex', viewPet.sex || '—'],
                     ['Color / Markings', viewPet.color || '—'],
-                    ['Birthdate', viewPet.birthdate ? new Date(viewPet.birthdate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'],
+                    ['Birthdate', formatDate(viewPet.birthdate)],
                     ['Registered Barangay', viewPet.barangay || '—'],
                     ['Owner', viewPet.owner_name || '—'],
-                    ['Registered', viewPet.created_at ? new Date(viewPet.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'],
-                    ['QR Code', viewPet.qr_status === 'active' ? 'Generated' : 'Pending'],
+                    ['Registered', formatDate(viewPet.created_at)],
+                    ['QR Code', viewPet.qr_status === 'Generated' ? 'Generated' : 'Pending'],
                     ['Vaccination Records', String(viewPet.vaccination_count ?? 0)],
                     ['Overdue Vaccinations', String(viewPet.overdue_vaccinations ?? 0)],
                     ['Payment Status', viewPet.latest_payment_status ? String(viewPet.latest_payment_status).replace(/_/g, ' ') : '—'],
@@ -421,7 +418,28 @@ export default function VerifyRegistration() {
                   ))}
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+                  {viewPet?.status !== 'Verified' && (
+                    <button
+                      onClick={() => handleVerify(viewPetId)}
+                      disabled={verifying}
+                      style={{
+                        padding: '0.65rem 1.25rem',
+                        background: verifying ? 'var(--color-success-tint)' : 'var(--color-success)',
+                        color: '#fff',
+                        border: '1.5px solid var(--color-success)',
+                        borderRadius: 8,
+                        fontWeight: 700,
+                        cursor: verifying ? 'progress' : 'pointer',
+                        fontSize: '0.92rem',
+                        display: 'flex', alignItems: 'center', gap: '0.4rem',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      <CheckCircle size={16} />
+                      {verifying ? 'Verifying...' : 'Verify Registration'}
+                    </button>
+                  )}
                   <button
                     onClick={() => setViewPetId(null)}
                     style={{
@@ -433,6 +451,10 @@ export default function VerifyRegistration() {
                     Close
                   </button>
                 </div>
+              </div>
+            ) : viewLoading ? (
+              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+                Loading pet details...
               </div>
             ) : (
               <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>

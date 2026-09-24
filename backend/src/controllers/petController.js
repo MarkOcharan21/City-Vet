@@ -353,6 +353,9 @@ async function getMyPets(req, res) {
 async function getPetById(req, res) {
   const { id } = req.params;
   try {
+    // LEFT JOIN pet_owners so a pet whose owner profile is missing (e.g. a
+    // just-registered account not fully set up yet) still resolves instead of
+    // 404ing and making the "View" button appear broken.
     const [rows] = await db.query(
       `SELECT p.*, s.species_name, COALESCE(b.breed_name, p.breed_custom) AS breed_name,
               qc.status AS qr_status, po.barangay, po.user_id AS owner_user_id,
@@ -371,7 +374,7 @@ async function getPetById(req, res) {
               (SELECT payment_status FROM payments py WHERE py.pet_id = p.id ORDER BY py.created_at DESC LIMIT 1) AS latest_payment_status,
               (SELECT validation_status FROM payments py WHERE py.pet_id = p.id ORDER BY py.created_at DESC LIMIT 1) AS latest_payment_validation
        FROM pets p
-       JOIN pet_owners po ON p.pet_owner_id = po.id
+       LEFT JOIN pet_owners po ON p.pet_owner_id = po.id
        LEFT JOIN species s ON p.species_id = s.id
        LEFT JOIN breeds b ON p.breed_id = b.id
        LEFT JOIN qr_codes qc ON qc.pet_id = p.id

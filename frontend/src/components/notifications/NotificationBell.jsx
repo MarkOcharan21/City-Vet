@@ -49,8 +49,10 @@ export default function NotificationBell() {
     const socket = io(getSocketOrigin(), {
       transports: ["websocket", "polling"],
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 800,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
     });
 
     const joinRoom = () => {
