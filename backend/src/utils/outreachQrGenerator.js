@@ -2,6 +2,7 @@ const QRCode = require("qrcode");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { uploadBuffer, cloudinaryConfigured } = require("./cloudUpload");
 
 // QR codes for outreach payment transactions. Each QR encodes a backend URL
 // (/oqr/<token>) that redirects to the public confirmation form on the
@@ -31,7 +32,23 @@ function generateQrToken() {
 // Writes a QR PNG for the given token to the outreach-qrs folder.
 // Returns { qrToken, imagePath, qrUrl }.
 async function generateOutreachQr(qrToken) {
-  const { filePath, imagePath } = getOutreachQrOutputPath(qrToken);
+  const { filePath, imagePath, fileName } = getOutreachQrOutputPath(qrToken);
+
+  if (cloudinaryConfigured) {
+    const qrBuffer = await QRCode.toBuffer(buildOutreachQrUrl(qrToken), { width: 300 });
+    try {
+      const url = await uploadBuffer(qrBuffer, {
+        folder: "pet-vet/outreach-qrs",
+        publicId: fileName.replace(/\.png$/, ""),
+      });
+      if (url) {
+        return { qrToken, imagePath: url, qrUrl: buildOutreachQrUrl(qrToken) };
+      }
+    } catch (err) {
+      console.warn("[outreachQrGenerator] Cloudinary upload failed, falling back to local file:", err.message);
+    }
+  }
+
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   await QRCode.toFile(filePath, buildOutreachQrUrl(qrToken), { width: 300 });
   return { qrToken, imagePath, qrUrl: buildOutreachQrUrl(qrToken) };
