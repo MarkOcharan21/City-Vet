@@ -10,9 +10,9 @@ const {
 router.post('/', auth, requireRole(['Owner']), requireVerifiedRegistration, createRequest);
 router.get('/my-requests', auth, requireRole(['Owner']), getMyRequests);
 router.delete('/:id', auth, requireRole(['Owner']), deleteRequest);
-router.get('/', auth, requireRole(['Staff', 'Veterinarian', 'Admin']), getAllRequests);
-router.put('/:id/issue', auth, requireRole(['Staff', 'Veterinarian', 'Admin']), issueRequest);
-router.get('/:id/preview-data', auth, requireRole(['Owner', 'Staff', 'Veterinarian', 'Admin']), getPreviewData);
-router.get('/:id/pdf', auth, requireRole(['Owner', 'Staff', 'Veterinarian', 'Admin']), generateRecordPdf);
+router.get('/', auth, requireRole(['Staff', 'Admin']), getAllRequests);
+router.put('/:id/issue', auth, requireRole(['Staff', 'Admin']), issueRequest);
+router.get('/:id/preview-data', auth, requireRole(['Owner', 'Staff', 'Admin']), getPreviewData);
+router.get('/:id/pdf', auth, requireRole(['Owner', 'Staff', 'Admin']), generateRecordPdf);
 
 module.exports = router;

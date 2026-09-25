@@ -4,6 +4,7 @@ const path = require("path");
 const http = require("http");
 const os = require("os");
 const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
 require("dotenv").config();
@@ -42,9 +43,8 @@ const draftRoutes = require("./src/routes/draftRoutes");
 const qrRoutes = require("./src/routes/qrRoutes");
 const vaccinationRoutes = require("./src/routes/vaccinationRoutes");
 const clinicalRoutes = require("./src/routes/clinicalRoutes");
+const clinicQueueRoutes = require("./src/routes/clinicQueueRoutes");
 const medicineRoutes = require("./src/routes/medicineRoutes");
-const paymentRoutes = require("./src/routes/paymentRoutes");
-const officialReceiptRoutes = require("./src/routes/officialReceiptRoutes");
 const paymentMonitoringRoutes = require("./src/routes/paymentMonitoringRoutes");
 const catalogRoutes = require("./src/routes/catalogRoutes");
 const paymentHistoryRoutes = require("./src/routes/paymentHistoryRoutes");
@@ -77,9 +77,6 @@ const {
 
 const app = express();
 
-// The phone-scan QR points the phone at the backend on the local network, so
-// the staff can scan the pet's sticker with their phone and the result lands
-// back on the counter PC. This picks the machine's LAN IPv4 for that link.
 function getLanIp() {
   try {
     const nets = os.networkInterfaces();
@@ -102,164 +99,7 @@ function getLanIp() {
 const LAN_IP = getLanIp();
 const API_PORT = Number(process.env.PORT || 5000);
 
-const PHONE_SCAN_PAGE = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>QR Scanner · City Veterinary Office</title>
-<style>
-  * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #7a0c1e; color: #fff; display: flex; flex-direction: column; }
-  header { padding: 14px 18px; text-align: center; background: rgba(0,0,0,.18); }
-  header h1 { margin: 0; font-size: 15px; letter-spacing: .02em; }
-  header p { margin: 4px 0 0; font-size: 12px; opacity: .8; }
-  main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 18px; gap: 16px; }
-  #stage { width: 100%; max-width: 400px; }
-  #reader { width: 100%; border-radius: 16px; overflow: hidden; background: #000; }
-  #reader video { border-radius: 16px !important; }
-  .fallback { display: none; width: 100%; max-width: 400px; flex-direction: column; align-items: center; gap: 12px; padding: 18px; background: rgba(0,0,0,.22); border-radius: 16px; text-align: center; }
-  .btn { border: 0; border-radius: 12px; padding: 14px 22px; font-size: 15px; font-weight: 700; cursor: pointer; width: 100%; max-width: 300px; }
-  .btn-phone { background: #fff; color: #7a0c1e; }
-  #status { min-height: 46px; text-align: center; font-size: 13px; line-height: 1.55; max-width: 400px; }
-  .ok { color: #c9f4c8; }
-  .err { color: #ffd8d8; }
-  .hint { font-size: 12px; opacity: .78; max-width: 400px; text-align: center; line-height: 1.5; margin: 0; }
-  input[type=file] { display: none; }
-  .spinner { width: 18px; height: 18px; border: 3px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: -4px; margin-right: 6px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-</style>
-</head>
-<body>
-<header>
-  <h1>City Veterinary Office · QR Scanner</h1>
-  <p id="sub">Scans the pet's QR code — or a payment receipt QR</p>
-</header>
-<main>
-  <div id="stage">
-    <div id="reader"></div>
-  </div>
-  <div class="fallback" id="fallback">
-    <p class="hint">The live camera could not start on this connection. Tap the button below to open your phone's camera instead, then point it at the QR once.</p>
-    <button type="button" id="openCam" class="btn btn-phone">Open phone camera</button>
-  </div>
-  <div id="status" class="hint"><span class="spinner"></span>Ready.<br/>Point the camera at the pet's QR code — it reads automatically.</div>
-  <p class="hint">The result appears automatically on the counter screen. You can close this page afterwards.</p>
-</main>
-<input type="file" id="file" accept="image/*" capture="environment" />
-<script src="/vendor/html5-qrcode.min.js"></script>
-<script>
-(function () {
-  var params = new URLSearchParams(window.location.search);
-  var key = (params.get('k') || '').trim();
-  var statusEl = document.getElementById('status');
-  var fallbackEl = document.getElementById('fallback');
-  var openCamBtn = document.getElementById('openCam');
-  var fileInput = document.getElementById('file');
-  var subEl = document.getElementById('sub');
-  var sent = false;
 
-  if (!key) {
-    statusEl.className = 'err';
-    statusEl.innerHTML = 'This scanner link is missing its session. Go back and scan the QR shown on the counter screen again.';
-    return;
-  }
-
-  subEl.textContent = 'Session active · scan the pet QR once';
-
-  function status(html, cls) {
-    statusEl.className = cls || '';
-    statusEl.innerHTML = html;
-  }
-
-  function submit(text) {
-    if (sent) return;
-    var trimmed = String(text || '').trim();
-    if (!trimmed) return;
-    sent = true;
-    status('<span class="spinner"></span>Sending to the counter\u2026');
-    fetch('/api/payment-monitoring/scan-board/value', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: key, value: trimmed }),
-    }).then(function (resp) {
-      if (!resp.ok) {
-        if (resp.status === 404) throw new Error('expired');
-        throw new Error('failed');
-      }
-      return resp.json();
-    }).then(function () {
-      status('\\u2713 Sent — the pet details are now on the counter screen. You can close this page.', 'ok');
-      stopCamera();
-    }).catch(function (err) {
-      status('Could not reach the counter session. Ask the staff to re-scan the QR on screen, then scan the pet again.', 'err');
-      sent = false;
-    });
-  }
-
-  var html5Qr = null;
-
-  function stopCamera() {
-    try {
-      if (html5Qr && html5Qr.isScanning) { html5Qr.stop().catch(function () {}); }
-    } catch (e) {}
-  }
-
-  function startCamera() {
-    try {
-      html5Qr = new Html5Qrcode('reader', {
-        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-        verbose: false,
-      });
-      html5Qr.start(
-        { facingMode: 'environment' },
-        { fps: 8, qrbox: { width: 230, height: 230 } },
-        function (decodedText) { submit(decodedText); },
-        function () {}
-      ).then(function () {
-        status('Live — point the camera at the pet\\'s QR code.', 'ok');
-      }).catch(function () {
-        showFallback();
-      });
-    } catch (e) {
-      showFallback();
-    }
-  }
-
-  function showFallback() {
-    try { stopCamera(); } catch (e) {}
-    document.getElementById('reader').style.display = 'none';
-    fallbackEl.style.display = 'flex';
-    status('Tap the button and point the phone at the pet\\'s QR code.', '');
-  }
-
-  openCamBtn.addEventListener('click', function () { fileInput.click(); });
-
-  fileInput.addEventListener('change', function () {
-    var file = fileInput.files ? fileInput.files[0] : null;
-    if (!file) return;
-    status('<span class="spinner"></span>Reading the QR\u2026');
-    try {
-      var dec = new Html5Qrcode('reader', { formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE], verbose: false });
-      dec.scanFile(file, false).then(function (text) {
-        submit(text);
-      }).catch(function () {
-        status('Could not read a QR in that photo. Point the camera closer and try again.', 'err');
-        sent = false;
-      }).finally(function () {
-        fileInput.value = '';
-      });
-    } catch (e) {
-      status('Scanner is not available on this browser. Try Chrome on Android or Safari on iPhone.', 'err');
-    }
-  });
-
-  startCamera();
-})();
-</script>
-</body>
-</html>`;
 
 
 app.use(cors({
@@ -277,12 +117,6 @@ app.use(
     express.static(path.join(__dirname, "uploads"))
 );
 
-// Standalone phone QR-scanner page assets (html5-qrcode UMD bundle).
-app.use(
-    "/vendor",
-    express.static(path.join(__dirname, "public", "vendor"))
-);
-
 app.get("/qr/:token", (req, res) => {
   const frontendOrigin = (process.env.FRONTEND_URL || "http://localhost:5178").replace(/\/$/, "");
   res.redirect(`${frontendOrigin}/public/${encodeURIComponent(req.params.token)}`);
@@ -294,15 +128,6 @@ app.get("/oqr/:token", (req, res) => {
   const frontendOrigin = (process.env.FRONTEND_URL || "http://localhost:5178").replace(/\/$/, "");
   res.redirect(`${frontendOrigin}/outreach-confirm/${encodeURIComponent(req.params.token)}`);
 });
-
-// QR landing for payment-monitoring receipts. The QR image encodes this path;
-// the browser is redirected to the staff payment monitoring page (staff signs
-// in there and re-scans — or already-recognized tokens autofill the record).
-app.get("/pm-receipt/:token", (req, res) => {
-  const frontendOrigin = (process.env.FRONTEND_URL || "http://localhost:5178").replace(/\/$/, "");
-  res.redirect(`${frontendOrigin}/staff/payment-monitoring`);
-});
-
 
 // ===================================
 // API Routes
@@ -320,13 +145,6 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Phone QR-scan page. The counter modal shows a QR encoding this URL with the
-// session key; scanning it on the phone opens a camera scanner for the pet's /
-// receipt's QR, whose decoded text is POSTed to the scan board above.
-app.get("/phone-scan", (req, res) => {
-  res.type("text/html").send(PHONE_SCAN_PAGE);
-});
-
 app.use("/api/auth", authRoutes);
 
 app.use("/api/pets", petRoutes);
@@ -339,11 +157,9 @@ app.use("/api/vaccinations", vaccinationRoutes);
 
 app.use("/api/clinical", clinicalRoutes);
 
+app.use("/api/clinic-queue", clinicQueueRoutes);
+
 app.use("/api/medicines", medicineRoutes);
-
-app.use("/api/payments", paymentRoutes);
-
-app.use("/api/official-receipts", officialReceiptRoutes);
 
 app.use("/api/payment-monitoring", paymentMonitoringRoutes);
 
@@ -426,16 +242,32 @@ global.io = io;
 
 app.set("io", io);
 
+io.use((socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next();
+
+    try {
+        const user = jwt.verify(token, process.env.JWT_SECRET);
+        socket.data.user = { id: user.id, role: user.role };
+        return next();
+    } catch (error) {
+        return next(new Error("Invalid authentication token."));
+    }
+});
+
 io.on("connection", (socket) => {
+
+    const authenticatedUser = socket.data.user;
+    if (authenticatedUser?.id) {
+        socket.join(`user-${authenticatedUser.id}`);
+    }
 
     console.log("Socket Connected:", socket.id);
 
-    socket.on("join-room", (userId) => {
-
-        socket.join(`user-${userId}`);
-
-        console.log(`User ${userId} joined room user-${userId}`);
-
+    socket.on("join-room", () => {
+        if (authenticatedUser?.id) {
+            socket.join(`user-${authenticatedUser.id}`);
+        }
     });
 
     socket.on("disconnect", () => {
@@ -469,9 +301,11 @@ async function startSchedulers() {
   await ensurePrescriptionItemsAutoIncrement();
   await ensureDefaultMedicines();
   await ensureTableAutoIncrement('payments');
+  await ensureConsultationBatchesTable();
+  await ensureClinicQueueTable();
   await ensurePaymentMonitoringTable();
-  await db.query("DROP TABLE IF EXISTS pm_capture_sessions").catch((e) => console.warn('⚠️ Drop pm_capture_sessions:', e.message));
   await ensureCatalogTable();
+  await ensureConsultationPaymentSchema();
   await ensureOutreachTables();
 
   startNotificationScheduler();
@@ -743,7 +577,7 @@ async function ensureNotificationTypes() {
     if (columns.length === 0) return;
 
     const columnType = columns[0].Type || '';
-    const requiredTypes = ['Announcement', 'Record', 'Registration'];
+    const requiredTypes = ['Announcement', 'Record', 'Registration', 'ClinicQueue'];
     const missingTypes = requiredTypes.filter((type) => !columnType.includes(`'${type}'`));
 
     if (missingTypes.length === 0) {
@@ -759,7 +593,8 @@ async function ensureNotificationTypes() {
           'System',
           'Announcement',
           'Record',
-          'Registration'
+          'Registration',
+          'ClinicQueue'
         ) NOT NULL DEFAULT 'System'
       `);
       console.log('✅ notifications.type enum updated.');
@@ -897,12 +732,116 @@ async function ensureDefaultMedicines() {
   }
 }
 
+async function tableExists(tableName) {
+  const [rows] = await db.query(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.TABLES
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+    [tableName],
+  );
+  return Number(rows[0]?.count || 0) > 0;
+}
+
+async function columnExists(tableName, columnName) {
+  const [rows] = await db.query(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [tableName, columnName],
+  );
+  return Number(rows[0]?.count || 0) > 0;
+}
+
+async function indexExists(tableName, indexName) {
+  const [rows] = await db.query(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`,
+    [tableName, indexName],
+  );
+  return Number(rows[0]?.count || 0) > 0;
+}
+
+async function uniqueIndexExistsForColumn(tableName, columnName) {
+  const [rows] = await db.query(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? AND NON_UNIQUE = 0`,
+    [tableName, columnName],
+  );
+  return Number(rows[0]?.count || 0) > 0;
+}
+
+async function foreignKeyExists(tableName, constraintName) {
+  const [rows] = await db.query(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.TABLE_CONSTRAINTS
+     WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = ?`,
+    [tableName, constraintName],
+  );
+  return Number(rows[0]?.count || 0) > 0;
+}
+
+async function addColumnIfMissing(tableName, columnName, definition) {
+  if (!(await tableExists(tableName)) || (await columnExists(tableName, columnName))) return;
+  try {
+    await db.query(`ALTER TABLE \`${tableName}\` ADD COLUMN \`${columnName}\` ${definition}`);
+  } catch (error) {
+    console.warn(`⚠️ Failed to add ${tableName}.${columnName}:`, error.message);
+  }
+}
+
+async function addIndexIfMissing(tableName, indexName, definition) {
+  if (!(await tableExists(tableName)) || (await indexExists(tableName, indexName))) return;
+  try {
+    await db.query(`ALTER TABLE \`${tableName}\` ADD ${definition}`);
+  } catch (error) {
+    console.warn(`⚠️ Failed to add index ${tableName}.${indexName}:`, error.message);
+  }
+}
+
+async function addForeignKeyIfMissing(tableName, constraintName, columnName, referencedTable, referencedColumn, onDelete = 'RESTRICT') {
+  if (!(await tableExists(tableName)) || !(await tableExists(referencedTable))) return;
+  if (!(await columnExists(tableName, columnName)) || (await foreignKeyExists(tableName, constraintName))) return;
+  try {
+    await db.query(
+      `ALTER TABLE \`${tableName}\`
+       ADD CONSTRAINT \`${constraintName}\`
+       FOREIGN KEY (\`${columnName}\`) REFERENCES \`${referencedTable}\` (\`${referencedColumn}\`) ON DELETE ${onDelete}`,
+    );
+  } catch (error) {
+    console.warn(`⚠️ Failed to add foreign key ${tableName}.${constraintName}:`, error.message);
+  }
+}
+
+async function ensureConsultationBatchesTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS consultation_batches (
+        id INT(11) NOT NULL AUTO_INCREMENT,
+        batch_token VARCHAR(100) NOT NULL,
+        created_by INT(11) NOT NULL,
+        status ENUM('Active','Completed','Cancelled') NOT NULL DEFAULT 'Active',
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_consultation_batches_token (batch_token),
+        KEY consultation_batches_created_by (created_by),
+        KEY consultation_batches_status (status),
+        CONSTRAINT fk_consultation_batches_created_by FOREIGN KEY (created_by) REFERENCES users (id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+  } catch (error) {
+    console.warn('⚠️ Failed to ensure consultation_batches table:', error.message);
+  }
+}
+
 async function ensurePaymentMonitoringTable() {
   try {
     await db.query(`
       CREATE TABLE IF NOT EXISTS payment_monitoring (
         id INT(11) NOT NULL AUTO_INCREMENT,
-        or_number VARCHAR(100) NOT NULL,
+        or_number VARCHAR(100) DEFAULT NULL,
         or_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         or_date DATE DEFAULT NULL,
         or_time TIME DEFAULT NULL,
@@ -911,93 +850,185 @@ async function ensurePaymentMonitoringTable() {
         or_photo_path VARCHAR(500) DEFAULT NULL,
         ocr_text MEDIUMTEXT DEFAULT NULL,
         ocr_confidence DECIMAL(5,2) DEFAULT NULL,
-        pet_owner_id INT(11) NOT NULL,
-        payment_type ENUM('Consultation','Vaccination','Medicine') NOT NULL,
+        pet_owner_id INT(11) DEFAULT NULL,
+        pet_id INT(11) DEFAULT NULL,
+        payment_type ENUM('Consultation','Vaccination','Medicine') DEFAULT NULL,
         medicine_id INT(11) DEFAULT NULL,
         medicine_quantity VARCHAR(50) DEFAULT NULL,
         medicine_total DECIMAL(10,2) DEFAULT NULL,
-        recorded_by INT(11) NOT NULL,
+        recorded_by INT(11) DEFAULT NULL,
         remarks VARCHAR(255) DEFAULT NULL,
+        consultation_id INT(11) DEFAULT NULL,
+        payment_reference VARCHAR(100) DEFAULT NULL,
+        payment_status ENUM('Unpaid','Paid','Cancelled') NOT NULL DEFAULT 'Unpaid',
+        total_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        consultation_date DATE DEFAULT NULL,
+        status_updated_by INT(11) DEFAULT NULL,
+        status_updated_at DATETIME DEFAULT NULL,
         pm_token VARCHAR(64) DEFAULT NULL,
         receipt_qr_path VARCHAR(500) DEFAULT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
         UNIQUE KEY uk_pm_or_number (or_number),
         UNIQUE KEY uk_pm_token (pm_token),
+        UNIQUE KEY uk_pm_consultation_id (consultation_id),
+        UNIQUE KEY uk_pm_payment_reference (payment_reference),
         KEY pet_owner_id (pet_owner_id),
         KEY medicine_id (medicine_id),
         KEY recorded_by (recorded_by),
-        CONSTRAINT fk_pm_owner FOREIGN KEY (pet_owner_id) REFERENCES pet_owners (id) ON DELETE CASCADE,
-        CONSTRAINT fk_pm_medicine FOREIGN KEY (medicine_id) REFERENCES medicines (id) ON DELETE SET NULL,
-        CONSTRAINT fk_pm_recorded_by FOREIGN KEY (recorded_by) REFERENCES users (id)
+        KEY idx_pm_pet (pet_id),
+        KEY idx_pm_status (payment_status),
+        KEY idx_pm_status_updated_by (status_updated_by)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
     `);
-
-    // Migrate existing installations: add the itemized "payment_items" column
-    // if it does not exist yet (safe for tables created before v2).
-    const [[column]] = await db.query(
-      `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = DATABASE()
-         AND TABLE_NAME = 'payment_monitoring'
-         AND COLUMN_NAME = 'payment_items'`
-    );
-    if (!column || Number(column.c) === 0) {
-      await db.query(
-        `ALTER TABLE payment_monitoring
-         ADD COLUMN payment_items TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL AFTER or_description`
-      );
-      console.log('✅ payment_items column added to payment_monitoring.');
-    }
-
-    // Migrate existing installations: QR receipt columns (pm_token + QR image).
-    const [[qrCol]] = await db.query(
-      `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = DATABASE()
-         AND TABLE_NAME = 'payment_monitoring'
-         AND COLUMN_NAME = 'pm_token'`
-    );
-    if (!qrCol || Number(qrCol.c) === 0) {
-      await db.query(
-        `ALTER TABLE payment_monitoring
-         ADD COLUMN pm_token VARCHAR(64) NULL,
-         ADD UNIQUE KEY uk_pm_token (pm_token)`
-      );
-      console.log('✅ pm_token column added to payment_monitoring.');
-    }
-    const [[qrPathCol]] = await db.query(
-      `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = DATABASE()
-         AND TABLE_NAME = 'payment_monitoring'
-         AND COLUMN_NAME = 'receipt_qr_path'`
-    );
-    if (!qrPathCol || Number(qrPathCol.c) === 0) {
-      await db.query(
-        `ALTER TABLE payment_monitoring
-         ADD COLUMN receipt_qr_path VARCHAR(500) NULL AFTER pm_token`
-      );
-      console.log('✅ receipt_qr_path column added to payment_monitoring.');
-    }
-
-    // Migrate existing installations: pet_id column (payments linked to a pet).
-    const [[petIdCol]] = await db.query(
-      `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = DATABASE()
-         AND TABLE_NAME = 'payment_monitoring'
-         AND COLUMN_NAME = 'pet_id'`
-    );
-    if (!petIdCol || Number(petIdCol.c) === 0) {
-      await db.query(
-        `ALTER TABLE payment_monitoring
-         ADD COLUMN pet_id INT(11) NULL AFTER pet_owner_id,
-         ADD KEY idx_pm_pet (pet_id),
-         ADD CONSTRAINT fk_pm_pet FOREIGN KEY (pet_id) REFERENCES pets (id) ON DELETE SET NULL`
-      );
-      console.log('✅ pet_id column added to payment_monitoring.');
-    }
-
     console.log('✅ payment_monitoring table verified.');
   } catch (error) {
     console.warn('⚠️ Failed to ensure payment_monitoring table:', error.message);
+  }
+}
+
+async function ensureClinicQueueTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS clinic_queue (
+        id INT(11) NOT NULL AUTO_INCREMENT,
+        pet_id INT(11) NOT NULL,
+        batch_id INT(11) DEFAULT NULL,
+        status ENUM('Waiting','In Consultation','Completed','Cancelled') NOT NULL DEFAULT 'Waiting',
+        notes VARCHAR(500) DEFAULT NULL,
+        checked_in_by INT(11) NOT NULL,
+        veterinarian_id INT(11) DEFAULT NULL,
+        checked_in_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        started_at DATETIME DEFAULT NULL,
+        completed_at DATETIME DEFAULT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_clinic_queue_batch_pet (batch_id, pet_id),
+        KEY clinic_queue_pet_id (pet_id),
+        KEY clinic_queue_status (status),
+        KEY clinic_queue_batch_id (batch_id),
+        KEY clinic_queue_checked_in_by (checked_in_by),
+        KEY clinic_queue_veterinarian_id (veterinarian_id),
+        CONSTRAINT fk_clinic_queue_pet FOREIGN KEY (pet_id) REFERENCES pets (id) ON DELETE CASCADE,
+        CONSTRAINT fk_clinic_queue_checked_in_by FOREIGN KEY (checked_in_by) REFERENCES users (id),
+        CONSTRAINT fk_clinic_queue_veterinarian FOREIGN KEY (veterinarian_id) REFERENCES users (id) ON DELETE SET NULL,
+        CONSTRAINT fk_clinic_queue_batch FOREIGN KEY (batch_id) REFERENCES consultation_batches (id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+  } catch (error) {
+    console.warn('⚠️ Failed to ensure clinic_queue table:', error.message);
+  }
+}
+
+async function ensureConsultationPaymentSchema() {
+  try {
+    await ensureConsultationBatchesTable();
+    await addColumnIfMissing('consultation_batches', 'batch_token', 'VARCHAR(100) DEFAULT NULL');
+    await addColumnIfMissing('consultation_batches', 'created_by', 'INT(11) NULL');
+    await addColumnIfMissing('consultation_batches', 'status', "ENUM('Active','Completed','Cancelled') NOT NULL DEFAULT 'Active'");
+    await addColumnIfMissing('consultation_batches', 'created_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP');
+    await addColumnIfMissing('consultation_batches', 'updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+    if (!(await uniqueIndexExistsForColumn('consultation_batches', 'batch_token'))) {
+      await addIndexIfMissing('consultation_batches', 'uk_consultation_batches_token', 'UNIQUE KEY `uk_consultation_batches_token` (`batch_token`)');
+    }
+    await addIndexIfMissing('consultation_batches', 'consultation_batches_created_by', 'KEY `consultation_batches_created_by` (`created_by`)');
+    await addIndexIfMissing('consultation_batches', 'consultation_batches_status', 'KEY `consultation_batches_status` (`status`)');
+    await addForeignKeyIfMissing('consultation_batches', 'fk_consultation_batches_created_by', 'created_by', 'users', 'id');
+
+    await addColumnIfMissing('clinic_queue', 'batch_id', 'INT(11) DEFAULT NULL AFTER pet_id');
+    await addIndexIfMissing('clinic_queue', 'clinic_queue_batch_id', 'KEY `clinic_queue_batch_id` (`batch_id`)');
+    if (!(await uniqueIndexExistsForColumn('clinic_queue', 'batch_id'))) {
+      await addIndexIfMissing('clinic_queue', 'uk_clinic_queue_batch_pet', 'UNIQUE KEY `uk_clinic_queue_batch_pet` (`batch_id`, `pet_id`)');
+    }
+    await addForeignKeyIfMissing('clinic_queue', 'fk_clinic_queue_batch', 'batch_id', 'consultation_batches', 'id', 'SET NULL');
+
+    await addColumnIfMissing('consultation_records', 'queue_id', 'INT(11) DEFAULT NULL AFTER pet_id');
+    await addColumnIfMissing('consultation_records', 'complaint', 'VARCHAR(255) DEFAULT NULL AFTER queue_id');
+    if (!(await uniqueIndexExistsForColumn('consultation_records', 'queue_id'))) {
+      await addIndexIfMissing('consultation_records', 'uk_consultation_queue_id', 'UNIQUE KEY `uk_consultation_queue_id` (`queue_id`)');
+    }
+    await addForeignKeyIfMissing('consultation_records', 'fk_consultation_queue', 'queue_id', 'clinic_queue', 'id', 'SET NULL');
+
+    if (!(await tableExists('consultation_charges'))) {
+      await db.query(`
+        CREATE TABLE consultation_charges (
+          id INT(11) NOT NULL AUTO_INCREMENT,
+          consultation_id INT(11) NOT NULL,
+          catalog_product_id INT(11) NOT NULL,
+          description VARCHAR(255) NOT NULL,
+          quantity INT(11) NOT NULL DEFAULT 1,
+          unit_price DECIMAL(10,2) NOT NULL,
+          line_total DECIMAL(10,2) NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          KEY consultation_charges_consultation_id (consultation_id),
+          KEY consultation_charges_catalog_product_id (catalog_product_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+      `);
+    }
+    await addIndexIfMissing('consultation_charges', 'consultation_charges_consultation_id', 'KEY `consultation_charges_consultation_id` (`consultation_id`)');
+    await addIndexIfMissing('consultation_charges', 'consultation_charges_catalog_product_id', 'KEY `consultation_charges_catalog_product_id` (`catalog_product_id`)');
+    await addForeignKeyIfMissing('consultation_charges', 'fk_consultation_charges_consultation', 'consultation_id', 'consultation_records', 'id', 'CASCADE');
+    await addForeignKeyIfMissing('consultation_charges', 'fk_consultation_charges_catalog', 'catalog_product_id', 'catalog_products', 'id', 'RESTRICT');
+
+    await addColumnIfMissing('payment_monitoring', 'or_number', 'VARCHAR(100) DEFAULT NULL');
+    await addColumnIfMissing('payment_monitoring', 'or_amount', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+    await addColumnIfMissing('payment_monitoring', 'or_description', 'VARCHAR(255) DEFAULT NULL');
+    await addColumnIfMissing('payment_monitoring', 'payment_items', 'TEXT DEFAULT NULL');
+    await addColumnIfMissing('payment_monitoring', 'pet_owner_id', 'INT(11) DEFAULT NULL');
+    await addColumnIfMissing('payment_monitoring', 'pet_id', 'INT(11) DEFAULT NULL');
+    await addColumnIfMissing('payment_monitoring', 'payment_type', "ENUM('Consultation','Vaccination','Medicine') DEFAULT NULL");
+    await addColumnIfMissing('payment_monitoring', 'recorded_by', 'INT(11) DEFAULT NULL');
+    await addColumnIfMissing('payment_monitoring', 'consultation_id', 'INT(11) DEFAULT NULL');
+    await addColumnIfMissing('payment_monitoring', 'payment_reference', 'VARCHAR(100) DEFAULT NULL');
+    await addColumnIfMissing('payment_monitoring', 'payment_status', "ENUM('Unpaid','Paid','Cancelled') NOT NULL DEFAULT 'Unpaid'");
+    await addColumnIfMissing('payment_monitoring', 'total_amount', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00');
+    await addColumnIfMissing('payment_monitoring', 'consultation_date', 'DATE DEFAULT NULL');
+    await addColumnIfMissing('payment_monitoring', 'status_updated_by', 'INT(11) DEFAULT NULL');
+    await addColumnIfMissing('payment_monitoring', 'status_updated_at', 'DATETIME DEFAULT NULL');
+    await addColumnIfMissing('payment_monitoring', 'pm_token', 'VARCHAR(64) DEFAULT NULL');
+    await addColumnIfMissing('payment_monitoring', 'receipt_qr_path', 'VARCHAR(500) DEFAULT NULL');
+
+    const nullablePaymentColumns = [
+      ['or_number', 'VARCHAR(100) DEFAULT NULL'],
+      ['pet_owner_id', 'INT(11) DEFAULT NULL'],
+      ['payment_type', "ENUM('Consultation','Vaccination','Medicine') DEFAULT NULL"],
+      ['recorded_by', 'INT(11) DEFAULT NULL'],
+    ];
+    for (const [columnName, definition] of nullablePaymentColumns) {
+      if (!(await columnExists('payment_monitoring', columnName))) continue;
+      const [columnRows] = await db.query(
+        `SELECT IS_NULLABLE FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = ?`,
+        [columnName],
+      );
+      if (columnRows[0]?.IS_NULLABLE === 'NO') {
+        await db.query(`ALTER TABLE payment_monitoring MODIFY COLUMN \`${columnName}\` ${definition}`).catch((error) => {
+          console.warn(`⚠️ Failed to make payment_monitoring.${columnName} nullable:`, error.message);
+        });
+      }
+    }
+    await db.query('UPDATE payment_monitoring SET total_amount = or_amount WHERE consultation_id IS NULL AND (total_amount IS NULL OR total_amount = 0)').catch(() => {});
+    await addIndexIfMissing('payment_monitoring', 'idx_pm_pet', 'KEY `idx_pm_pet` (`pet_id`)');
+    await addIndexIfMissing('payment_monitoring', 'idx_pm_status', 'KEY `idx_pm_status` (`payment_status`)');
+    await addIndexIfMissing('payment_monitoring', 'idx_pm_status_updated_by', 'KEY `idx_pm_status_updated_by` (`status_updated_by`)');
+    await addIndexIfMissing('payment_monitoring', 'uk_pm_token', 'UNIQUE KEY `uk_pm_token` (`pm_token`)');
+    if (!(await uniqueIndexExistsForColumn('payment_monitoring', 'consultation_id'))) {
+      await addIndexIfMissing('payment_monitoring', 'uk_pm_consultation_id', 'UNIQUE KEY `uk_pm_consultation_id` (`consultation_id`)');
+    }
+    if (!(await uniqueIndexExistsForColumn('payment_monitoring', 'payment_reference'))) {
+      await addIndexIfMissing('payment_monitoring', 'uk_pm_payment_reference', 'UNIQUE KEY `uk_pm_payment_reference` (`payment_reference`)');
+    }
+    await addForeignKeyIfMissing('payment_monitoring', 'fk_pm_medicine', 'medicine_id', 'medicines', 'id', 'SET NULL');
+    await addForeignKeyIfMissing('payment_monitoring', 'fk_pm_pet', 'pet_id', 'pets', 'id', 'SET NULL');
+    await addForeignKeyIfMissing('payment_monitoring', 'fk_pm_consultation', 'consultation_id', 'consultation_records', 'id', 'SET NULL');
+    await addForeignKeyIfMissing('payment_monitoring', 'fk_pm_status_updated_by', 'status_updated_by', 'users', 'id', 'SET NULL');
+    await addForeignKeyIfMissing('payment_monitoring', 'fk_pm_owner', 'pet_owner_id', 'pet_owners', 'id', 'CASCADE');
+    await addForeignKeyIfMissing('payment_monitoring', 'fk_pm_recorded_by', 'recorded_by', 'users', 'id', 'RESTRICT');
+    console.log('✅ consultation payment schema verified.');
+  } catch (error) {
+    console.warn('⚠️ Failed to ensure consultation payment schema:', error.message);
   }
 }
 

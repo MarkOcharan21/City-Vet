@@ -2,12 +2,9 @@ import { useEffect, useState, useMemo } from 'react';
 import useMinLoading from '../../hooks/useMinLoading';
 import {
   AlertTriangle,
-  Calendar,
   CheckCircle2,
   Clock,
   Eye,
-  FileText,
-  Image as ImageIcon,
   Receipt,
   RotateCcw,
   Search,
@@ -58,6 +55,10 @@ function itemLabel(item) {
   return combined || 'Payment item';
 }
 
+function itemAmount(item) {
+  return Number(item.line_total ?? item.amount ?? item.total ?? 0) || 0;
+}
+
 // ─── source + status metadata ───────────────────────────────
 
 const SOURCE_META = {
@@ -68,6 +69,8 @@ const SOURCE_META = {
 const STATUS_META = {
   Paid: { color: 'var(--color-success)', tint: 'var(--color-success-tint)' },
   Verified: { color: 'var(--color-success)', tint: 'var(--color-success-tint)' },
+  Unpaid: { color: 'var(--color-warning)', tint: 'var(--color-warning-tint)' },
+  Cancelled: { color: '#6B7280', tint: '#F3F4F6' },
   Submitted: { color: 'var(--color-warning)', tint: 'var(--color-warning-tint)' },
   Rejected: { color: '#DC2626', tint: '#FEF2F2' },
 };
@@ -97,8 +100,8 @@ function SourceChip({ source }) {
 }
 
 function StatusChip({ status }) {
-  const meta = STATUS_META[status] || STATUS_META.Submitted;
-  const icon = status === 'Paid' || status === 'Verified' ? CheckCircle2 : status === 'Rejected' ? AlertTriangle : Clock;
+  const meta = STATUS_META[status] || STATUS_META.Unpaid;
+  const icon = status === 'Cancelled' || status === 'Rejected' ? AlertTriangle : status === 'Paid' || status === 'Verified' ? CheckCircle2 : Clock;
   const Icon = icon;
   return (
     <span
@@ -145,7 +148,7 @@ function DetailModal({ record, onClose }) {
     <div className="pet-modal-backdrop" onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label="Payment details">
       <div className="pet-modal" style={{ maxWidth: 620 }}>
         <div className="pet-modal-header">
-          <h3>{isClinic ? 'Payment Receipt' : 'Outreach Payment'}</h3>
+          <h3>{isClinic ? 'Payment details' : 'Outreach payment details'}</h3>
           <button type="button" className="pet-modal-close" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
@@ -174,7 +177,7 @@ function DetailModal({ record, onClose }) {
         >
           <div>
             <p className="field-hint" style={{ margin: 0 }}>Reference</p>
-            <strong>{isClinic ? `OR ${record.ref}` : record.ref}</strong>
+            <strong>{record.ref || '—'}</strong>
           </div>
           <div>
             <p className="field-hint" style={{ margin: 0 }}>Date</p>
@@ -234,7 +237,7 @@ function DetailModal({ record, onClose }) {
                 }}
               >
                 <span>{isClinic ? itemLabel(item) : item.service_name}</span>
-                <strong style={{ whiteSpace: 'nowrap' }}>{fmtMoney(Number(item.amount) || 0)}</strong>
+                <strong style={{ whiteSpace: 'nowrap' }}>{fmtMoney(itemAmount(item))}</strong>
               </div>
             ))}
           </div>
@@ -294,36 +297,9 @@ function DetailModal({ record, onClose }) {
           </div>
         )}
 
-        {isClinic && (
-          <div>
-            <p className="field-hint" style={{ margin: '0 0 0.4rem' }}>Official Receipt</p>
-            {record.or_photo_path ? (
-              <div
-                style={{
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 10,
-                  overflow: 'hidden',
-                  background: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <img
-                  src={record.or_photo_path}
-                  alt={`Official receipt ${record.ref}`}
-                  style={{ maxWidth: '100%', maxHeight: 320, objectFit: 'contain' }}
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              </div>
-            ) : (
-              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', margin: 0 }}>
-                <ImageIcon size={14} style={{ verticalAlign: '-2px', marginRight: '0.3rem' }} />
-                No receipt photo on file.
-              </p>
-            )}
+        {isClinic && record.pet_name && (
+          <div style={{ marginBottom: '1.25rem', fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
+            <strong>Pet:</strong> {record.pet_name}{record.pet_code ? ` · ${record.pet_code}` : ''}
           </div>
         )}
 
@@ -429,7 +405,7 @@ export default function PaymentHistory() {
         </div>
         <h1>Payment History</h1>
         <p className="page-intro">
-          Track your clinic payments and outreach activity fees in one place. Download-proof record of your official receipts.
+          Track consultation payments and outreach activity fees in one place.
         </p>
       </header>
 
@@ -437,15 +413,15 @@ export default function PaymentHistory() {
       <div className="summary-row" style={{ marginBottom: '1.75rem' }}>
         <div className="summary-card" style={{ borderTopColor: 'var(--color-primary)' }}>
           <p className="summary-card-value">{fmtMoney(summary?.overallTotal || 0)}</p>
-          <p className="summary-card-label">Total Paid · {summary?.overallCount ?? 0} payment{summary?.overallCount === 1 ? '' : 's'}</p>
+          <p className="summary-card-label">Total Paid · {summary?.overallPaidCount ?? 0} paid</p>
         </div>
         <div className="summary-card" style={{ borderTopColor: 'var(--color-success)' }}>
           <p className="summary-card-value">{fmtMoney(summary?.clinicTotal || 0)}</p>
-          <p className="summary-card-label">Clinic Payments · {summary?.clinicCount ?? 0}</p>
+          <p className="summary-card-label">Clinic Paid · {summary?.clinicPaidCount ?? 0}</p>
         </div>
         <div className="summary-card" style={{ borderTopColor: 'var(--color-accent)' }}>
           <p className="summary-card-value">{fmtMoney(summary?.outreachTotal || 0)}</p>
-          <p className="summary-card-label">Outreach Payments · {summary?.outreachCount ?? 0}</p>
+          <p className="summary-card-label">Outreach Paid · {summary?.outreachPaidCount ?? 0}</p>
         </div>
         <div className="summary-card" style={{ borderTopColor: '#6B7280' }}>
           <p className="summary-card-value" style={{ fontSize: '1rem' }}>{mostRecent}</p>
@@ -458,7 +434,7 @@ export default function PaymentHistory() {
         <div className="search-wrap">
           <input
             type="text"
-            placeholder="Search OR number, program, service..."
+             placeholder="Search reference, program, service..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search payment history"
@@ -525,7 +501,7 @@ export default function PaymentHistory() {
                   </td>
                   <td className="ph-cell-source"><SourceChip source={record.source} /></td>
                   <td className="ph-cell-ref">
-                    {record.source === 'clinic' ? `OR ${record.ref}` : record.ref}
+                     {record.ref || '—'}
                   </td>
                   <td className="ph-cell-details">
                     {record.source === 'clinic' ? (

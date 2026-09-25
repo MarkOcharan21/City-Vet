@@ -5,7 +5,30 @@ import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import PasswordInput from "../../components/PasswordInput";
 
-export default function StaffLogin() {
+const CLINIC_LOGIN_CONFIG = {
+  staff: {
+    role: "Staff",
+    title: "Staff Login",
+    graphicTitle: "Staff Access",
+    description: "Manage registrations and daily clinic tasks.",
+    placeholder: "e.g. STF-2026-0001 or staff@cityvet.gov.ph",
+    destination: "/staff/check-in",
+    forgotPath: "/staff/forgot-password",
+  },
+  veterinarian: {
+    role: "Veterinarian",
+    title: "Veterinarian Login",
+    graphicTitle: "Veterinarian Access",
+    description: "Access consultations, clinical records, and care tools.",
+    placeholder: "e.g. VET-2026-0001 or vet@cityvet.gov.ph",
+    destination: "/veterinarian/dashboard",
+    forgotPath: "/veterinarian/forgot-password",
+  },
+};
+
+export default function StaffLogin({ portal = "staff" }) {
+
+  const config = CLINIC_LOGIN_CONFIG[portal] || CLINIC_LOGIN_CONFIG.staff;
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -40,8 +63,8 @@ export default function StaffLogin() {
         password
       });
 
-      if(!["Staff","Veterinarian"].includes(res.data.user.role)){
-        setError("This login is for Clinic Staff only.");
+      if(res.data.user.role !== config.role){
+        setError(`This login is for ${config.role} accounts only.`);
         setLoading(false);
         return;
       }
@@ -52,8 +75,7 @@ export default function StaffLogin() {
       sessionStorage.removeItem('staff_check_in_name');
       sessionStorage.removeItem('staff_check_in_time');
 
-      // Redirect to check-in page first
-      navigate("/staff/check-in");
+      navigate(config.destination);
 
     }catch(err){
 
@@ -69,13 +91,13 @@ export default function StaffLogin() {
 
   return(
 
-<div className="auth-page">
+<div className={`auth-page clinic-login-page clinic-login-page--${portal}`}>
 
 <div className="auth-graphic">
 
-<h2>Clinic Staff Access</h2>
+<h2>{config.graphicTitle}</h2>
 
-<p>Handle registrations and vaccination records.</p>
+<p>{config.description}</p>
 
 </div>
 
@@ -84,7 +106,7 @@ export default function StaffLogin() {
 <button
 type="button"
 className="back-btn"
-onClick={()=>navigate("/")}
+  onClick={()=>navigate("/clinic/roles")}
 >
 
 <ArrowLeft size={20}/>
@@ -93,7 +115,7 @@ Back
 
 </button>
 
-<h3>Clinic Staff Login</h3>
+<h3>{config.title}</h3>
 
 {/* Session Expired Banner */}
 {sessionExpired && (
@@ -120,7 +142,7 @@ Back
 
 <input
 type="text"
-placeholder="e.g. STF-2026-0001 or staff@cityvet.gov.ph"
+placeholder={config.placeholder}
 value={identifier}
 onChange={(e)=>setIdentifier(e.target.value)}
 required
@@ -135,7 +157,7 @@ onChange={(e)=>setPassword(e.target.value)}
 
 <div className="forgot-password">
 
-<a href="#">Forgot Password?</a>
+<Link to={config.forgotPath}>Forgot Password?</Link>
 
 </div>
 

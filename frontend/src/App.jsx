@@ -7,6 +7,7 @@ import AutoCapitalize from "./components/AutoCapitalize";
 import Homepage from "./pages/shared/Homepage";
 import PublicPetProfile from "./pages/shared/PublicPetProfile";
 import OutreachConfirmForm from "./pages/shared/OutreachConfirmForm";
+import { ClinicWelcome, ClinicRoleSelection } from "./pages/shared/ClinicAccess";
 
 // OWNER
 import OwnerLogin from "./pages/owner/OwnerLogin";
@@ -28,6 +29,8 @@ import AccountSetup from "./pages/auth/AccountSetup";
 import StaffLogin from "./pages/staff/StaffLogin";
 import StaffCheckIn from "./pages/staff/StaffCheckIn";
 import StaffDashboard from "./pages/staff/StaffDashboard";
+import ClinicQueue from "./pages/staff/ClinicQueue";
+import VeterinarianDashboard from "./pages/staff/VeterinarianDashboard";
 import PetRecords from "./pages/staff/PetRecords";
 import VerifyRegistration from "./pages/staff/VerifyRegistration";
 import VaccinationMonitoring from "./pages/staff/VaccinationMonitoring";
@@ -55,6 +58,7 @@ import NotificationCenter from "./pages/shared/NotificationCenter";
 // LAYOUTS
 import OwnerLayout from "./layouts/OwnerLayout";
 import StaffLayout from "./layouts/StaffLayout";
+import VeterinarianLayout from "./layouts/VeterinarianLayout";
 import AdminLayout from "./layouts/AdminLayout";
 
 export default function App() {
@@ -69,6 +73,10 @@ export default function App() {
 
           <Route path="/" element={<Homepage />} />
 
+          <Route path="/clinic/welcome" element={<ClinicWelcome />} />
+
+          <Route path="/clinic/roles" element={<ClinicRoleSelection />} />
+
           <Route path="/public/:token" element={<PublicPetProfile />} />
 
 <Route path="/outreach-confirm/:token" element={<OutreachConfirmForm />} />
@@ -79,13 +87,34 @@ export default function App() {
 
           <Route path="/owner/reset-password" element={<ResetPassword />} />
 
+          <Route path="/staff/forgot-password" element={<ForgotPassword portal="staff" />} />
+
+           <Route path="/staff/reset-password" element={<ResetPassword portal="staff" />} />
+
+           <Route path="/veterinarian/forgot-password" element={<ForgotPassword portal="veterinarian" />} />
+
+           <Route path="/veterinarian/reset-password" element={<ResetPassword portal="veterinarian" />} />
+
+          <Route path="/admin/forgot-password" element={<ForgotPassword portal="admin" />} />
+
+          <Route path="/admin/reset-password" element={<ResetPassword portal="admin" />} />
+
           <Route path="/account-setup" element={<AccountSetup />} />
 
           <Route path="/owner/register" element={<OwnerRegister />} />
 
-          <Route path="/staff/login" element={<StaffLogin />} />
+          <Route path="/staff/login" element={<StaffLogin portal="staff" />} />
 
-          <Route path="/staff/check-in" element={<StaffCheckIn />} />
+          <Route path="/veterinarian/login" element={<StaffLogin portal="veterinarian" />} />
+
+           <Route
+             path="/staff/check-in"
+             element={
+               <ProtectedRoute allowedRoles={["Staff"]}>
+                 <StaffCheckIn />
+               </ProtectedRoute>
+             }
+           />
 
           <Route path="/admin/login" element={<AdminLogin />} />
 
@@ -140,17 +169,22 @@ export default function App() {
           <Route
             path="/staff"
             element={
-              <ProtectedRoute
-                allowedRoles={["Staff", "Veterinarian", "Admin"]}
-              >
+               <ProtectedRoute
+                 allowedRoles={["Staff"]}
+               >
                 <StaffLayout />
               </ProtectedRoute>
             }
           >
-            <Route
-              path="dashboard"
-              element={<StaffDashboard />}
-            />
+             <Route
+               path="dashboard"
+               element={<StaffDashboard />}
+             />
+
+             <Route
+               path="queue"
+               element={<ClinicQueue />}
+             />
 
             <Route
               path="pet-records"
@@ -162,23 +196,8 @@ export default function App() {
               element={<VerifyRegistration />}
             />
 
-            <Route
-              path="vaccination-monitoring"
-              element={<VaccinationMonitoring />}
-            />
-
-            <Route
-              path="clinical-records"
-              element={<ClinicalRecords />}
-            />
-
-            <Route
-              path="medicine-records"
-              element={<MedicineRecords />}
-            />
-
-            <Route
-              path="issue-records"
+             <Route
+               path="issue-records"
               element={<IssueRequestedRecord />}
             />
 
@@ -191,9 +210,50 @@ export default function App() {
               path="outreach-monitoring"
               element={<OutreachMonitoring />}
             />
-          </Route>
+           </Route>
 
-          {/* ===================== ADMIN ===================== */}
+           {/* ===================== VETERINARIAN ===================== */}
+
+           <Route
+             path="/veterinarian"
+             element={
+               <ProtectedRoute allowedRoles={["Veterinarian"]}>
+                 <VeterinarianLayout />
+               </ProtectedRoute>
+             }
+           >
+             <Route
+               path="dashboard"
+               element={<VeterinarianDashboard />}
+             />
+
+             <Route
+               path="queue"
+               element={<ClinicQueue />}
+             />
+
+             <Route
+               path="pet-records"
+               element={<PetRecords />}
+             />
+
+             <Route
+               path="vaccination-monitoring"
+               element={<VaccinationMonitoring />}
+             />
+
+             <Route
+               path="clinical-records"
+               element={<ClinicalRecords />}
+             />
+
+             <Route
+               path="medicine-records"
+               element={<MedicineRecords />}
+             />
+           </Route>
+
+           {/* ===================== ADMIN ===================== */}
 
           <Route
             path="/admin"

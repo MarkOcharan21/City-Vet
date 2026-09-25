@@ -13,6 +13,8 @@ const STATUS_COLORS = {
 
   Paid: "#15803D",
 
+  Unpaid: "#D97706",
+
   Issued: "#15803D",
 
   Active: "#15803D",
@@ -42,6 +44,14 @@ const STATUS_COLORS = {
   Overdue: "#DC2626",
 
   "Pending Setup": "#D97706",
+
+  Waiting: "#D97706",
+
+  "In Consultation": "#1D4ED8",
+
+  Completed: "#15803D",
+
+  Cancelled: "#6B7280",
 
   Inactive: "#6B7280"
 

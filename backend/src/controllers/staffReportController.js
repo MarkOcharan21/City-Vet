@@ -259,50 +259,63 @@ async function buildMedicine(from, to) {
 }
 
 async function buildPayments(from, to) {
-  const { where, params } = rangeClause("pm.or_date", from, to);
+  const paymentDate = "COALESCE(pm.consultation_date, DATE(pm.created_at))";
+  const range = rangeClause(paymentDate, from, to);
+  const rangeFilter = range.where ? range.where.replace(/^WHERE /, "AND ") : "";
   const [rows] = await db.query(
     `
     SELECT
-      pm.or_date, pm.or_time, pm.or_number, pm.payment_type, pm.or_amount,
-      pm.or_description, pm.medicine_quantity,
-      po.full_name AS owner_name, po.barangay,
-      COALESCE(m.medicine_name, '') AS medicine_name,
-      ${vetNameExpr('recorded_by_name')}
+      ${paymentDate} AS payment_date,
+      TIME(pm.created_at) AS payment_time,
+      pm.payment_reference,
+      COALESCE(pm.payment_status, 'Unpaid') AS payment_status,
+      COALESCE(pm.total_amount, 0) AS amount,
+      pm.payment_type,
+      p.name AS pet_name,
+      p.pet_code,
+      po.full_name AS owner_name,
+      po.barangay,
+      COALESCE(vet.full_name, actor.full_name, actor.email) AS recorded_by_name
     FROM payment_monitoring pm
-    JOIN pet_owners po ON pm.pet_owner_id = po.id
-    JOIN users u ON pm.recorded_by = u.id
-    LEFT JOIN medicines m ON pm.medicine_id = m.id
-    ${where}
-    ORDER BY pm.or_date DESC, pm.or_time DESC
+    LEFT JOIN consultation_records cr ON cr.id = pm.consultation_id
+    LEFT JOIN pets p ON p.id = COALESCE(pm.pet_id, cr.pet_id)
+    LEFT JOIN pet_owners po ON po.id = COALESCE(pm.pet_owner_id, p.pet_owner_id)
+    LEFT JOIN users vet ON vet.id = cr.vet_id
+    LEFT JOIN users actor ON actor.id = pm.recorded_by
+    WHERE (pm.consultation_id IS NOT NULL OR pm.payment_reference IS NOT NULL)
+    ${rangeFilter}
+    ORDER BY payment_date DESC, pm.created_at DESC, pm.id DESC
     `,
-    params
+    range.params
   );
 
-  const totalAmount = rows.reduce((sum, r) => sum + Number(r.or_amount || 0), 0);
-  const byType = {};
-  for (const r of rows) {
-    byType[r.payment_type] = (byType[r.payment_type] || 0) + 1;
-  }
+  const totalAmount = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const byStatus = rows.reduce((counts, row) => {
+    const status = row.payment_status || "Unpaid";
+    counts[status] = (counts[status] || 0) + 1;
+    return counts;
+  }, {});
 
   return {
     summaryCards: [
-      { label: "Total Payments", value: rows.length },
+      { label: "Total Transactions", value: rows.length },
       { label: "Total Amount", value: `P ${money(totalAmount)}` },
-      { label: "Consultations", value: byType.Consultation || 0 },
-      { label: "Vaccinations", value: byType.Vaccination || 0 },
-      { label: "Medicine", value: byType.Medicine || 0 },
+      { label: "Unpaid", value: byStatus.Unpaid || 0 },
+      { label: "Paid", value: byStatus.Paid || 0 },
+      { label: "Cancelled", value: byStatus.Cancelled || 0 },
     ],
     table: {
-      title: "Payment Monitoring Records",
+      title: "Consultation Payment Transactions",
       columns: [
-        { key: "or_date", label: "OR Date", format: "date" },
-        { key: "or_time", label: "Time", format: "time" },
-        { key: "or_number", label: "OR Number" },
+        { key: "payment_date", label: "Consultation Date", format: "date" },
+        { key: "payment_time", label: "Time", format: "time" },
+        { key: "payment_reference", label: "Reference" },
+        { key: "payment_status", label: "Status" },
         { key: "owner_name", label: "Owner" },
-        { key: "barangay", label: "Barangay" },
-        { key: "payment_type", label: "Payment Type" },
-        { key: "medicine_name", label: "Medicine" },
-        { key: "or_amount", label: "Amount", format: "money" },
+        { key: "pet_name", label: "Pet" },
+        { key: "pet_code", label: "Pet ID" },
+        { key: "payment_type", label: "Type" },
+        { key: "amount", label: "Amount", format: "money" },
         { key: "recorded_by_name", label: "Recorded By" },
       ],
       rows,

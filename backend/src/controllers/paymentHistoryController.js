@@ -18,50 +18,54 @@ function numberOrNull(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-// Fetch clinic records for a pet owner with optional filters.
 async function fetchClinicRecords(ownerId, filters = {}) {
-  const conditions = ["pm.pet_owner_id = ?"];
+  const conditions = [
+    "po.id = ?",
+    "(pm.consultation_id IS NOT NULL OR pm.payment_reference IS NOT NULL)",
+  ];
   const params = [ownerId];
 
   const term = (filters.search || "").trim();
   if (term) {
-    conditions.push("(pm.or_number LIKE ? OR pm.or_description LIKE ?)");
-    params.push(`%${term}%`, `%${term}%`);
+    conditions.push("(pm.payment_reference LIKE ? OR pm.payment_type LIKE ? OR p.name LIKE ? OR p.pet_code LIKE ? OR po.full_name LIKE ?)");
+    params.push(`%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`);
   }
+  const paymentDate = "COALESCE(pm.consultation_date, DATE(pm.created_at))";
   const from = parseDate(filters.from);
   if (from) {
-    conditions.push("pm.or_date >= ?");
+    conditions.push(`${paymentDate} >= ?`);
     params.push(from);
   }
   const to = parseDate(filters.to);
   if (to) {
-    conditions.push("pm.or_date <= ?");
+    conditions.push(`${paymentDate} <= ?`);
     params.push(to);
   }
 
   const [rows] = await db.query(
     `SELECT
        pm.id,
-       pm.or_number,
-       pm.or_amount,
-       DATE_FORMAT(pm.or_date, '%Y-%m-%d') AS or_date,
-       DATE_FORMAT(pm.or_time, '%H:%i:%s') AS or_time,
-       pm.or_description,
+       pm.consultation_id,
+       pm.payment_reference,
+       COALESCE(pm.payment_status, 'Unpaid') AS payment_status,
+       COALESCE(pm.total_amount, 0) AS amount,
+       DATE_FORMAT(${paymentDate}, '%Y-%m-%d') AS payment_date,
+       TIME(pm.created_at) AS payment_time,
+       COALESCE(pm.remarks, 'Consultation charges') AS description,
        pm.payment_items,
-       pm.or_photo_path,
-       pm.pm_token,
        pm.payment_type,
-       pm.medicine_quantity,
-       pm.medicine_total,
        pm.remarks,
        pm.recorded_by,
        ru.full_name AS recorded_by_name,
-       m.medicine_name
+       p.name AS pet_name,
+       p.pet_code
      FROM payment_monitoring pm
-     LEFT JOIN users ru ON pm.recorded_by = ru.id
-     LEFT JOIN medicines m ON pm.medicine_id = m.id
+     LEFT JOIN consultation_records cr ON cr.id = pm.consultation_id
+     LEFT JOIN pets p ON p.id = COALESCE(pm.pet_id, cr.pet_id)
+     LEFT JOIN pet_owners po ON po.id = COALESCE(pm.pet_owner_id, p.pet_owner_id)
+     LEFT JOIN users ru ON ru.id = pm.recorded_by
      WHERE ${conditions.join(" AND ")}
-     ORDER BY pm.or_date DESC, pm.or_time DESC, pm.id DESC`,
+     ORDER BY payment_date DESC, payment_time DESC, pm.id DESC`,
     params
   );
   return rows;
@@ -168,23 +172,20 @@ async function getOwnerPaymentHistory(req, res) {
     const clinicRecord = (r) => ({
       source: "clinic",
       id: r.id,
-      ref: r.or_number,
-      date: r.or_date,
-      time: r.or_time,
-      title: r.payment_type,
-      description: r.or_description,
-      amount: numberOrNull(r.or_amount),
-      status: "Paid",
+      consultation_id: r.consultation_id,
+      ref: r.payment_reference || `PM-${r.id}`,
+      payment_reference: r.payment_reference,
+      date: r.payment_date,
+      time: r.payment_time,
+      title: r.payment_type || "Consultation",
+      description: r.description,
+      amount: numberOrNull(r.amount),
+      status: r.payment_status || "Unpaid",
       payment_items: r.payment_items,
-      medicine_name: r.medicine_name,
-      medicine_quantity: r.medicine_quantity,
-      medicine_total: numberOrNull(r.medicine_total),
+      pet_name: r.pet_name,
+      pet_code: r.pet_code,
       remarks: r.remarks,
       recorded_by_name: r.recorded_by_name,
-      or_photo_path: r.or_photo_path,
-      pm_token: r.pm_token,
-      created_at: r.created_at,
-      raw: r,
     });
 
     const outreachRecord = (r) => ({
@@ -213,15 +214,21 @@ async function getOwnerPaymentHistory(req, res) {
       ...(outreachNeeded ? outreachRows.map(outreachRecord) : []),
     ].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(a.time || "").localeCompare(String(b.time || "")));
 
-    const clinicSum = allClinic.reduce((sum, r) => sum + (numberOrNull(r.or_amount) || 0), 0);
-    const outreachSum = allOutreach.reduce((sum, r) => sum + (numberOrNull(r.total_amount) || 0), 0);
+    const clinicPaid = allClinic.filter((r) => r.payment_status === "Paid");
+    const outreachPaid = allOutreach.filter((r) => r.status === "Verified");
+    const clinicSum = clinicPaid.reduce((sum, r) => sum + (numberOrNull(r.amount) || 0), 0);
+    const outreachSum = outreachPaid.reduce((sum, r) => sum + (numberOrNull(r.total_amount) || 0), 0);
 
     const summary = {
       clinicCount: allClinic.length,
+      clinicPaidCount: clinicPaid.length,
+      clinicUnpaidCount: allClinic.filter((r) => r.payment_status !== "Paid").length,
       clinicTotal: Number(clinicSum.toFixed(2)),
       outreachCount: allOutreach.length,
+      outreachPaidCount: outreachPaid.length,
       outreachTotal: Number(outreachSum.toFixed(2)),
       overallCount: allClinic.length + allOutreach.length,
+      overallPaidCount: clinicPaid.length + outreachPaid.length,
       overallTotal: Number((clinicSum + outreachSum).toFixed(2)),
     };
 

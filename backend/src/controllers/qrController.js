@@ -463,6 +463,7 @@ async function scanOwnerQr(req, res) {
          po.contact_number,
          po.address,
          po.barangay,
+         qc.status AS qr_status,
          p.id AS pet_id,
          p.name AS pet_name,
          p.pet_code AS pet_code,
@@ -484,6 +485,9 @@ async function scanOwnerQr(req, res) {
 
     if (rows.length === 0) {
       return res.status(404).json({ success: false, message: 'QR not recognized. This code is not registered in the system.' });
+    }
+    if (rows[0].qr_status !== 'Generated') {
+      return res.status(403).json({ success: false, message: 'This QR code is no longer active.' });
     }
 
     res.json({ success: true, owner: rows[0] });

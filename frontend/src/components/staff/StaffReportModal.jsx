@@ -9,7 +9,7 @@ const CATEGORIES = [
   { key: 'vaccinations', label: 'Vaccination Report', icon: '💉', desc: 'Vaccination records administered to pets' },
   { key: 'clinical', label: 'Clinical Consultations', icon: '🩺', desc: 'Consultations, diagnoses and treatment plans' },
   { key: 'medicine', label: 'Medicine / Prescriptions', icon: '💊', desc: 'Prescriptions and medicines dispensed' },
-  { key: 'payments', label: 'Payment Monitoring', icon: '🧾', desc: 'Official receipt payment records' },
+  { key: 'payments', label: 'Payment Monitoring', icon: '🧾', desc: 'Consultation payment transactions' },
   { key: 'outreach', label: 'Outreach Transactions', icon: '🚌', desc: 'Barangay outreach transactions' },
   { key: 'requests', label: 'Record Requests', icon: '📄', desc: 'Requested pet records and issue status' },
 ];

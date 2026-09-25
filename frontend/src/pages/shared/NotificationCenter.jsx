@@ -15,7 +15,7 @@ import toast from "react-hot-toast";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { getNotificationPath } from "../../utils/notificationRoutes";
-import { getSocketOrigin } from "../../utils/socketOrigin";
+import { getSocketOrigin, getSocketAuthToken } from "../../utils/socketOrigin";
 
 function prependNotification(list, incoming) {
   if (!incoming?.id) return list;
@@ -38,6 +38,7 @@ export default function NotificationCenter() {
     if (!user?.id) return;
 
     const socket = io(getSocketOrigin(), {
+      auth: { token: getSocketAuthToken() },
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: Infinity,

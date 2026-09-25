@@ -94,6 +94,8 @@ DROP TABLE IF EXISTS `consultation_records`;
 CREATE TABLE `consultation_records` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `pet_id` int(11) NOT NULL,
+  `queue_id` int(11) DEFAULT NULL,
+  `complaint` varchar(255) DEFAULT NULL,
   `diagnosis` text DEFAULT NULL,
   `treatment_plan` text DEFAULT NULL,
   `consultation_date` date DEFAULT NULL,
@@ -101,8 +103,10 @@ CREATE TABLE `consultation_records` (
   `vet_id` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_consultation_queue_id` (`queue_id`),
   KEY `pet_id` (`pet_id`),
-  KEY `vet_id` (`vet_id`)
+  KEY `vet_id` (`vet_id`),
+  CONSTRAINT `fk_consultation_queue` FOREIGN KEY (`queue_id`) REFERENCES `clinic_queue` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -154,7 +158,7 @@ CREATE TABLE `notifications` (
   `user_id` int(11) NOT NULL,
   `title` varchar(150) NOT NULL,
   `message` text NOT NULL,
-  `type` enum('Vaccination','Payment','QR','LostPet','System','Announcement','Record','Registration') NOT NULL DEFAULT 'System',
+  `type` enum('Vaccination','Payment','QR','LostPet','System','Announcement','Record','Registration','ClinicQueue') NOT NULL DEFAULT 'System',
   `link` varchar(255) DEFAULT NULL,
   `is_read` tinyint(1) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
@@ -325,7 +329,7 @@ DROP TABLE IF EXISTS `payment_monitoring`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `payment_monitoring` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `or_number` varchar(100) NOT NULL,
+  `or_number` varchar(100) DEFAULT NULL,
   `or_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
   `or_date` date DEFAULT NULL,
   `or_time` time DEFAULT NULL,
@@ -334,28 +338,41 @@ CREATE TABLE `payment_monitoring` (
   `or_photo_path` varchar(500) DEFAULT NULL,
   `ocr_text` mediumtext DEFAULT NULL,
   `ocr_confidence` decimal(5,2) DEFAULT NULL,
-  `pet_owner_id` int(11) NOT NULL,
+  `pet_owner_id` int(11) DEFAULT NULL,
   `pet_id` int(11) DEFAULT NULL,
-  `payment_type` enum('Consultation','Vaccination','Medicine') NOT NULL,
+  `payment_type` enum('Consultation','Vaccination','Medicine') DEFAULT NULL,
   `medicine_id` int(11) DEFAULT NULL,
   `medicine_quantity` varchar(50) DEFAULT NULL,
   `medicine_total` decimal(10,2) DEFAULT NULL,
-  `recorded_by` int(11) NOT NULL,
+  `recorded_by` int(11) DEFAULT NULL,
   `remarks` varchar(255) DEFAULT NULL,
+  `consultation_id` int(11) DEFAULT NULL,
+  `payment_reference` varchar(100) DEFAULT NULL,
+  `payment_status` enum('Unpaid','Paid','Cancelled') NOT NULL DEFAULT 'Unpaid',
+  `total_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `consultation_date` date DEFAULT NULL,
+  `status_updated_by` int(11) DEFAULT NULL,
+  `status_updated_at` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `pm_token` varchar(64) DEFAULT NULL,
   `receipt_qr_path` varchar(500) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_pm_or_number` (`or_number`),
   UNIQUE KEY `uk_pm_token` (`pm_token`),
+  UNIQUE KEY `uk_pm_consultation_id` (`consultation_id`),
+  UNIQUE KEY `uk_pm_payment_reference` (`payment_reference`),
   KEY `pet_owner_id` (`pet_owner_id`),
   KEY `idx_pm_pet` (`pet_id`),
+  KEY `idx_pm_status` (`payment_status`),
+  KEY `idx_pm_status_updated_by` (`status_updated_by`),
   KEY `medicine_id` (`medicine_id`),
   KEY `recorded_by` (`recorded_by`),
   CONSTRAINT `fk_pm_medicine` FOREIGN KEY (`medicine_id`) REFERENCES `medicines` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_pm_owner` FOREIGN KEY (`pet_owner_id`) REFERENCES `pet_owners` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_pm_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_pm_recorded_by` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`id`)
+  CONSTRAINT `fk_pm_recorded_by` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`id`),
+  CONSTRAINT `fk_pm_consultation` FOREIGN KEY (`consultation_id`) REFERENCES `consultation_records` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_pm_status_updated_by` FOREIGN KEY (`status_updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -384,6 +401,27 @@ CREATE TABLE `catalog_products` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
+DROP TABLE IF EXISTS `consultation_charges`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `consultation_charges` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `consultation_id` int(11) NOT NULL,
+  `catalog_product_id` int(11) NOT NULL,
+  `description` varchar(255) NOT NULL,
+  `quantity` int(11) NOT NULL DEFAULT 1,
+  `unit_price` decimal(10,2) NOT NULL,
+  `line_total` decimal(10,2) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `consultation_charges_consultation_id` (`consultation_id`),
+  KEY `consultation_charges_catalog_product_id` (`catalog_product_id`),
+  CONSTRAINT `fk_consultation_charges_consultation` FOREIGN KEY (`consultation_id`) REFERENCES `consultation_records` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_consultation_charges_catalog` FOREIGN KEY (`catalog_product_id`) REFERENCES `catalog_products` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `payment_types`
 --
 
@@ -677,6 +715,48 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB AUTO_INCREMENT=220 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
+DROP TABLE IF EXISTS `consultation_batches`;
+CREATE TABLE `consultation_batches` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `batch_token` varchar(100) NOT NULL,
+  `created_by` int(11) NOT NULL,
+  `status` enum('Active','Completed','Cancelled') NOT NULL DEFAULT 'Active',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_consultation_batches_token` (`batch_token`),
+  KEY `consultation_batches_created_by` (`created_by`),
+  KEY `consultation_batches_status` (`status`),
+  CONSTRAINT `fk_consultation_batches_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `clinic_queue`;
+CREATE TABLE `clinic_queue` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `pet_id` int(11) NOT NULL,
+  `batch_id` int(11) DEFAULT NULL,
+  `status` enum('Waiting','In Consultation','Completed','Cancelled') NOT NULL DEFAULT 'Waiting',
+  `notes` varchar(500) DEFAULT NULL,
+  `checked_in_by` int(11) NOT NULL,
+  `veterinarian_id` int(11) DEFAULT NULL,
+  `checked_in_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `started_at` datetime DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_clinic_queue_batch_pet` (`batch_id`,`pet_id`),
+  KEY `clinic_queue_pet_id` (`pet_id`),
+  KEY `clinic_queue_status` (`status`),
+  KEY `clinic_queue_batch_id` (`batch_id`),
+  KEY `clinic_queue_checked_in_by` (`checked_in_by`),
+  KEY `clinic_queue_veterinarian_id` (`veterinarian_id`),
+  CONSTRAINT `fk_clinic_queue_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_clinic_queue_checked_in_by` FOREIGN KEY (`checked_in_by`) REFERENCES `users` (`id`),
+  CONSTRAINT `fk_clinic_queue_veterinarian` FOREIGN KEY (`veterinarian_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_clinic_queue_batch` FOREIGN KEY (`batch_id`) REFERENCES `consultation_batches` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 --
 -- Table structure for table `vaccination_records`
 --
@@ -737,6 +817,518 @@ CREATE TABLE `vaccines` (
   `interval_days` int(11) DEFAULT 365
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'CREATE TABLE IF NOT EXISTS consultation_batches (id INT(11) NOT NULL AUTO_INCREMENT, batch_token VARCHAR(100) NOT NULL, created_by INT(11) NOT NULL, status ENUM(''Active'',''Completed'',''Cancelled'') NOT NULL DEFAULT ''Active'', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (id), UNIQUE KEY uk_consultation_batches_token (batch_token), KEY consultation_batches_created_by (created_by), KEY consultation_batches_status (status), CONSTRAINT fk_consultation_batches_created_by FOREIGN KEY (created_by) REFERENCES users (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci',
+    'SELECT 1')
+  FROM information_schema.TABLES
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'consultation_batches'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'CREATE TABLE IF NOT EXISTS clinic_queue (id INT(11) NOT NULL AUTO_INCREMENT, pet_id INT(11) NOT NULL, batch_id INT(11) DEFAULT NULL, status ENUM(''Waiting'',''In Consultation'',''Completed'',''Cancelled'') NOT NULL DEFAULT ''Waiting'', notes VARCHAR(500) DEFAULT NULL, checked_in_by INT(11) NOT NULL, veterinarian_id INT(11) DEFAULT NULL, checked_in_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, started_at DATETIME DEFAULT NULL, completed_at DATETIME DEFAULT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (id), UNIQUE KEY uk_clinic_queue_batch_pet (batch_id, pet_id), KEY clinic_queue_pet_id (pet_id), KEY clinic_queue_status (status), KEY clinic_queue_batch_id (batch_id), KEY clinic_queue_checked_in_by (checked_in_by), KEY clinic_queue_veterinarian_id (veterinarian_id), CONSTRAINT fk_clinic_queue_pet FOREIGN KEY (pet_id) REFERENCES pets (id) ON DELETE CASCADE, CONSTRAINT fk_clinic_queue_checked_in_by FOREIGN KEY (checked_in_by) REFERENCES users (id), CONSTRAINT fk_clinic_queue_veterinarian FOREIGN KEY (veterinarian_id) REFERENCES users (id) ON DELETE SET NULL, CONSTRAINT fk_clinic_queue_batch FOREIGN KEY (batch_id) REFERENCES consultation_batches (id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci',
+    'SELECT 1')
+  FROM information_schema.TABLES
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clinic_queue'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'CREATE TABLE IF NOT EXISTS consultation_charges (id INT(11) NOT NULL AUTO_INCREMENT, consultation_id INT(11) NOT NULL, catalog_product_id INT(11) NOT NULL, description VARCHAR(255) NOT NULL, quantity INT(11) NOT NULL DEFAULT 1, unit_price DECIMAL(10,2) NOT NULL, line_total DECIMAL(10,2) NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id), KEY consultation_charges_consultation_id (consultation_id), KEY consultation_charges_catalog_product_id (catalog_product_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci',
+    'SELECT 1')
+  FROM information_schema.TABLES
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'consultation_charges'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `clinic_queue` ADD COLUMN `batch_id` INT(11) DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clinic_queue' AND COLUMN_NAME = 'batch_id'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `consultation_records` ADD COLUMN `queue_id` INT(11) DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'consultation_records' AND COLUMN_NAME = 'queue_id'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `consultation_records` ADD COLUMN `complaint` VARCHAR(255) DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'consultation_records' AND COLUMN_NAME = 'complaint'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `or_number` VARCHAR(100) DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'or_number'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `or_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'or_amount'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `or_description` VARCHAR(255) DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'or_description'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `payment_items` TEXT DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'payment_items'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `pet_id` INT(11) DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'pet_id'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `consultation_id` INT(11) DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'consultation_id'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `payment_reference` VARCHAR(100) DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'payment_reference'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `payment_status` ENUM(''Unpaid'',''Paid'',''Cancelled'') NOT NULL DEFAULT ''Unpaid''',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'payment_status'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `total_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'total_amount'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `consultation_date` DATE DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'consultation_date'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `status_updated_by` INT(11) DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'status_updated_by'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `status_updated_at` DATETIME DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'status_updated_at'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `pm_token` VARCHAR(64) DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'pm_token'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `receipt_qr_path` VARCHAR(500) DEFAULT NULL',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'receipt_qr_path'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0 OR MAX(IS_NULLABLE) <> 'NO',
+    'SELECT 1',
+    'ALTER TABLE `payment_monitoring` MODIFY COLUMN `or_number` VARCHAR(100) DEFAULT NULL')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'or_number'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `pet_owner_id` INT(11) DEFAULT NULL',
+    IF(MAX(IS_NULLABLE) = 'NO',
+      'ALTER TABLE `payment_monitoring` MODIFY COLUMN `pet_owner_id` INT(11) DEFAULT NULL',
+      'SELECT 1'))
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'pet_owner_id'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `payment_type` ENUM(''Consultation'',''Vaccination'',''Medicine'') DEFAULT NULL',
+    IF(MAX(IS_NULLABLE) = 'NO',
+      'ALTER TABLE `payment_monitoring` MODIFY COLUMN `payment_type` ENUM(''Consultation'',''Vaccination'',''Medicine'') DEFAULT NULL',
+      'SELECT 1'))
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'payment_type'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD COLUMN `recorded_by` INT(11) DEFAULT NULL',
+    IF(MAX(IS_NULLABLE) = 'NO',
+      'ALTER TABLE `payment_monitoring` MODIFY COLUMN `recorded_by` INT(11) DEFAULT NULL',
+      'SELECT 1'))
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND COLUMN_NAME = 'recorded_by'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `clinic_queue` ADD KEY `clinic_queue_batch_id` (`batch_id`)',
+    'SELECT 1')
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clinic_queue' AND INDEX_NAME = 'clinic_queue_batch_id'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `consultation_charges` ADD KEY `consultation_charges_consultation_id` (`consultation_id`)',
+    'SELECT 1')
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'consultation_charges' AND INDEX_NAME = 'consultation_charges_consultation_id'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `consultation_charges` ADD KEY `consultation_charges_catalog_product_id` (`catalog_product_id`)',
+    'SELECT 1')
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'consultation_charges' AND INDEX_NAME = 'consultation_charges_catalog_product_id'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `clinic_queue` ADD UNIQUE KEY `uk_clinic_queue_batch_pet` (`batch_id`, `pet_id`)',
+    'SELECT 1')
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clinic_queue' AND INDEX_NAME = 'uk_clinic_queue_batch_pet'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `consultation_records` ADD UNIQUE KEY `uk_consultation_queue_id` (`queue_id`)',
+    'SELECT 1')
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'consultation_records' AND INDEX_NAME = 'uk_consultation_queue_id'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD UNIQUE KEY `uk_pm_consultation_id` (`consultation_id`)',
+    'SELECT 1')
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND INDEX_NAME = 'uk_pm_consultation_id'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD UNIQUE KEY `uk_pm_payment_reference` (`payment_reference`)',
+    'SELECT 1')
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND INDEX_NAME = 'uk_pm_payment_reference'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD KEY `idx_pm_pet` (`pet_id`)',
+    'SELECT 1')
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND INDEX_NAME = 'idx_pm_pet'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD KEY `idx_pm_status` (`payment_status`)',
+    'SELECT 1')
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND INDEX_NAME = 'idx_pm_status'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD KEY `idx_pm_status_updated_by` (`status_updated_by`)',
+    'SELECT 1')
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND INDEX_NAME = 'idx_pm_status_updated_by'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD UNIQUE KEY `uk_pm_token` (`pm_token`)',
+    'SELECT 1')
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND INDEX_NAME = 'uk_pm_token'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `consultation_batches` ADD CONSTRAINT `fk_consultation_batches_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`)',
+    'SELECT 1')
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'consultation_batches' AND CONSTRAINT_NAME = 'fk_consultation_batches_created_by'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `clinic_queue` ADD CONSTRAINT `fk_clinic_queue_batch` FOREIGN KEY (`batch_id`) REFERENCES `consultation_batches` (`id`) ON DELETE SET NULL',
+    'SELECT 1')
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'clinic_queue' AND CONSTRAINT_NAME = 'fk_clinic_queue_batch'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `consultation_records` ADD CONSTRAINT `fk_consultation_queue` FOREIGN KEY (`queue_id`) REFERENCES `clinic_queue` (`id`) ON DELETE SET NULL',
+    'SELECT 1')
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'consultation_records' AND CONSTRAINT_NAME = 'fk_consultation_queue'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `consultation_charges` ADD CONSTRAINT `fk_consultation_charges_consultation` FOREIGN KEY (`consultation_id`) REFERENCES `consultation_records` (`id`) ON DELETE CASCADE',
+    'SELECT 1')
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'consultation_charges' AND CONSTRAINT_NAME = 'fk_consultation_charges_consultation'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `consultation_charges` ADD CONSTRAINT `fk_consultation_charges_catalog` FOREIGN KEY (`catalog_product_id`) REFERENCES `catalog_products` (`id`)',
+    'SELECT 1')
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'consultation_charges' AND CONSTRAINT_NAME = 'fk_consultation_charges_catalog'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD CONSTRAINT `fk_pm_medicine` FOREIGN KEY (`medicine_id`) REFERENCES `medicines` (`id`) ON DELETE SET NULL',
+    'SELECT 1')
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND CONSTRAINT_NAME = 'fk_pm_medicine'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD CONSTRAINT `fk_pm_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`id`) ON DELETE SET NULL',
+    'SELECT 1')
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND CONSTRAINT_NAME = 'fk_pm_pet'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD CONSTRAINT `fk_pm_consultation` FOREIGN KEY (`consultation_id`) REFERENCES `consultation_records` (`id`) ON DELETE SET NULL',
+    'SELECT 1')
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND CONSTRAINT_NAME = 'fk_pm_consultation'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD CONSTRAINT `fk_pm_status_updated_by` FOREIGN KEY (`status_updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL',
+    'SELECT 1')
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND CONSTRAINT_NAME = 'fk_pm_status_updated_by'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD CONSTRAINT `fk_pm_owner` FOREIGN KEY (`pet_owner_id`) REFERENCES `pet_owners` (`id`) ON DELETE CASCADE',
+    'SELECT 1')
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND CONSTRAINT_NAME = 'fk_pm_owner'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `payment_monitoring` ADD CONSTRAINT `fk_pm_recorded_by` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`id`)',
+    'SELECT 1')
+  FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'payment_monitoring' AND CONSTRAINT_NAME = 'fk_pm_recorded_by'
+);
+PREPARE payment_schema_stmt FROM @sql;
+EXECUTE payment_schema_stmt;
+DEALLOCATE PREPARE payment_schema_stmt;
 
 --
 -- Dumping routines for database 'pet_vet_system'

@@ -3,26 +3,27 @@ import { useAuth } from '../context/AuthContext';
 
 // Returns the correct login path based on the URL the user is trying to visit
 function getLoginPath(pathname) {
-  if (pathname.startsWith('/staff') || pathname.startsWith('/admin')) {
-    if (pathname.startsWith('/admin')) return '/admin/login';
-    return '/staff/login';
-  }
+  if (pathname.startsWith('/admin')) return '/admin/login';
+  if (pathname.startsWith('/veterinarian')) return '/veterinarian/login';
+  if (pathname.startsWith('/staff')) return '/staff/login';
   return '/owner/login';
 }
 
 // Returns the correct dashboard path for a given role
 function getDashboardPath(role) {
   if (role === 'Admin') return '/admin/overview';
-  if (role === 'Staff' || role === 'Veterinarian') return '/staff/dashboard';
+  if (role === 'Veterinarian') return '/veterinarian/dashboard';
+  if (role === 'Staff') return '/staff/dashboard';
   return '/owner/dashboard';
 }
 
 // Checks if the current URL path is compatible with the user's role
 function pathMatchesRole(pathname, role) {
   if (pathname.startsWith('/admin')) return role === 'Admin';
-  if (pathname.startsWith('/staff')) return role === 'Staff' || role === 'Veterinarian';
+  if (pathname.startsWith('/veterinarian')) return role === 'Veterinarian';
+  if (pathname.startsWith('/staff')) return role === 'Staff';
   if (pathname.startsWith('/owner')) return role === 'Owner';
-  return true; // Public paths
+  return true;
 }
 
 export default function ProtectedRoute({ children, allowedRoles }) {

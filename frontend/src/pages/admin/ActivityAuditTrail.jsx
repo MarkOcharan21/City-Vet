@@ -13,7 +13,12 @@ import {
   FolderOpen,
   Shield,
   RefreshCw,
+  ShieldCheck,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
+import StatusBadge from '../../components/StatusBadge';
+import FullScreenLoader from '../../components/ui/FullScreenLoader';
 
 const MODULE_LABELS = {
   auth: { label: 'Authentication' },
@@ -30,6 +35,7 @@ const MODULE_LABELS = {
   transaction: { label: 'Outreach Transaction' },
   qr: { label: 'QR Code' },
   staff: { label: 'Staff' },
+  password_reset_request: { label: 'Password Reset' },
 };
 
 const ACTION_OPTIONS = [
@@ -39,6 +45,7 @@ const ACTION_OPTIONS = [
   'VERIFY',
   'REJECT',
   'APPROVE',
+  'DECLINE',
   'CANCEL',
   'RESTORE',
   'LOGIN',
@@ -54,6 +61,7 @@ const ACTION_META = {
   VERIFY: 'Verified',
   REJECT: 'Rejected',
   APPROVE: 'Approved',
+  DECLINE: 'Declined',
   CANCEL: 'Cancelled',
   RESTORE: 'Restored',
   LOGIN: 'Logged In',
@@ -85,6 +93,7 @@ function getActionBadgeClass(action) {
     VERIFY: 'aat-action-badge aat-action-badge--verify',
     APPROVE: 'aat-action-badge aat-action-badge--approve',
     RESTORE: 'aat-action-badge aat-action-badge--approve',
+    DECLINE: 'aat-action-badge aat-action-badge--reject',
     REJECT: 'aat-action-badge aat-action-badge--reject',
     CANCEL: 'aat-action-badge aat-action-badge--reject',
     LOGIN: 'aat-action-badge aat-action-badge--login',
@@ -171,6 +180,67 @@ export default function ActivityAuditTrail() {
   });
   const [viewTarget, setViewTarget] = useState(null);
 
+  const [resetRequests, setResetRequests] = useState([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [requestsError, setRequestsError] = useState('');
+  const [processingId, setProcessingId] = useState(null);
+  const [processingAction, setProcessingAction] = useState('');
+  const [declineTarget, setDeclineTarget] = useState(null);
+  const [declineReason, setDeclineReason] = useState('');
+  const [declining, setDeclining] = useState(false);
+
+  async function loadResetRequests() {
+    setRequestsLoading(true);
+    setRequestsError('');
+    try {
+      const res = await api.get('/users/reset-requests');
+      setResetRequests(res.data.requests || []);
+    } catch {
+      setRequestsError('Unable to load password reset requests.');
+    } finally {
+      setRequestsLoading(false);
+    }
+  }
+
+  async function approveResetRequest(req, action = 'approve') {
+    setProcessingId(req.id);
+    setProcessingAction(action);
+    try {
+      const res = await api.post(`/users/reset-requests/${req.id}/approve`);
+      toast.success(res.data.message);
+      await loadResetRequests();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Unable to approve the request.');
+    } finally {
+      setProcessingId(null);
+      setProcessingAction('');
+    }
+  }
+
+  function openDecline(req) {
+    setDeclineReason('');
+    setDeclineTarget(req);
+  }
+
+  async function confirmDecline() {
+    if (!declineTarget) return;
+    setDeclining(true);
+    try {
+      await api.post(`/users/reset-requests/${declineTarget.id}/decline`, {
+        reason: declineReason.trim() || undefined,
+      });
+      toast.success(
+        `${declineTarget.full_name || declineTarget.email}'s request was declined. They will be notified by email.`
+      );
+      setDeclineTarget(null);
+      await loadResetRequests();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Unable to decline the request.');
+    } finally {
+      setDeclining(false);
+    }
+  }
+
   const buildParams = (page = 1, useFilters = filters, useTab = tab) => {
     const params = new URLSearchParams({
       page,
@@ -216,6 +286,7 @@ export default function ActivityAuditTrail() {
 
   useEffect(() => {
     loadStats();
+    loadResetRequests();
   }, []);
 
   const handleTabChange = (nextTab) => {
@@ -260,6 +331,12 @@ export default function ActivityAuditTrail() {
 
   const topUsers = stats?.top_users || [];
   const modulesInvolved = stats?.by_entity?.length || 0;
+  const pendingCount = resetRequests.filter((r) => r.status === 'pending').length;
+  const isResetCodeActive = (r) =>
+    r.status === 'approved' &&
+    r.reset_code &&
+    r.reset_code_expiry &&
+    new Date(r.reset_code_expiry) > new Date();
 
   return (
     <div className="page">
@@ -327,6 +404,108 @@ export default function ActivityAuditTrail() {
           </div>
         </div>
       )}
+
+      <div className="page-card" style={{ marginBottom: '1.5rem' }}>
+        <div className="table-header-row">
+          <div>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <ShieldCheck size={18} />
+              Password Reset Requests
+            </h2>
+            <p className="page-intro">
+              Staff can request a password reset from their login page. Approve to email them a one-time reset
+              code, or decline the request.
+            </p>
+          </div>
+          <div className="table-meta" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {pendingCount > 0 && (
+              <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: '999px', padding: '2px 10px', fontSize: '12px', fontWeight: '600' }}>
+                {pendingCount} pending
+              </span>
+            )}
+            <button className="btn-icon-action" onClick={loadResetRequests} title="Refresh" style={{ width: '32px', height: '32px', padding: 0 }}>
+              <RefreshCw size={14} />
+            </button>
+          </div>
+        </div>
+
+        {requestsError && <p className="form-error">{requestsError}</p>}
+
+        <div className="table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Staff</th>
+                <th>Role</th>
+                <th>Requested</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {requestsLoading ? (
+                <tr>
+                  <td colSpan="5">Loading reset requests...</td>
+                </tr>
+              ) : resetRequests.length === 0 ? (
+                <tr>
+                  <td colSpan="5">No password reset requests.</td>
+                </tr>
+              ) : (
+                resetRequests.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <div>{r.full_name || '—'}</div>
+                      <div className="table-subtext">{r.email}</div>
+                      {r.account_id && <div className="table-subtext">{r.account_id}</div>}
+                    </td>
+                    <td>{r.role || '—'}</td>
+                    <td>{formatDateTime(r.created_at)}</td>
+                    <td>
+                      <StatusBadge status={r.status === 'approved' ? 'Approved' : r.status === 'denied' ? 'Declined' : 'Pending'} />
+                    </td>
+                    <td>
+                      {r.status === 'pending' ? (
+                        <div className="reset-actions">
+                          <button
+                            className="reset-action-btn reset-action-btn--approve"
+                            disabled={processingId === r.id}
+                            onClick={() => approveResetRequest(r, 'approve')}
+                          >
+                            <CheckCircle2 size={14} />
+                            Approve
+                          </button>
+                          <button
+                            className="reset-action-btn reset-action-btn--decline"
+                            disabled={processingId === r.id}
+                            onClick={() => openDecline(r)}
+                          >
+                            <XCircle size={14} />
+                            Decline
+                          </button>
+                        </div>
+                      ) : r.status === 'approved' ? (
+                      isResetCodeActive(r) ? (
+                        <span className="table-subtext">
+                          Code sent — expires {formatDateTime(r.reset_code_expiry)}
+                        </span>
+                      ) : (
+                        <button className="reset-action-btn reset-action-btn--resend" disabled={processingId === r.id} onClick={() => approveResetRequest(r, 'resend')}>
+                          <RefreshCw size={14} />
+                          Resend Code
+                        </button>
+                      )
+                    ) : (
+                        <span className="table-subtext">{r.decline_reason ? `Declined — ${r.decline_reason}` : 'Declined'}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div style={{ marginBottom: '1.5rem' }}>
         <button
@@ -606,6 +785,43 @@ export default function ActivityAuditTrail() {
           </div>
         </div>
       )}
+
+      {declineTarget && (
+        <div className="logout-modal-overlay">
+          <div className="logout-modal">
+            <h3>Decline Reset Request</h3>
+            <p>
+              This will reject the request from {declineTarget.full_name || declineTarget.email}. They will be
+              notified by email.
+            </p>
+            <label style={{ marginTop: '0.5rem', display: 'block', fontSize: '13px', fontWeight: '600' }}>
+              Reason (optional)
+            </label>
+            <textarea
+              value={declineReason}
+              onChange={(e) => setDeclineReason(e.target.value)}
+              rows={3}
+              placeholder="e.g. Please visit the office to confirm your identity"
+              style={{ width: '100%', marginTop: '0.35rem', padding: '0.5rem 0.75rem', border: '1px solid var(--color-border, #d1d5db)', borderRadius: '8px', fontFamily: 'inherit', fontSize: '14px' }}
+            />
+            <div className="logout-modal-buttons">
+              <button className="confirm-logout-btn" onClick={confirmDecline} disabled={declining}>
+                {declining ? 'Declining...' : 'Decline Request'}
+              </button>
+              <button className="btn-secondary" onClick={() => setDeclineTarget(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {processingId && (
+        <FullScreenLoader
+          text={processingAction === 'resend' ? 'Resending reset code...' : 'Approving reset request...'}
+        />
+      )}
+      {declining && <FullScreenLoader text="Declining reset request..." />}
     </div>
   );
 }

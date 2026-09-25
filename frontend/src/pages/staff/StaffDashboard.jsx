@@ -43,10 +43,10 @@ export default function StaffDashboard() {
           <strong>Verify Registration</strong>
           <p>Review and approve newly submitted pet registrations</p>
         </Link>
-        <Link to="/staff/vaccination-monitoring" className="action-card">
-          <strong>Vaccination Monitoring</strong>
-          <p>Track which pets are due or updated</p>
-        </Link>
+         <Link to="/staff/queue" className="action-card">
+           <strong>Walk-in Queue</strong>
+           <p>Check in patients and monitor consultation progress</p>
+         </Link>
         <Link to="/staff/issue-records" className="action-card">
           <strong>Issue Requested Records</strong>
           <p>Fulfill pending document requests</p>

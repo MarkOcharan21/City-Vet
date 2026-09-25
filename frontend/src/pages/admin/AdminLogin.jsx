@@ -145,7 +145,7 @@ onChange={(e)=>setPassword(e.target.value)}
 
 <div className="forgot-password">
 
-<a href="#">Forgot Password?</a>
+<Link to="/admin/forgot-password">Forgot Password?</Link>
 
 </div>
 

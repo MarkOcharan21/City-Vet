@@ -15,14 +15,18 @@ function getStorageKeyPrefix() {
   const hostname = window.location.hostname;
   
   if (path.startsWith('/admin')) return `admin_${hostname}_`;
-  if (path.startsWith('/staff')) return `staff_${hostname}_`;
+  if (path.startsWith('/staff') || path.startsWith('/veterinarian')) return `clinic_${hostname}_`;
   if (path.startsWith('/owner')) return `owner_${hostname}_`;
   return `public_${hostname}_`;
 }
 
 api.interceptors.request.use((config) => {
   const storageKeyPrefix = getStorageKeyPrefix();
-  const token = localStorage.getItem(`${storageKeyPrefix}token`);
+  const legacyPrefix = storageKeyPrefix.startsWith('clinic_')
+    ? `staff_${window.location.hostname}_`
+    : null;
+  const token = localStorage.getItem(`${storageKeyPrefix}token`) ||
+    (legacyPrefix ? localStorage.getItem(`${legacyPrefix}token`) : null);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -69,10 +73,18 @@ api.interceptors.response.use(
     }
     if (error.response?.status === 401) {
       const storageKeyPrefix = getStorageKeyPrefix();
-      const token = localStorage.getItem(`${storageKeyPrefix}token`);
+      const legacyPrefix = storageKeyPrefix.startsWith('clinic_')
+        ? `staff_${window.location.hostname}_`
+        : null;
+      const token = localStorage.getItem(`${storageKeyPrefix}token`) ||
+        (legacyPrefix ? localStorage.getItem(`${legacyPrefix}token`) : null);
       if (token) {
         localStorage.removeItem(`${storageKeyPrefix}token`);
         localStorage.removeItem(`${storageKeyPrefix}user`);
+        if (legacyPrefix) {
+          localStorage.removeItem(`${legacyPrefix}token`);
+          localStorage.removeItem(`${legacyPrefix}user`);
+        }
         window.dispatchEvent(new CustomEvent('auth:logout', {
           detail: { reason: 'expired' },
         }));

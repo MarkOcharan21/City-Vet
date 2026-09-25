@@ -2,8 +2,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 const crypto = require('crypto');
-const { sendResetCodeEmail, sendRegistrationOtpEmail, isEmailConfigured } = require('../services/emailService');
+const { sendResetCodeEmail, sendRegistrationOtpEmail, sendNotificationEmail, isEmailConfigured } = require('../services/emailService');
 const { logAudit } = require('../middleware/auditMiddleware');
+const { createStaffResetRequest } = require('./passwordResetController');
 const {
   trim,
   isValidEmail,
@@ -31,6 +32,81 @@ function otpMatches(stored, provided) {
   const b = String(provided || '').trim();
   if (!a || !b || a.length !== b.length) return false;
   return crypto.timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+}
+
+const MAX_RESET_ATTEMPTS = 5;
+
+// Direct link to the guided reset form for the requester's portal, so the
+// emailed code can take the user straight to the OTP step (email pre-filled).
+function resetUrlFor(req, role, email) {
+  const origin = (req.headers.origin || process.env.FRONTEND_URL || 'http://localhost:5178').replace(/\/$/, '');
+  const path = role === 'Admin' ? '/admin/reset-password' : role === 'Owner' ? '/owner/reset-password' : '/staff/reset-password';
+  const query = email ? `?email=${encodeURIComponent(trim(email).toLowerCase())}` : '';
+  return `${origin}${path}${query}`;
+}
+
+// Shared OTP validation for both reset-password (final step) and
+// verify-reset-code (step 1 of the guided reset form). Applies the same
+// expiry, lockout, and attempt-counting rules so counters stay in sync.
+// Returns { ok: true, user } on a correct code, or
+// { ok: false, status, message, remaining } after applying side effects.
+async function verifyResetCodeForUser(email, otp) {
+  const [rows] = await db.query(
+    `SELECT id, full_name, email, reset_code, reset_code_expiry, reset_code_attempts
+     FROM users
+     WHERE email = ?`,
+    [trim(email).toLowerCase()]
+  );
+
+  if (rows.length === 0) {
+    return { ok: false, status: 400, message: 'Invalid or expired reset code.' };
+  }
+
+  const user = rows[0];
+
+  if (!user.reset_code || !user.reset_code_expiry) {
+    return { ok: false, status: 400, message: 'No active reset code. Request a new code first.' };
+  }
+
+  if (new Date(user.reset_code_expiry) < new Date()) {
+    await db.query(
+      'UPDATE users SET reset_code = NULL, reset_code_expiry = NULL, reset_code_attempts = 0 WHERE id = ?',
+      [user.id]
+    );
+    return { ok: false, status: 410, message: 'Your reset code has expired. Request a new one.' };
+  }
+
+  if (Number(user.reset_code_attempts || 0) >= MAX_RESET_ATTEMPTS) {
+    await db.query(
+      'UPDATE users SET reset_code = NULL, reset_code_expiry = NULL, reset_code_attempts = 0 WHERE id = ?',
+      [user.id]
+    );
+    return { ok: false, status: 429, message: 'Too many incorrect attempts. The reset code has been invalidated. Request a new code.' };
+  }
+
+  if (!otpMatches(user.reset_code, otp)) {
+    const attempts = Number(user.reset_code_attempts || 0) + 1;
+    const remaining = MAX_RESET_ATTEMPTS - attempts;
+    const lockout = remaining <= 0;
+
+    await db.query(
+      lockout
+        ? 'UPDATE users SET reset_code = NULL, reset_code_expiry = NULL, reset_code_attempts = 0 WHERE id = ?'
+        : 'UPDATE users SET reset_code_attempts = ? WHERE id = ?',
+      lockout ? [user.id] : [attempts, user.id]
+    );
+
+    return {
+      ok: false,
+      status: 400,
+      message: lockout
+        ? 'Too many incorrect attempts. The reset code has been invalidated. Request a new code.'
+        : `Incorrect reset code. ${remaining} attempt(s) remaining.`,
+      remaining,
+    };
+  }
+
+  return { ok: true, user };
 }
 
 // POST /api/auth/register-owner
@@ -532,6 +608,13 @@ async function completeSetup(req, res) {
 }
 
 // POST /api/auth/forgot-password
+// Role-aware self-service:
+//  - Owner / Admin accounts → a 6-digit reset code is emailed right away.
+//  - Staff / Veterinarian accounts → a password reset request is queued for
+//    the Admin to approve; only after approval is the code emailed (the
+//    approved request invalidates this step — see resetPassword).
+// The response is identical regardless of whether the email exists or what
+// role it belongs to, so the endpoint cannot be used to enumerate accounts.
 async function forgotPassword(req, res) {
   const { email } = req.body;
 
@@ -549,17 +632,53 @@ async function forgotPassword(req, res) {
     });
   }
 
+  const GENERIC_REPLY =
+    'If the email matches a Staff, Veterinarian, or Admin account, a password reset request has been sent to the System Administrator for approval. For Pet Owner accounts, a reset code has been sent to the email instead.';
+
   try {
     const [rows] = await db.query(
-      "SELECT id FROM users WHERE email = ?",
+      `SELECT id, email, role, status, account_id, full_name, reset_code_sent_at
+       FROM users
+       WHERE email = ?`,
       [trim(email).toLowerCase()]
     );
 
     if (rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No account found with that email.",
+      return res.json({ success: true, message: GENERIC_REPLY });
+    }
+
+    const user = rows[0];
+
+    // Staff / Veterinarian → admin-gated approval workflow.
+    if (user.role === 'Staff' || user.role === 'Veterinarian') {
+      const result = await createStaffResetRequest(req, user);
+      if (result.error) {
+        const { status, message } = result.error;
+        return res.status(status).json({ success: false, message });
+      }
+
+      return res.json({
+        success: true,
+        message:
+          'Your password reset request has been sent to the System Administrator for approval. Once approved, a 6-digit reset code will be emailed to you. The code expires in 15 minutes.',
       });
+    }
+
+    // Owner / Admin → email the reset code immediately.
+    if (user.status !== 'active') {
+      return res.json({ success: true, message: GENERIC_REPLY });
+    }
+
+    if (user.reset_code_sent_at) {
+      const elapsedSeconds = (Date.now() - new Date(user.reset_code_sent_at).getTime()) / 1000;
+      if (elapsedSeconds < OTP_RESEND_COOLDOWN_SECONDS) {
+        const waitSeconds = Math.ceil(OTP_RESEND_COOLDOWN_SECONDS - elapsedSeconds);
+        return res.status(429).json({
+          success: false,
+          message: `Please wait ${waitSeconds} second(s) before requesting another code.`,
+          retry_after: waitSeconds,
+        });
+      }
     }
 
     const code = String(crypto.randomInt(100000, 1000000)).padStart(6, '0');
@@ -567,28 +686,44 @@ async function forgotPassword(req, res) {
 
     await db.query(
       `UPDATE users
-       SET reset_code = ?, reset_code_expiry = ?
-       WHERE email = ?`,
-      [code, expiry, trim(email).toLowerCase()]
+       SET reset_code = ?, reset_code_expiry = ?, reset_code_sent_at = NOW(), reset_code_attempts = 0
+       WHERE id = ?`,
+      [code, expiry, user.id]
     );
 
-    await sendResetCodeEmail(email, code);
+    try {
+      await sendResetCodeEmail(user.email, code, resetUrlFor(req, user.role, user.email));
+    } catch (emailErr) {
+      console.warn('Reset code email failed:', emailErr.message);
+      return res.status(502).json({
+        success: false,
+        message: 'We could not send the reset email. Please try again.',
+      });
+    }
 
     res.json({
       success: true,
-      message: "OTP sent to your email. Use it within 15 minutes.",
+      message: `A 6-digit reset code was sent to your email. It expires in 15 minutes.`,
     });
 
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to send reset OTP.",
-      error: error.message,
+    await logAudit(req, {
+      user_id: user.id,
+      staff_name: user.full_name || null,
+      action: 'CREATE',
+      entity_type: 'password_reset_request',
+      entity_id: user.id,
+      description: `${roleLabel(user.role)} "${user.full_name || user.email}" requested a password reset code (self-service OTP)`,
+      new_value: { email: user.email, account_id: user.account_id || null },
     });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ success: false, message: 'Failed to process the request.', error: error.message });
   }
 }
 
 // POST /api/auth/reset-password
+// Step 2 of the guided reset flow: verifies the emailed 6-digit code (shared
+// anti-brute-force rules — max 5 wrong guesses), then hashes the new password.
 async function resetPassword(req, res) {
   const { email, otp, password } = req.body;
   const validation = validateResetPassword({ email, otp, password });
@@ -598,53 +733,86 @@ async function resetPassword(req, res) {
   }
 
   try {
-    const [rows] = await db.query(
-      `SELECT id, full_name
-       FROM users
-       WHERE email = ?
-       AND reset_code = ?
-       AND reset_code_expiry > NOW()`,
-      [trim(email).toLowerCase(), trim(otp)]
-    );
+    const result = await verifyResetCodeForUser(email, otp);
 
-    if (rows.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid or expired OTP.",
-      });
+    if (!result.ok) {
+      return res.status(result.status).json({ success: false, message: result.message });
     }
 
+    const user = result.user;
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await db.query(
       `UPDATE users
        SET password = ?,
            reset_code = NULL,
-           reset_code_expiry = NULL
+           reset_code_expiry = NULL,
+           reset_code_attempts = 0
        WHERE id = ?`,
-      [hashedPassword, rows[0].id]
+      [hashedPassword, user.id]
     );
 
     res.json({
       success: true,
-      message: "Password updated successfully.",
+      message: 'Password updated successfully.',
     });
+
+    // Let the user know their password was changed (also alerts them if it was NOT them).
+    sendNotificationEmail(
+      user.email,
+      'Password Changed',
+      'Your City Vet password was changed successfully. If you did not make this change, please contact the System Administrator immediately.'
+    ).catch((emailErr) =>
+      console.warn('Password changed notification email failed:', emailErr.message)
+    );
 
     await logAudit(req, {
-      user_id: rows[0].id,
-      staff_name: rows[0].full_name || null,
-      action: "UPDATE",
-      entity_type: "user",
-      entity_id: rows[0].id,
-      description: `Password changed for ${trim(email).toLowerCase()}`,
+      user_id: user.id,
+      staff_name: user.full_name || null,
+      action: 'UPDATE',
+      entity_type: 'user',
+      entity_id: user.id,
+      description: `Password reset completed for ${trim(email).toLowerCase()}`,
     });
-
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Password reset failed.",
-      error: error.message,
+    console.error('Password reset failed:', error);
+    res.status(500).json({ success: false, message: 'Password reset failed.', error: error.message });
+  }
+}
+
+// POST /api/auth/verify-reset-code
+// Step 1 of the guided reset flow: checks the emailed code WITHOUT consuming
+// it, so a correct code moves the user on to the new-password step. Uses the
+// same lockout/expiry rules as resetPassword.
+async function verifyResetCode(req, res) {
+  const { email, otp } = req.body;
+
+  if (!trim(email) || !isValidEmail(email)) {
+    return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+  }
+
+  if (!isValidOtp(otp)) {
+    return res.status(400).json({ success: false, message: 'Enter the 6-digit code from your email.' });
+  }
+
+  try {
+    const result = await verifyResetCodeForUser(email, otp);
+
+    if (!result.ok) {
+      return res.status(result.status).json({
+        success: false,
+        message: result.message,
+        remaining: result.remaining ?? null,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Code verified. Set your new password.',
     });
+  } catch (error) {
+    console.error('Verify reset code error:', error);
+    res.status(500).json({ success: false, message: 'Could not verify the reset code.', error: error.message });
   }
 }
 
@@ -683,6 +851,7 @@ module.exports = {
   getSetup,
   completeSetup,
   forgotPassword,
+  verifyResetCode,
   resetPassword,
   logout,
 };

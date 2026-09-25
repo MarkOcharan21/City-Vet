@@ -38,14 +38,34 @@ async function sendMail({ to, subject, text, html }) {
   return true;
 }
 
-async function sendResetCodeEmail(email, code) {
+async function sendResetCodeEmail(email, code, resetUrl) {
+  const emailLink = resetUrl
+    ? `\nEnter the code here: ${resetUrl}`
+    : '';
+
   const sent = await sendMail({
     to: email,
     subject: 'City Vet Password Reset OTP',
-    text: `Your City Vet password reset code is ${code}. This code expires in 15 minutes.`,
+    text: `Your City Vet password reset code is ${code}. This code expires in 15 minutes.${emailLink}`,
     html: `
-      <p>Your City Vet password reset code is <strong>${code}</strong>.</p>
-      <p>This code expires in 15 minutes.</p>
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #222;">
+        <h2 style="margin: 0 0 12px; color: #C8102E;">City Vet Cabuyao</h2>
+        <p style="margin: 0 0 8px;">Your City Vet password reset code is:</p>
+        <p style="margin: 0 0 16px;">
+          <span style="display:inline-block;background:#C8102E;color:#fff;padding:10px 18px;border-radius:8px;font-size:22px;font-weight:700;letter-spacing:4px;">${code}</span>
+        </p>
+        <p style="margin: 0 0 16px;">This code expires in 15 minutes.</p>
+        ${
+          resetUrl
+            ? `<p style="margin: 0 0 16px;">
+                 <a href="${resetUrl}" style="display:inline-block;background:#C8102E;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;">Enter Reset Code</a>
+               </p>
+               <p style="margin: 0; font-size: 13px; color: #666;">
+                 If the button does not work, copy and paste this link into your browser: ${resetUrl}
+               </p>`
+            : ''
+        }
+      </div>
     `,
   });
 

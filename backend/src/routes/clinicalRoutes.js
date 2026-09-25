@@ -7,7 +7,7 @@ const {
 } = require('../controllers/clinicalController');
 
 router.get('/my-records', auth, requireRole(['Owner']), getMyClinicalRecords);
-router.get('/', auth, requireRole(['Staff', 'Admin', 'Veterinarian']), getAllClinicalRecords);
-router.post('/', auth, requireRole(['Staff', 'Admin', 'Veterinarian']), addClinicalRecord);
+router.get('/', auth, requireRole(['Admin', 'Veterinarian']), getAllClinicalRecords);
+router.post('/', auth, requireRole(['Admin', 'Veterinarian']), addClinicalRecord);
 
 module.exports = router;

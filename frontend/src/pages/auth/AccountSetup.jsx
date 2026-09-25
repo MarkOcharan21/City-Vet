@@ -9,6 +9,12 @@ import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import FieldError from "../../components/ui/FieldError";
 import { validateAccountSetup } from "../../utils/validation";
 
+function getClinicLoginPath(role) {
+  if (role === "Veterinarian") return "/veterinarian/login";
+  if (role === "Staff") return "/staff/login";
+  return "/clinic/welcome";
+}
+
 export default function AccountSetup() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -27,6 +33,7 @@ export default function AccountSetup() {
   const [saving, setSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
+  const clinicLoginPath = getClinicLoginPath(account?.role);
 
   useEffect(() => {
     if (!token) {
@@ -150,8 +157,8 @@ export default function AccountSetup() {
                 ? "Your account has already been activated. You may log in directly."
                 : "If you keep seeing this, contact the City Vet office."}
             </p>
-            <Link to="/staff/login" className="btn-secondary">
-              Go to Staff Login
+            <Link to="/clinic/welcome" className="btn-secondary">
+              Go to Clinic Access
             </Link>
           </div>
         ) : (
@@ -242,7 +249,7 @@ export default function AccountSetup() {
               <span />
               <p>
                 Already activated?
-                <Link to="/staff/login"> Sign In</Link>
+                <Link to={clinicLoginPath}> Sign In</Link>
               </p>
               <span />
             </div>
@@ -259,8 +266,8 @@ export default function AccountSetup() {
               <strong> {account?.account_id}</strong> and your new password.
             </p>
             <div className="logout-modal-buttons">
-              <button className="confirm-logout-btn" onClick={() => navigate("/staff/login")}>
-                Go to Staff Login
+              <button className="confirm-logout-btn" onClick={() => navigate(clinicLoginPath)}>
+                Go to Clinic Login
               </button>
             </div>
           </div>

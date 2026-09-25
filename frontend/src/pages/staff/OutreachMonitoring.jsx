@@ -25,6 +25,7 @@ import { saveAs } from "file-saver";
 import api from "../../services/api";
 import { ALL_CABUYAO_BARANGAYS } from "../../data/cabuyaoBarangays";
 import PrintReportButton from "../../components/staff/PrintReportButton";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { resolveMediaUrl } from "../../utils/mediaUrl";
 
 const STATUS_COLORS = {
@@ -123,6 +124,8 @@ export default function OutreachMonitoring() {
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deletingTx, setDeletingTx] = useState(false);
+  const [deleteProgramOpen, setDeleteProgramOpen] = useState(false);
+  const [deletingProgram, setDeletingProgram] = useState(false);
 
   async function loadPrograms() {
     try {
@@ -333,10 +336,12 @@ export default function OutreachMonitoring() {
   }
 
   async function deleteProgram() {
-    if (!window.confirm("Delete this outreach program? This cannot be undone.")) return;
+    if (!selectedId) return;
+    setDeletingProgram(true);
     try {
       const response = await api.delete(`/outreach/${selectedId}`);
       toast.success(response.data.message);
+      setDeleteProgramOpen(false);
       setSelectedId(null);
       setProgram(null);
       setQrOpen(false);
@@ -344,6 +349,8 @@ export default function OutreachMonitoring() {
       await loadAllSummary();
     } catch (err) {
       toast.error(err.response?.data?.message || "Could not delete the program.");
+    } finally {
+      setDeletingProgram(false);
     }
   }
 
@@ -805,7 +812,7 @@ export default function OutreachMonitoring() {
                     </button>
                     <button
                       className="btn-delete-text"
-                      onClick={deleteProgram}
+                      onClick={() => setDeleteProgramOpen(true)}
                       style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "0.4rem 0.85rem", fontSize: 13, height: "32px" }}
                     >
                       Delete
@@ -1500,6 +1507,23 @@ export default function OutreachMonitoring() {
           </div>
         </Overlay>
       )}
+
+      <ConfirmDialog
+        open={deleteProgramOpen}
+        title="Delete outreach program?"
+        message={
+          selectedRecord
+            ? `Are you sure you want to delete "${selectedRecord.program_name}"? This cannot be undone.`
+            : "Are you sure you want to delete this outreach program? This cannot be undone."
+        }
+        confirmText="Yes"
+        cancelText="No"
+        loading={deletingProgram}
+        onConfirm={deleteProgram}
+        onCancel={() => {
+          if (!deletingProgram) setDeleteProgramOpen(false);
+        }}
+      />
 
       {/* ---------- DELETE TRANSACTION MODAL ---------- */}
       {deleteTarget && (

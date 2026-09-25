@@ -145,7 +145,7 @@ async function createRequest(req, res) {
       );
 
       await notifyUsersByRoles(
-        ["Staff", "Veterinarian", "Admin"],
+        ["Staff", "Admin"],
         "New Record Request",
         `${pet.name} record request needs processing.`,
         "Record"

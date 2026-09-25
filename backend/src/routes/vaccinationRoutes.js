@@ -7,9 +7,9 @@ const {
 } = require('../controllers/vaccinationController');
 
 router.get('/vaccines', auth, getVaccineList);
-router.get('/pet/:petId', auth, requireRole(['Staff', 'Admin', 'Veterinarian']), getPetVaccinationHistory);
+router.get('/pet/:petId', auth, requireRole(['Admin', 'Veterinarian']), getPetVaccinationHistory);
 router.get('/my-history', auth, requireRole(['Owner']), getMyVaccinationHistory);
-router.get('/', auth, requireRole(['Staff', 'Admin', 'Veterinarian']), getAllVaccinations);
-router.post('/', auth, requireRole(['Staff', 'Veterinarian']), recordVaccination);
+router.get('/', auth, requireRole(['Admin', 'Veterinarian']), getAllVaccinations);
+router.post('/', auth, requireRole(['Admin', 'Veterinarian']), recordVaccination);
 
 module.exports = router;

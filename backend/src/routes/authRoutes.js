@@ -9,10 +9,12 @@ const {
   getSetup,
   completeSetup,
   forgotPassword,
+  verifyResetCode,
   resetPassword,
   logout,
 } = require("../controllers/authController");
 const authMiddleware = require("../middleware/authMiddleware");
+const { getResetRequestStatus } = require("../controllers/passwordResetController");
 
 // Register Owner — step 1: creates a pending account and emails the OTP
 router.post("/register-owner", registerOwner);
@@ -32,6 +34,13 @@ router.post("/setup/:token", completeSetup);
 
 // Forgot Password
 router.post("/forgot-password", forgotPassword);
+
+// Verify emailed reset code (step 1 of the guided reset form)
+router.post("/verify-reset-code", verifyResetCode);
+
+// Reset request status — polled by the staff Forgot Password page to know
+// when the admin has approved (auto-redirect to the OTP step)
+router.post("/reset-request-status", getResetRequestStatus);
 
 // Reset Password
 router.post("/reset-password", resetPassword);

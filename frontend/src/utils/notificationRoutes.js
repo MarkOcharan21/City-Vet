@@ -1,7 +1,7 @@
 const PORTAL_PREFIX = {
   Owner: '/owner',
   Staff: '/staff',
-  Veterinarian: '/staff',
+  Veterinarian: '/veterinarian',
   Admin: '/admin',
 };
 
@@ -13,24 +13,27 @@ const ROUTES_BY_ROLE = {
     Record: 'record-requests',
     Registration: 'my-pets',
     LostPet: 'my-pets',
+    ClinicQueue: 'dashboard',
     System: 'dashboard',
   },
   Staff: {
     Announcement: 'dashboard',
-    Vaccination: 'vaccination-monitoring',
+    Vaccination: 'pet-records',
     QR: 'pet-records',
     Record: 'issue-records',
     Registration: 'verify-registration',
     LostPet: 'pet-records',
+    ClinicQueue: 'queue',
     System: 'dashboard',
   },
   Veterinarian: {
     Announcement: 'dashboard',
     Vaccination: 'vaccination-monitoring',
     QR: 'pet-records',
-    Record: 'issue-records',
-    Registration: 'verify-registration',
+    Record: 'pet-records',
+    Registration: 'pet-records',
     LostPet: 'pet-records',
+    ClinicQueue: 'queue',
     System: 'dashboard',
   },
   Admin: {
@@ -40,6 +43,7 @@ const ROUTES_BY_ROLE = {
     Record: 'registration-records',
     Registration: 'registration-records',
     LostPet: 'registration-records',
+    ClinicQueue: 'registration-records',
     System: 'overview',
   },
 };
@@ -61,6 +65,10 @@ export function getNotificationPath(role, notification) {
     }
     // Owner/staff see announcement content in the notification itself.
     return null;
+  }
+
+  if (link === 'queue') {
+    return role === 'Admin' ? '/admin/overview' : `${prefix}/queue`;
   }
 
   if (link) {

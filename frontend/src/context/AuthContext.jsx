@@ -23,6 +23,7 @@ function isTokenExpired(token) {
 function getLoginPathForCurrentUrl() {
   const path = window.location.pathname;
   if (path.startsWith('/admin')) return '/admin/login';
+  if (path.startsWith('/veterinarian')) return '/veterinarian/login';
   if (path.startsWith('/staff')) return '/staff/login';
   return '/owner/login';
 }
@@ -34,7 +35,7 @@ function getStorageKeyPrefix() {
   const hostname = window.location.hostname;
   
   if (path.startsWith('/admin')) return `admin_${hostname}_`;
-  if (path.startsWith('/staff')) return `staff_${hostname}_`;
+  if (path.startsWith('/staff') || path.startsWith('/veterinarian')) return `clinic_${hostname}_`;
   if (path.startsWith('/owner')) return `owner_${hostname}_`;
   return `public_${hostname}_`;
 }
@@ -42,9 +43,10 @@ function getStorageKeyPrefix() {
 // Checks if a role matches the current URL path pattern
 function roleMatchesPath(role, pathname) {
   if (pathname.startsWith('/admin')) return role === 'Admin';
-  if (pathname.startsWith('/staff')) return role === 'Staff' || role === 'Veterinarian';
+  if (pathname.startsWith('/veterinarian')) return role === 'Veterinarian';
+  if (pathname.startsWith('/staff')) return role === 'Staff';
   if (pathname.startsWith('/owner')) return role === 'Owner';
-  return true; // Public paths are fine
+  return true;
 }
 
 export function AuthProvider({ children }) {
@@ -54,15 +56,38 @@ export function AuthProvider({ children }) {
   const navigate = useNavigate();
 
   const storageKeyPrefix = getStorageKeyPrefix();
+  const legacyStorageKeyPrefix = storageKeyPrefix.startsWith('clinic_')
+    ? `staff_${window.location.hostname}_`
+    : null;
 
   // Restore session from localStorage on first mount with validation
   useEffect(() => {
-    const token = localStorage.getItem(`${storageKeyPrefix}token`);
-    const saved = localStorage.getItem(`${storageKeyPrefix}user`);
+    const tokenKey = `${storageKeyPrefix}token`;
+    const userKey = `${storageKeyPrefix}user`;
+    let token = localStorage.getItem(tokenKey);
+    let saved = localStorage.getItem(userKey);
+
+    if (legacyStorageKeyPrefix) {
+      const legacyToken = localStorage.getItem(`${legacyStorageKeyPrefix}token`);
+      const legacyUser = localStorage.getItem(`${legacyStorageKeyPrefix}user`);
+      if (!token && legacyToken) {
+        token = legacyToken;
+        saved = legacyUser;
+        localStorage.setItem(tokenKey, legacyToken);
+        if (legacyUser) localStorage.setItem(userKey, legacyUser);
+      } else if (token && !saved && legacyUser) {
+        saved = legacyUser;
+        localStorage.setItem(userKey, legacyUser);
+      }
+    }
 
     if (!token || isTokenExpired(token)) {
-      localStorage.removeItem(`${storageKeyPrefix}token`);
-      localStorage.removeItem(`${storageKeyPrefix}user`);
+      localStorage.removeItem(tokenKey);
+      localStorage.removeItem(userKey);
+      if (legacyStorageKeyPrefix) {
+        localStorage.removeItem(`${legacyStorageKeyPrefix}token`);
+        localStorage.removeItem(`${legacyStorageKeyPrefix}user`);
+      }
       setUser(null);
       setInitializing(false);
       return;
@@ -74,6 +99,10 @@ export function AuthProvider({ children }) {
       // Token is malformed — clear everything
       localStorage.removeItem(`${storageKeyPrefix}token`);
       localStorage.removeItem(`${storageKeyPrefix}user`);
+      if (legacyStorageKeyPrefix) {
+        localStorage.removeItem(`${legacyStorageKeyPrefix}token`);
+        localStorage.removeItem(`${legacyStorageKeyPrefix}user`);
+      }
       setUser(null);
       setInitializing(false);
       return;
@@ -108,18 +137,24 @@ export function AuthProvider({ children }) {
 
     setUser(savedUser);
     setInitializing(false);
-  }, [storageKeyPrefix]);
+  }, [storageKeyPrefix, legacyStorageKeyPrefix]);
 
   // Handle 401 events fired by the api.js interceptor.
   // Uses React Router navigate() — no hard page reload, no React state wipe.
   const handleAutoLogout = useCallback(() => {
     setUser(null);
+    localStorage.removeItem(`${storageKeyPrefix}token`);
+    localStorage.removeItem(`${storageKeyPrefix}user`);
+    if (legacyStorageKeyPrefix) {
+      localStorage.removeItem(`${legacyStorageKeyPrefix}token`);
+      localStorage.removeItem(`${legacyStorageKeyPrefix}user`);
+    }
     const loginPath = getLoginPathForCurrentUrl();
     const returnTo = encodeURIComponent(
       window.location.pathname + window.location.search
     );
     navigate(`${loginPath}?returnTo=${returnTo}&session=expired`, { replace: true });
-  }, [navigate]);
+  }, [legacyStorageKeyPrefix, navigate, storageKeyPrefix]);
 
   useEffect(() => {
     window.addEventListener('auth:logout', handleAutoLogout);
@@ -142,6 +177,10 @@ export function AuthProvider({ children }) {
 
     localStorage.removeItem(`${storageKeyPrefix}token`);
     localStorage.removeItem(`${storageKeyPrefix}user`);
+    if (legacyStorageKeyPrefix) {
+      localStorage.removeItem(`${legacyStorageKeyPrefix}token`);
+      localStorage.removeItem(`${legacyStorageKeyPrefix}user`);
+    }
     setUser(null);
 
     // Navigate to correct portal login after manual logout
@@ -154,6 +193,10 @@ export function AuthProvider({ children }) {
     setUser(null);
     localStorage.removeItem(`${storageKeyPrefix}token`);
     localStorage.removeItem(`${storageKeyPrefix}user`);
+    if (legacyStorageKeyPrefix) {
+      localStorage.removeItem(`${legacyStorageKeyPrefix}token`);
+      localStorage.removeItem(`${legacyStorageKeyPrefix}user`);
+    }
   }
 
   // Check if the current user's role matches the current URL path

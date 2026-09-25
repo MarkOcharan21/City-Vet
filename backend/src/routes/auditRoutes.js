@@ -12,8 +12,8 @@ const {
   getComprehensiveAuditStats,
 } = require('../controllers/auditController');
 
-// Staff check-in (Staff, Veterinarian)
-router.post('/check-in', auth, requireRole(['Staff', 'Veterinarian']), staffCheckIn);
+// Staff check-in
+router.post('/check-in', auth, requireRole(['Staff']), staffCheckIn);
 
 // Get all audit logs with filtering and pagination (Admin only) - for legacy Staff Login Logs page
 router.get('/', auth, requireRole(['Admin']), getAllAuditLogs);

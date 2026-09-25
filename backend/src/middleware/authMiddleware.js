@@ -4,9 +4,6 @@ const jwt = require('jsonwebtoken');
 // Every protected route uses this before running its real logic.
 function authMiddleware(req, res, next) {
 
-  console.log("===== AUTH MIDDLEWARE =====");
-  console.log("Authorization:", req.headers.authorization);
-
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -21,8 +18,6 @@ function authMiddleware(req, res, next) {
   try {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    console.log("Decoded Token:", decoded);
 
     req.user = decoded;
 
