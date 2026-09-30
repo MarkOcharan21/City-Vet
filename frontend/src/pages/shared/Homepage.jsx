@@ -191,8 +191,8 @@ export default function Homepage() {
             <a href="#about">About</a>
           </div>
           <div className="homepage-auth-links">
-            <Link to="/owner/register">Register</Link>
-            <Link to="/owner/login" className="homepage-login-link">
+            <Link to="/owner/welcome?to=/owner/register">Register</Link>
+            <Link to="/owner/welcome" className="homepage-login-link">
               Log In
             </Link>
           </div>

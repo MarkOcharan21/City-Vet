@@ -39,3 +39,8 @@ carousel-*.png
 backend/_*.cjs
 backend/_*.js
 backend/_*.py
+/_*.cjs
+
+# ── Thesis / survey documents & QA screenshots ───────────
+screenshots/
+

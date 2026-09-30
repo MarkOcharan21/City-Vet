@@ -657,7 +657,7 @@ export default function OutreachMonitoring() {
 
   return (
     <div className="page">
-      <div className="page-header-row">
+      <div className="page-header-row page-header-row--stacked">
         <div>
           <h1>Outreach Program Payment Monitoring</h1>
           <p className="page-intro">

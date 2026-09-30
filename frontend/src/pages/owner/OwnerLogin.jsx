@@ -67,7 +67,7 @@ export default function OwnerLogin() {
   }
 
   return (
-    <div className="auth-page">
+    <div className="auth-page auth-page--owner">
 
       {/* LEFT SIDE */}
       <div className="auth-graphic">

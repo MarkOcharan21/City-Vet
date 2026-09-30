@@ -2,11 +2,9 @@ import { useState, useEffect } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
-  ListChecks,
   ClipboardList,
   Syringe,
   Stethoscope,
-  Pill,
   Moon,
   Sun,
   PanelLeftClose,
@@ -18,6 +16,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import NotificationBell from "../components/notifications/NotificationBell";
+import GlobalLoadingOverlay from "../components/GlobalLoadingOverlay";
 
 function fmtDate(value) {
   const date = value instanceof Date ? value : new Date(value);
@@ -36,6 +35,12 @@ export default function VeterinarianLayout() {
   const [showLogOutModal, setShowLogOutModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setPageLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -89,21 +94,17 @@ export default function VeterinarianLayout() {
             <LayoutDashboard size={16} />
             <span className="sidebar-label">Dashboard</span>
           </NavLink>
-          <NavLink to="/veterinarian/queue" onClick={() => setMobileOpen(false)}>
-            <ListChecks size={16} />
-            <span className="sidebar-label">Walk-in Queue</span>
-          </NavLink>
           <NavLink to="/veterinarian/pet-records" onClick={() => setMobileOpen(false)}>
             <ClipboardList size={16} />
             <span className="sidebar-label">Pet Records</span>
           </NavLink>
           <NavLink to="/veterinarian/clinical-records" onClick={() => setMobileOpen(false)}>
             <Stethoscope size={16} />
-            <span className="sidebar-label">Consultation Records</span>
+            <span className="sidebar-label">New Consultation</span>
           </NavLink>
-          <NavLink to="/veterinarian/medicine-records" onClick={() => setMobileOpen(false)}>
-            <Pill size={16} />
-            <span className="sidebar-label">Medicine Records</span>
+          <NavLink to="/veterinarian/consultation-log" onClick={() => setMobileOpen(false)}>
+            <ClipboardList size={16} />
+            <span className="sidebar-label">Consultation Log</span>
           </NavLink>
           <NavLink to="/veterinarian/vaccination-monitoring" onClick={() => setMobileOpen(false)}>
             <Syringe size={16} />
@@ -181,6 +182,8 @@ export default function VeterinarianLayout() {
           </div>
         </div>
       )}
+
+      <GlobalLoadingOverlay visible={pageLoading} message="Loading dashboard..." />
     </div>
   );
 }

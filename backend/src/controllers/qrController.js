@@ -221,35 +221,30 @@ async function scanQrToken(req, res) {
     pet.id
     ]
     );
-
+    // Consultation charges are billed into payment_monitoring. The legacy payments
+    // table is no longer written by the app but still holds historical records, so
+    // the booklet reads both and merges them — otherwise every consultation charge
+    // the clinic bills would be missing from the pet's booklet.
     const [payments] = await db.query(
-    `
-    SELECT
-
-    p.payment_date,
-
-    p.amount,
-
-    p.payment_status,
-
-    p.validation_status,
-
-    p.or_number,
-
-    pt.type_name
-
-    FROM payments p
-
-    JOIN payment_types pt
-    ON p.payment_type_id = pt.id
-
-    WHERE p.pet_id = ?
-
-    ORDER BY p.payment_date DESC
-    `,
-    [
-    pet.id
-    ]
+      `
+      SELECT payment_date, amount, payment_status, validation_status, type_name
+      FROM (
+        SELECT pay.payment_date, pay.amount, pay.payment_status, pay.validation_status, pt.type_name
+        FROM payments pay
+        JOIN payment_types pt ON pay.payment_type_id = pt.id
+        WHERE pay.pet_id = ?
+        UNION ALL
+        SELECT pm.consultation_date AS payment_date,
+               pm.total_amount AS amount,
+               pm.payment_status,
+               NULL AS validation_status,
+               pm.payment_type AS type_name
+        FROM payment_monitoring pm
+        WHERE pm.pet_id = ?
+      ) AS billed
+      ORDER BY payment_date DESC
+      `,
+      [pet.id, pet.id]
     );
 
     const [preventiveCare] = await db.query(

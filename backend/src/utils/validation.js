@@ -275,6 +275,26 @@ function validateVaccinationRecord(data) {
   return { valid: Object.keys(errors).length === 0, errors, message: 'Please correct the highlighted fields.' };
 }
 
+// Item-level checks shared by the standalone prescription endpoint and the
+// consultation save. The consultation path allows an empty list, because a
+// visit with no medication is perfectly valid.
+function validatePrescriptionItems(items) {
+  const errors = {};
+  if (items === undefined || items === null) return { valid: true, errors };
+  if (!Array.isArray(items)) {
+    errors.prescription = 'Prescription must be a list of medicines.';
+    return { valid: false, errors, message: 'Please correct the highlighted fields.' };
+  }
+
+  items.forEach((item, index) => {
+    if (!item || !isPositiveInt(item.medicine_id)) {
+      errors[`prescription.${index}.medicine_id`] = 'Select a medicine.';
+    }
+  });
+
+  return { valid: Object.keys(errors).length === 0, errors, message: 'Please correct the highlighted fields.' };
+}
+
 function validatePrescription(data) {
   const errors = {};
   if (!isPositiveInt(data.consultation_id) && !isPositiveInt(data.pet_id)) {
@@ -363,6 +383,7 @@ module.exports = {
   validateClinicalRecord,
   validateVaccinationRecord,
   validatePrescription,
+  validatePrescriptionItems,
   validatePayment,
   validateRecordRequest,
 };

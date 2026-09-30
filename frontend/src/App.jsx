@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { Toaster } from "react-hot-toast";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -8,9 +8,12 @@ import Homepage from "./pages/shared/Homepage";
 import PublicPetProfile from "./pages/shared/PublicPetProfile";
 import OutreachConfirmForm from "./pages/shared/OutreachConfirmForm";
 import { ClinicWelcome, ClinicRoleSelection } from "./pages/shared/ClinicAccess";
+import MobileScan from "./pages/shared/MobileScan";
+import NotFound from "./pages/shared/NotFound";
 
 // OWNER
 import OwnerLogin from "./pages/owner/OwnerLogin";
+import OwnerWelcome from "./pages/owner/OwnerWelcome";
 import OwnerRegister from "./pages/owner/OwnerRegister";
 import OwnerDashboard from "./pages/owner/OwnerDashboard";
 import PetRegistration from "./pages/owner/PetRegistration";
@@ -29,13 +32,12 @@ import AccountSetup from "./pages/auth/AccountSetup";
 import StaffLogin from "./pages/staff/StaffLogin";
 import StaffCheckIn from "./pages/staff/StaffCheckIn";
 import StaffDashboard from "./pages/staff/StaffDashboard";
-import ClinicQueue from "./pages/staff/ClinicQueue";
 import VeterinarianDashboard from "./pages/staff/VeterinarianDashboard";
 import PetRecords from "./pages/staff/PetRecords";
 import VerifyRegistration from "./pages/staff/VerifyRegistration";
 import VaccinationMonitoring from "./pages/staff/VaccinationMonitoring";
 import ClinicalRecords from "./pages/staff/ClinicalRecords";
-import MedicineRecords from "./pages/staff/MedicineRecords";
+import ConsultationLog from "./pages/staff/ConsultationLog";
 import IssueRequestedRecord from "./pages/staff/IssueRequestedRecord";
 import PaymentMonitoring from "./pages/staff/PaymentMonitoring";
 import OutreachMonitoring from "./pages/staff/OutreachMonitoring";
@@ -81,6 +83,8 @@ export default function App() {
 
 <Route path="/outreach-confirm/:token" element={<OutreachConfirmForm />} />
 
+          <Route path="/owner/welcome" element={<OwnerWelcome />} />
+
           <Route path="/owner/login" element={<OwnerLogin />} />
 
           <Route path="/owner/forgot-password" element={<ForgotPassword />} />
@@ -100,6 +104,8 @@ export default function App() {
           <Route path="/admin/reset-password" element={<ResetPassword portal="admin" />} />
 
           <Route path="/account-setup" element={<AccountSetup />} />
+
+          <Route path="/mobile-scan" element={<MobileScan />} />
 
           <Route path="/owner/register" element={<OwnerRegister />} />
 
@@ -182,14 +188,9 @@ export default function App() {
              />
 
              <Route
-               path="queue"
-               element={<ClinicQueue />}
+               path="pet-records"
+               element={<PetRecords />}
              />
-
-            <Route
-              path="pet-records"
-              element={<PetRecords />}
-            />
 
             <Route
               path="verify-registration"
@@ -227,20 +228,15 @@ export default function App() {
                element={<VeterinarianDashboard />}
              />
 
-             <Route
-               path="queue"
-               element={<ClinicQueue />}
-             />
+              <Route
+                path="pet-records"
+                element={<PetRecords />}
+              />
 
-             <Route
-               path="pet-records"
-               element={<PetRecords />}
-             />
-
-             <Route
-               path="vaccination-monitoring"
-               element={<VaccinationMonitoring />}
-             />
+              <Route
+                path="vaccination-monitoring"
+                element={<VaccinationMonitoring />}
+              />
 
              <Route
                path="clinical-records"
@@ -248,8 +244,13 @@ export default function App() {
              />
 
              <Route
+               path="consultation-log"
+               element={<ConsultationLog />}
+             />
+
+             <Route
                path="medicine-records"
-               element={<MedicineRecords />}
+               element={<Navigate to="/veterinarian/clinical-records" replace />}
              />
            </Route>
 
@@ -308,6 +309,9 @@ export default function App() {
               element={<ProductCatalog />}
             />
           </Route>
+
+          {/* Unknown/retired URLs — never leave the user on a blank page. */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

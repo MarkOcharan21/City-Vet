@@ -23,7 +23,7 @@ const ROUTES_BY_ROLE = {
     Record: 'issue-records',
     Registration: 'verify-registration',
     LostPet: 'pet-records',
-    ClinicQueue: 'queue',
+    ClinicQueue: 'dashboard',
     System: 'dashboard',
   },
   Veterinarian: {
@@ -33,7 +33,7 @@ const ROUTES_BY_ROLE = {
     Record: 'pet-records',
     Registration: 'pet-records',
     LostPet: 'pet-records',
-    ClinicQueue: 'queue',
+    ClinicQueue: 'clinical-records',
     System: 'dashboard',
   },
   Admin: {
@@ -68,7 +68,11 @@ export function getNotificationPath(role, notification) {
   }
 
   if (link === 'queue') {
-    return role === 'Admin' ? '/admin/overview' : `${prefix}/queue`;
+    if (role === 'Admin') return '/admin/overview';
+    if (role === 'Veterinarian') return '/veterinarian/clinical-records';
+    // Staff no longer has a walk-in queue page — send them to the dashboard.
+    if (role === 'Staff') return '/staff/dashboard';
+    return `${prefix}/queue`;
   }
 
   if (link) {

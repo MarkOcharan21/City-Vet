@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 const db = require('../src/config/db');
 const petController = require('../src/controllers/petController');
-const officialReceiptController = require('../src/controllers/officialReceiptController');
+const medicineController = require('../src/controllers/medicineController');
 const notificationController = require('../src/controllers/notificationController');
 const auditController = require('../src/controllers/auditController');
 const userController = require('../src/controllers/userController');
@@ -47,36 +47,30 @@ test('owner cannot report another owner\'s pet as lost', async () => {
   assert.match(res.body.message, /own pets/i);
 });
 
-test('owner cannot create a payment for another owner\'s pet', async () => {
-  const mockConn = {
-    query: async (sql, params) => {
-      if (sql.includes('SELECT id FROM pet_owners WHERE user_id')) return [[{ id: 5 }]];
-      if (sql.includes('SELECT id FROM official_receipts WHERE or_number')) return [[]];
-      if (sql.includes('SELECT p.id, p.name FROM pets p')) return [[]]; // pet not found
-      return [[]];
-    },
-    beginTransaction: async () => {},
-    commit: async () => {},
-    rollback: async () => {},
-    release: () => {},
+test('prescription will not fabricate a consultation that skips billing', async () => {
+  const queries = [];
+  db.query = async (sql, params) => {
+    queries.push({ sql, params });
+    // No consultation that produced charges: the patient has not been consulted yet.
+    if (sql.includes('FROM consultation_records cr')) return [[]];
+    throw new Error(`Unexpected query: ${sql}`);
   };
-  db.getConnection = async () => mockConn;
 
   const res = response();
-  await officialReceiptController.createOfficialReceipt(
+  await medicineController.addPrescription(
     {
-      body: {
-        or_number: 'OR-TEST-99',
-        payment_date: '2026-08-20',
-        items: [{ pet_id: 99, payment_type_id: 1 }],
-      },
-      user: { id: 1, role: 'Owner' },
+      body: { pet_id: 7, items: [{ medicine_id: 1, quantity: '1' }] },
+      user: { id: 3, role: 'Veterinarian' },
     },
     res,
   );
 
-  assert.equal(res.statusCode, 403);
-  assert.match(res.body.message, /not found or not yours/i);
+  assert.equal(res.statusCode, 409);
+  assert.match(res.body.message, /save the consultation first/i);
+  assert.ok(
+    !queries.some(({ sql }) => sql.includes('INSERT INTO consultation_records')),
+    'must not insert a consultation row that would never get a payment transaction',
+  );
 });
 
 test('notification deletion is scoped to the authenticated user', async () => {

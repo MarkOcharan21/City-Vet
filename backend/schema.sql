@@ -142,8 +142,52 @@ CREATE TABLE `medicines` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `medicine_name` varchar(150) NOT NULL,
   `description` varchar(255) DEFAULT NULL,
+  `category` varchar(60) DEFAULT NULL,
+  `default_dosage` varchar(100) DEFAULT NULL,
+  `default_frequency` varchar(100) DEFAULT NULL,
+  `default_duration` varchar(100) DEFAULT NULL,
+  `default_instructions` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Consultation quick templates. The 5 templates that used to be hardcoded in
+-- ClinicalRecords.jsx now live here so a clinic can edit them without a redeploy.
+--
+
+CREATE TABLE `condition_regimens` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(120) NOT NULL,
+  `complaint` varchar(255) DEFAULT NULL,
+  `diagnosis` varchar(255) DEFAULT NULL,
+  `treatment` varchar(255) DEFAULT NULL,
+  `sort_order` int(11) NOT NULL DEFAULT 0,
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+-- A NULL dosage/frequency/duration/instructions means "inherit the medicine
+-- default", so a regimen only overrides a field the clinic actually changed.
+CREATE TABLE `condition_regimen_items` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `regimen_id` int(11) NOT NULL,
+  `medicine_id` int(11) NOT NULL,
+  `dosage` varchar(100) DEFAULT NULL,
+  `frequency` varchar(100) DEFAULT NULL,
+  `duration` varchar(100) DEFAULT NULL,
+  `instructions` varchar(255) DEFAULT NULL,
+  `sort_order` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `regimen_medicine` (`regimen_id`,`medicine_id`),
+  KEY `regimen_id` (`regimen_id`),
+  KEY `medicine_id` (`medicine_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -393,11 +437,13 @@ CREATE TABLE `catalog_products` (
   `price` decimal(10,2) NOT NULL DEFAULT 0.00,
   `active` tinyint(1) NOT NULL DEFAULT 1,
   `sort_order` int(11) NOT NULL DEFAULT 0,
+  `medicine_id` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `idx_catalog_category` (`category`),
-  KEY `idx_catalog_active` (`active`)
+  KEY `idx_catalog_active` (`active`),
+  KEY `medicine_id` (`medicine_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

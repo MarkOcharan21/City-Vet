@@ -20,11 +20,12 @@ export function getBackendOrigin() {
 export function resolveMediaUrl(path, fallback) {
   if (!path) return fallback ?? null;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  if (path.startsWith("data:")) return path;
 
   const apiUrl = import.meta.env.VITE_API_URL || "/api";
 
   if (apiUrl.startsWith("/")) {
-    return path;
+    return `${getBackendOrigin()}${path}`;
   }
 
   return `${apiUrl.replace(/\/api\/?$/, "")}${path}`;

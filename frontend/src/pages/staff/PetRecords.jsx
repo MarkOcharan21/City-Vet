@@ -1,11 +1,21 @@
-import { useEffect, useState } from 'react';
-import { MapPin } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  MapPin,
+  PawPrint,
+  Search,
+  Stethoscope,
+  Syringe,
+  HeartPulse,
+  ShieldAlert,
+} from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import api from '../../services/api';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
-import useMinLoading from '../../hooks/useMinLoading';
 import StatusBadge from '../../components/StatusBadge';
 import DigitalPetBooklet from '../../components/booklet/DigitalPetBooklet';
+import { resolveMediaUrl } from '../../utils/mediaUrl';
+import { useAuth } from '../../context/AuthContext';
 import {
   CABUYAO_BARANGAYS,
   CABUYAO_POB_BARANGAYS,
@@ -13,13 +23,54 @@ import {
 import PrintReportButton from '../../components/staff/PrintReportButton';
 
 const NO_BARANGAY_KEY = '__none__';
+const PAGE_SIZE = 25;
+
+function hasValue(value) {
+  return value != null && String(value).trim() !== '';
+}
+
+// "7 mo" / "2y 3m" — vets read age at a glance, not a raw birthdate.
+function formatAge(birthdate) {
+  if (!hasValue(birthdate)) return null;
+  const born = new Date(birthdate);
+  if (Number.isNaN(born.getTime())) return null;
+
+  const months = (Date.now() - born.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
+  if (months < 0) return null;
+  if (months < 12) return `${Math.floor(months)} mo`;
+
+  const years = Math.floor(months / 12);
+  const rest = Math.floor(months % 12);
+  return rest ? `${years}y ${rest}m` : `${years}y`;
+}
+
+// Safety-critical context a vet should see before opening a consultation.
+function healthFlags(pet) {
+  const flags = [];
+  if (hasValue(pet.allergies)) {
+    flags.push({ key: 'allergies', label: pet.allergies, tone: 'danger', Icon: ShieldAlert });
+  }
+  if (hasValue(pet.current_medication)) {
+    flags.push({ key: 'medication', label: pet.current_medication, tone: 'warn', Icon: Syringe });
+  }
+  if (hasValue(pet.important_conditions)) {
+    flags.push({ key: 'conditions', label: pet.important_conditions, tone: 'warn', Icon: HeartPulse });
+  }
+  return flags;
+}
 
 export default function PetRecords() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const isVet = user?.role === 'Veterinarian';
+
   const [pets, setPets] = useState([]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [barangay, setBarangay] = useState('');
+  const [species, setSpecies] = useState('');
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   const [bookletData, setBookletData] = useState(null);
   const [bookletToken, setBookletToken] = useState(null);
@@ -42,6 +93,33 @@ export default function PetRecords() {
   useEffect(() => {
     loadPets();
   }, [search, status, barangay]);
+
+  // A narrowed result set can shrink below the current page — start over.
+  useEffect(() => {
+    setPage(1);
+  }, [search, status, barangay, species]);
+
+  const speciesOptions = useMemo(() => {
+    const names = new Set();
+    pets.forEach((p) => {
+      if (hasValue(p.species_name)) names.add(p.species_name);
+    });
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [pets]);
+
+  const filteredPets = useMemo(() => {
+    if (!species) return pets;
+    return pets.filter((p) => p.species_name === species);
+  }, [pets, species]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPets.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const visiblePets = filteredPets.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const flaggedCount = useMemo(
+    () => filteredPets.filter((p) => healthFlags(p).length > 0).length,
+    [filteredPets],
+  );
 
   const openBooklet = async (pet) => {
     setBookletData(null);
@@ -75,7 +153,11 @@ export default function PetRecords() {
     if (bookletPet) openBooklet(bookletPet);
   };
 
-  const hasActiveFilters = Boolean(status || barangay);
+  const startConsultation = (pet) => {
+    navigate(`/veterinarian/clinical-records?pet_id=${pet.id}`);
+  };
+
+  const hasActiveFilters = Boolean(status || barangay || species);
 
   return (
     <div className="page">
@@ -96,12 +178,15 @@ export default function PetRecords() {
             <p>Use the filters below to quickly locate records in a specific barangay.</p>
           </div>
           <div className="table-meta">
-            {loading ? 'Loading...' : `${pets.length} record${pets.length !== 1 ? 's' : ''}`}
+            {loading
+              ? 'Loading...'
+              : `${filteredPets.length} record${filteredPets.length !== 1 ? 's' : ''}`}
           </div>
         </div>
 
         <div className="toolbar-row">
           <div className="search-wrap">
+            <Search size={16} className="search-icon" aria-hidden="true" />
             <input
               type="text"
               placeholder="Search by pet, owner, or breed..."
@@ -120,6 +205,21 @@ export default function PetRecords() {
               <option value="">All Status</option>
               <option value="Pending">Pending</option>
               <option value="Verified">Verified</option>
+            </select>
+          </div>
+
+          <div className="toolbar-select">
+            <select
+              value={species}
+              onChange={(e) => setSpecies(e.target.value)}
+              aria-label="Filter by species"
+            >
+              <option value="">All Species</option>
+              {speciesOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -167,7 +267,21 @@ export default function PetRecords() {
                 {barangay ? ' with' : ' with'} status <strong>{status}</strong>
               </>
             )}
+            {species && (
+              <>
+                {' '}
+                of species <strong>{species}</strong>
+              </>
+            )}
             .
+          </p>
+        )}
+
+        {flaggedCount > 0 && !loading && (
+          <p className="pr-flag-summary">
+            <ShieldAlert size={15} aria-hidden="true" />
+            <strong>{flaggedCount}</strong> of these records carry allergies, medication, or medical
+            conditions — review before starting a consultation.
           </p>
         )}
 
@@ -175,11 +289,10 @@ export default function PetRecords() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Pet ID</th>
-                <th>Pet Name</th>
+                <th>Pet</th>
                 <th>Owner</th>
-                <th>Barangay</th>
-                <th>Breed</th>
+                <th>Sex / Age</th>
+                <th>Health Notes</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -187,44 +300,164 @@ export default function PetRecords() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="empty-state-cell">
+                  <td colSpan="6" className="empty-state-cell">
                     <LoadingSpinner text="Loading pet records..." fullPage={false} />
                   </td>
                 </tr>
-              ) : pets.length === 0 ? (
+              ) : visiblePets.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="empty-state-cell">
+                  <td colSpan="6" className="empty-state-cell">
                     {hasActiveFilters || search.trim()
                       ? 'No pet records match your filters.'
                       : 'No pet records found.'}
                   </td>
                 </tr>
               ) : (
-                pets.map((p) => (
-                  <tr key={p.id}>
-                    <td data-label="Pet ID">{p.pet_code}</td>
-                    <td data-label="Pet Name" className="pet-name-cell">{p.name}</td>
-                    <td data-label="Owner">{p.owner_name}</td>
-                    <td data-label="Barangay">{p.barangay || '—'}</td>
-                    <td data-label="Breed">{p.breed_name || '—'}</td>
-                    <td data-label="Status">
-                      <StatusBadge status={p.status} />
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn-secondary btn-sm"
-                        onClick={() => openBooklet(p)}
-                      >
-                        Open Booklet
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                visiblePets.map((p) => {
+                  const age = formatAge(p.birthdate);
+                  const flags = healthFlags(p);
+                  const shownFlags = flags.slice(0, 2);
+                  const extraFlags = flags.length - shownFlags.length;
+
+                  return (
+                    <tr key={p.id}>
+                      <td data-label="Pet" className="pr-pet-cell">
+                        <div className="pr-pet">
+                          {hasValue(p.photo) ? (
+                            <img
+                              className="pr-pet-thumb"
+                              src={resolveMediaUrl(p.photo)}
+                              alt=""
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="pr-pet-thumb pr-pet-thumb--empty" aria-hidden="true">
+                              <PawPrint size={15} />
+                            </span>
+                          )}
+                          <div className="pr-pet-main">
+                            <strong>{p.name}</strong>
+                            <span
+                              className="pr-pet-sub"
+                              title={`${p.pet_code}${p.breed_name || p.species_name ? ` · ${p.breed_name || p.species_name}` : ''}`}
+                            >
+                              {p.pet_code}
+                              {p.breed_name || p.species_name
+                                ? ` · ${p.breed_name || p.species_name}`
+                                : ''}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td data-label="Owner">
+                        <div className="pr-owner">
+                          <span>{p.owner_name || '—'}</span>
+                          <span className="pr-owner-meta">{p.barangay || 'No barangay'}</span>
+                        </div>
+                      </td>
+
+                      <td data-label="Sex / Age">
+                        <div className="pr-demographic">
+                          <span>{p.sex || '—'}</span>
+                          {age && <span className="pr-demographic-age">{age}</span>}
+                        </div>
+                      </td>
+
+                      <td data-label="Health Notes">
+                        {flags.length === 0 ? (
+                          <span className="pr-flag pr-flag--none">None noted</span>
+                        ) : (
+                          <div className="pr-flags">
+                            {shownFlags.map((flag) => (
+                              <span
+                                key={flag.key}
+                                className={`pr-flag pr-flag--${flag.tone}`}
+                                title={flag.label}
+                              >
+                                <flag.Icon size={12} aria-hidden="true" />
+                                {flag.key === 'allergies'
+                                  ? 'Allergy'
+                                  : flag.key === 'medication'
+                                    ? 'Medication'
+                                    : 'Condition'}
+                              </span>
+                            ))}
+                            {extraFlags > 0 && (
+                              <span
+                                className="pr-flag pr-flag--more"
+                                title={flags
+                                  .slice(2)
+                                  .map((f) => f.label)
+                                  .join(', ')}
+                              >
+                                +{extraFlags}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
+                      <td data-label="Status">
+                        <div className="pr-status">
+                          <StatusBadge status={p.status} />
+                          {Number(p.is_lost) === 1 && (
+                            <span className="pr-flag pr-flag--danger">Lost</span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td data-label="Actions">
+                        <div className="table-actions">
+                          {isVet && (
+                            <button
+                              type="button"
+                              className="btn-primary btn-sm"
+                              onClick={() => startConsultation(p)}
+                            >
+                              <Stethoscope size={14} /> Consult
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="btn-secondary btn-sm"
+                            onClick={() => openBooklet(p)}
+                          >
+                            Booklet
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="pr-pagination">
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={safePage === 1}
+            >
+              Previous
+            </button>
+            <span className="pr-pagination-info">
+              Page {safePage} of {totalPages} · {filteredPets.length} records
+            </span>
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={safePage === totalPages}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       {bookletData && (

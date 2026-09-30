@@ -22,7 +22,7 @@ async function listCatalog(req, res) {
   try {
     const [rows] = await db.query(
       `SELECT
-        id, category, product_name, species, unit, subcategory, price, active, sort_order
+        id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id
        FROM catalog_products
        WHERE active = 1
        ORDER BY category ASC, sort_order ASC, product_name ASC`
@@ -37,6 +37,9 @@ async function listCatalog(req, res) {
         unit: row.unit || null,
         subcategory: row.subcategory || null,
         price: row.price,
+        // Non-null means this stocked item also prescribes a medicine, so the
+        // consultation form can add the charge and the dose in one click.
+        medicine_id: row.medicine_id || null,
       });
     });
 
@@ -58,7 +61,7 @@ async function listCatalogAdmin(req, res) {
   try {
     const [rows] = await db.query(
       `SELECT
-        id, category, product_name, species, unit, subcategory, price, active, sort_order
+        id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id
        FROM catalog_products
        ORDER BY category ASC, sort_order ASC, product_name ASC`
     );
@@ -73,6 +76,7 @@ async function listCatalogAdmin(req, res) {
         subcategory: row.subcategory || null,
         price: row.price,
         active: !!row.active,
+        medicine_id: row.medicine_id || null,
       });
     });
 

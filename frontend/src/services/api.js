@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { portalFromPathname, readAuthToken, clearPortalSession } from '../utils/authStorage';
 
 const api = axios.create({
   // A relative URL lets Vite proxy requests when the app is opened from another
@@ -9,24 +10,14 @@ const api = axios.create({
   timeout: 15000,
 });
 
-// Helper function to get storage key prefix based on URL path (same as AuthContext)
-function getStorageKeyPrefix() {
-  const path = window.location.pathname;
-  const hostname = window.location.hostname;
-  
-  if (path.startsWith('/admin')) return `admin_${hostname}_`;
-  if (path.startsWith('/staff') || path.startsWith('/veterinarian')) return `clinic_${hostname}_`;
-  if (path.startsWith('/owner')) return `owner_${hostname}_`;
-  return `public_${hostname}_`;
+// Auth keys are resolved by utils/authStorage so the interceptor always sends
+// the token belonging to the portal currently open in the URL.
+function currentPortal() {
+  return portalFromPathname(window.location.pathname);
 }
 
 api.interceptors.request.use((config) => {
-  const storageKeyPrefix = getStorageKeyPrefix();
-  const legacyPrefix = storageKeyPrefix.startsWith('clinic_')
-    ? `staff_${window.location.hostname}_`
-    : null;
-  const token = localStorage.getItem(`${storageKeyPrefix}token`) ||
-    (legacyPrefix ? localStorage.getItem(`${legacyPrefix}token`) : null);
+  const token = readAuthToken(currentPortal());
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -72,19 +63,11 @@ api.interceptors.response.use(
       window.dispatchEvent(new CustomEvent('api:network-offline'));
     }
     if (error.response?.status === 401) {
-      const storageKeyPrefix = getStorageKeyPrefix();
-      const legacyPrefix = storageKeyPrefix.startsWith('clinic_')
-        ? `staff_${window.location.hostname}_`
-        : null;
-      const token = localStorage.getItem(`${storageKeyPrefix}token`) ||
-        (legacyPrefix ? localStorage.getItem(`${legacyPrefix}token`) : null);
-      if (token) {
-        localStorage.removeItem(`${storageKeyPrefix}token`);
-        localStorage.removeItem(`${storageKeyPrefix}user`);
-        if (legacyPrefix) {
-          localStorage.removeItem(`${legacyPrefix}token`);
-          localStorage.removeItem(`${legacyPrefix}user`);
-        }
+      const portal = currentPortal();
+      // Only sign out the portal that made the failed call — a 401 in the Staff
+      // portal must not kill a concurrently signed-in Veterinarian session.
+      if (readAuthToken(portal)) {
+        clearPortalSession(portal);
         window.dispatchEvent(new CustomEvent('auth:logout', {
           detail: { reason: 'expired' },
         }));

@@ -434,6 +434,8 @@ async function verifyTransaction(req, res) {
       return res.status(400).json({ success: false, message: "Rejected transactions cannot be verified. Issue a new QR instead." });
     }
 
+    if (global.io) global.io.emit("data-changed", { type: "transaction-verified" });
+
     await db.query(
       `UPDATE outreach_transactions
        SET status = 'Verified', verified_at = NOW(), verified_by = ?, rejection_reason = NULL

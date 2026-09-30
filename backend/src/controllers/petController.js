@@ -27,6 +27,8 @@ async function registerPet(req, res) {
       photo,
     });
 
+    if (global.io) global.io.emit("data-changed", { type: "pet-registered" });
+
     res.status(201).json({
       success: true,
       message: "Pet registered successfully.",
@@ -493,6 +495,8 @@ async function updatePet(req, res) {
       } catch (_) {}
     }
 
+    if (global.io) global.io.emit("data-changed", { type: "pet-updated" });
+
     await db.query(
       `UPDATE pets SET
         name = ?,
@@ -678,9 +682,11 @@ async function getAllPets(req, res) {
     const params = [];
 
     if (search) {
+      // pet_code is searchable too — staff/vets look patients up by the ID
+      // printed on the physical record, booklet, and QR code.
       query +=
-        " AND (p.name LIKE ? OR po.full_name LIKE ? OR b.breed_name LIKE ? OR p.breed_custom LIKE ?)";
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+        " AND (p.name LIKE ? OR p.pet_code LIKE ? OR po.full_name LIKE ? OR b.breed_name LIKE ? OR p.breed_custom LIKE ?)";
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
     if (status) {
       query += " AND p.status = ?";
@@ -745,6 +751,8 @@ async function verifyPet(req, res) {
         message: "Pet registration is already verified.",
       });
     }
+
+    if (global.io) global.io.emit("data-changed", { type: "pet-verified" });
 
     await db.query(`UPDATE pets SET status = 'Verified' WHERE id = ?`, [id]);
 

@@ -1,160 +1,60 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
+import {
+  portalFromPathname,
+  storagePrefixForPortal,
+  loginPathForPortal,
+  roleMatchesPath,
+  loadPortalSession,
+  savePortalSession,
+  clearPortalSession,
+} from '../utils/authStorage';
 
 const AuthContext = createContext(null);
 
-function decodeToken(token) {
-  try {
-    const payload = token.split('.')[1];
-    return JSON.parse(atob(payload));
-  } catch {
-    return null;
-  }
-}
-
-function isTokenExpired(token) {
-  const decoded = decodeToken(token);
-  if (!decoded || !decoded.exp) return true;
-  return Date.now() >= decoded.exp * 1000;
-}
-
-// Returns the correct login path for the current URL
-function getLoginPathForCurrentUrl() {
-  const path = window.location.pathname;
-  if (path.startsWith('/admin')) return '/admin/login';
-  if (path.startsWith('/veterinarian')) return '/veterinarian/login';
-  if (path.startsWith('/staff')) return '/staff/login';
-  return '/owner/login';
-}
-
-// Returns the storage key prefix based on the current URL path (not role)
-// This avoids circular dependency - we determine prefix from URL, not from token
-function getStorageKeyPrefix() {
-  const path = window.location.pathname;
-  const hostname = window.location.hostname;
-  
-  if (path.startsWith('/admin')) return `admin_${hostname}_`;
-  if (path.startsWith('/staff') || path.startsWith('/veterinarian')) return `clinic_${hostname}_`;
-  if (path.startsWith('/owner')) return `owner_${hostname}_`;
-  return `public_${hostname}_`;
-}
-
-// Checks if a role matches the current URL path pattern
-function roleMatchesPath(role, pathname) {
-  if (pathname.startsWith('/admin')) return role === 'Admin';
-  if (pathname.startsWith('/veterinarian')) return role === 'Veterinarian';
-  if (pathname.startsWith('/staff')) return role === 'Staff';
-  if (pathname.startsWith('/owner')) return role === 'Owner';
-  return true;
-}
-
 export function AuthProvider({ children }) {
-  const [initializing, setInitializing] = useState(true);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Each portal keeps its own session, so the active one is derived from the
+  // URL. Re-resolving on every navigation is what keeps /veterinarian/* on the
+  // veterinarian page after a refresh instead of falling back to staff.
+  const portal = portalFromPathname(location.pathname);
+  const storageKeyPrefix = storagePrefixForPortal(portal);
+
   const [user, setUser] = useState(null);
   const [sessionValid, setSessionValid] = useState(true);
-  const navigate = useNavigate();
+  // Tracks which portal the current `user` belongs to. Until it matches, the
+  // in-memory user is stale and consumers must wait.
+  const [syncedPortal, setSyncedPortal] = useState(null);
+  const initializing = syncedPortal !== portal;
 
-  const storageKeyPrefix = getStorageKeyPrefix();
-  const legacyStorageKeyPrefix = storageKeyPrefix.startsWith('clinic_')
-    ? `staff_${window.location.hostname}_`
-    : null;
-
-  // Restore session from localStorage on first mount with validation
+  // Restore this portal's session from localStorage, validating the JWT.
   useEffect(() => {
-    const tokenKey = `${storageKeyPrefix}token`;
-    const userKey = `${storageKeyPrefix}user`;
-    let token = localStorage.getItem(tokenKey);
-    let saved = localStorage.getItem(userKey);
-
-    if (legacyStorageKeyPrefix) {
-      const legacyToken = localStorage.getItem(`${legacyStorageKeyPrefix}token`);
-      const legacyUser = localStorage.getItem(`${legacyStorageKeyPrefix}user`);
-      if (!token && legacyToken) {
-        token = legacyToken;
-        saved = legacyUser;
-        localStorage.setItem(tokenKey, legacyToken);
-        if (legacyUser) localStorage.setItem(userKey, legacyUser);
-      } else if (token && !saved && legacyUser) {
-        saved = legacyUser;
-        localStorage.setItem(userKey, legacyUser);
-      }
-    }
-
-    if (!token || isTokenExpired(token)) {
-      localStorage.removeItem(tokenKey);
-      localStorage.removeItem(userKey);
-      if (legacyStorageKeyPrefix) {
-        localStorage.removeItem(`${legacyStorageKeyPrefix}token`);
-        localStorage.removeItem(`${legacyStorageKeyPrefix}user`);
-      }
-      setUser(null);
-      setInitializing(false);
+    // Public pages (homepage, public pet profile, mobile scan) own no session.
+    // Keep the current user instead of clearing it, so browsing them must not
+    // look like being signed out.
+    if (portal === 'public') {
+      setSyncedPortal(portal);
       return;
     }
-
-    // Decode JWT to get the source-of-truth role
-    const decoded = decodeToken(token);
-    if (!decoded || !decoded.role) {
-      // Token is malformed — clear everything
-      localStorage.removeItem(`${storageKeyPrefix}token`);
-      localStorage.removeItem(`${storageKeyPrefix}user`);
-      if (legacyStorageKeyPrefix) {
-        localStorage.removeItem(`${legacyStorageKeyPrefix}token`);
-        localStorage.removeItem(`${legacyStorageKeyPrefix}user`);
-      }
-      setUser(null);
-      setInitializing(false);
-      return;
-    }
-
-    // Try to parse saved user data, safely
-    let savedUser = null;
-    try {
-      savedUser = saved ? JSON.parse(saved) : null;
-    } catch {
-      // Corrupted localStorage — clear it
-      localStorage.removeItem(`${storageKeyPrefix}user`);
-    }
-
-    // CRITICAL FIX: Validate that the JWT token's role matches the saved user's role
-    // The JWT is the source of truth. If mismatched, rebuild the user object from the token.
-    if (savedUser && savedUser.role !== decoded.role) {
-      // Token says one role, saved user says another — trust the token
-      savedUser = { ...savedUser, role: decoded.role };
-      localStorage.setItem(`${storageKeyPrefix}user`, JSON.stringify(savedUser));
-    }
-
-    // If savedUser is null but we have a valid token, create a minimal user from the token
-    if (!savedUser && decoded) {
-      savedUser = {
-        id: decoded.id,
-        email: decoded.email,
-        role: decoded.role
-      };
-      localStorage.setItem(`${storageKeyPrefix}user`, JSON.stringify(savedUser));
-    }
-
-    setUser(savedUser);
-    setInitializing(false);
-  }, [storageKeyPrefix, legacyStorageKeyPrefix]);
+    const { user: restored } = loadPortalSession(portal);
+    setUser(restored);
+    setSessionValid(true);
+    setSyncedPortal(portal);
+  }, [portal]);
 
   // Handle 401 events fired by the api.js interceptor.
   // Uses React Router navigate() — no hard page reload, no React state wipe.
   const handleAutoLogout = useCallback(() => {
     setUser(null);
-    localStorage.removeItem(`${storageKeyPrefix}token`);
-    localStorage.removeItem(`${storageKeyPrefix}user`);
-    if (legacyStorageKeyPrefix) {
-      localStorage.removeItem(`${legacyStorageKeyPrefix}token`);
-      localStorage.removeItem(`${legacyStorageKeyPrefix}user`);
-    }
-    const loginPath = getLoginPathForCurrentUrl();
+    clearPortalSession(portal);
     const returnTo = encodeURIComponent(
       window.location.pathname + window.location.search
     );
-    navigate(`${loginPath}?returnTo=${returnTo}&session=expired`, { replace: true });
-  }, [legacyStorageKeyPrefix, navigate, storageKeyPrefix]);
+    navigate(`${loginPathForPortal(portal)}?returnTo=${returnTo}&session=expired`, { replace: true });
+  }, [navigate, portal]);
 
   useEffect(() => {
     window.addEventListener('auth:logout', handleAutoLogout);
@@ -162,9 +62,9 @@ export function AuthProvider({ children }) {
   }, [handleAutoLogout]);
 
   function login(token, userData) {
-    localStorage.setItem(`${storageKeyPrefix}token`, token);
-    localStorage.setItem(`${storageKeyPrefix}user`, JSON.stringify(userData));
+    savePortalSession(portal, token, userData);
     setUser(userData);
+    setSyncedPortal(portal);
     setSessionValid(true);
   }
 
@@ -175,35 +75,23 @@ export function AuthProvider({ children }) {
       api.post('/auth/logout', {}, { headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
     }
 
-    localStorage.removeItem(`${storageKeyPrefix}token`);
-    localStorage.removeItem(`${storageKeyPrefix}user`);
-    if (legacyStorageKeyPrefix) {
-      localStorage.removeItem(`${legacyStorageKeyPrefix}token`);
-      localStorage.removeItem(`${legacyStorageKeyPrefix}user`);
-    }
+    clearPortalSession(portal);
     setUser(null);
 
     // Navigate to correct portal login after manual logout
-    const loginPath = getLoginPathForCurrentUrl();
-    navigate(loginPath, { replace: true });
+    navigate(loginPathForPortal(portal), { replace: true });
   }
 
   // Legacy — kept for backward compat, now delegates to the event handler
   function autoLogout() {
     setUser(null);
-    localStorage.removeItem(`${storageKeyPrefix}token`);
-    localStorage.removeItem(`${storageKeyPrefix}user`);
-    if (legacyStorageKeyPrefix) {
-      localStorage.removeItem(`${legacyStorageKeyPrefix}token`);
-      localStorage.removeItem(`${legacyStorageKeyPrefix}user`);
-    }
+    clearPortalSession(portal);
   }
 
   // Check if the current user's role matches the current URL path
   function validateCurrentSession() {
     if (!user) return false;
-    const pathname = window.location.pathname;
-    if (!roleMatchesPath(user.role, pathname)) {
+    if (!roleMatchesPath(user.role, location.pathname)) {
       setSessionValid(false);
       return false;
     }

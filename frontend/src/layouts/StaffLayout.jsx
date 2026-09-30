@@ -19,6 +19,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import NotificationBell from "../components/notifications/NotificationBell";
+import GlobalLoadingOverlay from "../components/GlobalLoadingOverlay";
 
 function fmtDate(d) {
   const date = d instanceof Date ? d : new Date(d);
@@ -39,6 +40,12 @@ export default function StaffLayout() {
   const [showLogOutModal, setShowLogOutModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setPageLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Close mobile sidebar on route change
   useEffect(() => {
@@ -110,11 +117,6 @@ export default function StaffLayout() {
            <NavLink to="/staff/dashboard" onClick={() => setMobileOpen(false)}>
              <LayoutDashboard size={16} />
              <span className="sidebar-label">Dashboard</span>
-           </NavLink>
-
-           <NavLink to="/staff/queue" onClick={() => setMobileOpen(false)}>
-             <ClipboardList size={16} />
-             <span className="sidebar-label">Walk-in Queue</span>
            </NavLink>
 
            <NavLink to="/staff/pet-records" onClick={() => setMobileOpen(false)}>
@@ -211,7 +213,7 @@ export default function StaffLayout() {
 
               <button
                 className="confirm-logout-btn"
-                 onClick={handleLogout}
+                onClick={handleLogout}
               >
                 Logout
               </button>
@@ -219,6 +221,8 @@ export default function StaffLayout() {
           </div>
         </div>
       )}
+
+      <GlobalLoadingOverlay visible={pageLoading} message="Loading dashboard..." />
     </div>
   );
 }

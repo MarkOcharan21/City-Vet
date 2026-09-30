@@ -115,6 +115,7 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
     const fallbackPosition = L.latLng(CABUYAO_CENTER);
     const hasPhoto = Boolean(pet?.photo && String(pet.photo).trim() !== '');
     const petName = escapeHtml(pet?.name || '');
+    const photoUrl = hasPhoto ? resolveMediaUrl(pet.photo) : null;
     const pinIcon = hasPhoto
       ? L.divIcon({
         className: 'traceability-map-pin pin-with-photo',
@@ -123,8 +124,7 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
             + `<span class="traceability-pin-ring"></span>`
             + `<span class="traceability-pin-ring"></span>`
             + `<span class="traceability-pin-squircle">`
-            + `<img class="traceability-pin-img" src="${resolveMediaUrl(pet.photo)}" alt="${petName}" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />`
-            + `<span class="traceability-pin-placeholder">🐾</span>`
+            + `<img class="traceability-pin-img" src="${photoUrl}" alt="${petName}" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjOTQ5NDk0IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTIwLjU5IDEzLjQxbC03LjE3IDcuMTdhMiAyIDAgMCAxLTIuODMgMEwyIDEyVjJoMTBsOC41OSA4LjU5YTIgMiAwIDAgMSAwIDIuODN6Ii8+PHBhdGggZD0iTTcgMTdhMiAyIDAgMSAwIDAtNCAyIDIgMCAwIDAgMCA0eiIvPjwvc3ZnPg=='" />`
             + `</span>`
             + `<span class="traceability-pin-tail"></span>`
             + `</span>`,
@@ -866,7 +866,15 @@ export default function Traceability() {
           {/* Pet Info Card */}
           <div className="form-card" style={{ marginBottom: '2rem', borderLeftColor: 'var(--color-primary)' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.5rem', marginBottom: '1.5rem' }}>
-              <div style={{ width: '60px', height: '60px', borderRadius: '12px', background: 'var(--color-primary-tint)', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {trace.pet.photo ? (
+                <img
+                  src={resolveMediaUrl(trace.pet.photo)}
+                  alt={trace.pet.name}
+                  style={{ width: '60px', height: '60px', borderRadius: '12px', objectFit: 'cover', flexShrink: 0 }}
+                  onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                />
+              ) : null}
+              <div style={{ width: '60px', height: '60px', borderRadius: '12px', background: 'var(--color-primary-tint)', color: 'var(--color-primary)', display: trace.pet.photo ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <PawPrint size={28} />
               </div>
               <div style={{ flex: 1 }}>

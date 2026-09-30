@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Eye, PawPrint, Search, Stethoscope, Syringe, Pill, UserRound } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Eye, PawPrint, Printer, Search, Stethoscope, Syringe, Pill } from "lucide-react";
 import api from "../../services/api";
 import toast from "react-hot-toast";
 import PrintReportButton from "../../components/staff/PrintReportButton";
+import { LOGO_URL } from "../../utils/printReport";
+import { useAuth } from "../../context/AuthContext";
 
 const STATUS_OPTIONS = ["Unpaid", "Paid", "Cancelled"];
 const TYPE_ICON = { Consultation: Stethoscope, Vaccination: Syringe, Medicine: Pill };
+const PAGE_SIZE = 25;
 
 function formatMoney(value) {
   return `₱${(Number(value) || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -35,8 +39,10 @@ function statusClass(status) {
 }
 
 export default function PaymentMonitoring() {
+  const { user } = useAuth();
+  const staffName = (user?.full_name || "").trim();
   const [records, setRecords] = useState([]);
-  const [summary, setSummary] = useState({ overall: { total_payments: 0, total_amount: 0 }, summary: {} });
+  const [summary, setSummary] = useState({ overall: { total_payments: 0, total_amount: 0 }, summary: {}, byType: [], todayCount: 0 });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -44,11 +50,16 @@ export default function PaymentMonitoring() {
   const [toDate, setToDate] = useState("");
   const [detailRecord, setDetailRecord] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
 
   function loadRecords(params = {}) {
-    const query = { ...params };
+    const query = { ...params, page, limit: PAGE_SIZE };
     if (query.status === "All") delete query.status;
-    return api.get("/payment-monitoring", { params: query }).then((response) => setRecords(response.data.records || []));
+    return api.get("/payment-monitoring", { params: query }).then((response) => {
+      setRecords(response.data.records || []);
+      setTotalRecords(Number(response.data.total || 0));
+    });
   }
 
   function loadSummary() {
@@ -56,6 +67,7 @@ export default function PaymentMonitoring() {
       overall: response.data.overall || { total_payments: 0, total_amount: 0 },
       summary: response.data.summary || {},
       byType: response.data.byType || [],
+      todayCount: Number(response.data.todayCount || 0),
     }));
   }
 
@@ -68,9 +80,18 @@ export default function PaymentMonitoring() {
       loadRecords({ search: searchTerm || undefined, status: statusFilter, from: fromDate || undefined, to: toDate || undefined }).catch(() => {});
     }, 250);
     return () => window.clearTimeout(timer);
+  }, [searchTerm, statusFilter, fromDate, toDate, page]);
+
+  // A narrowed result set can shrink below the current page — start over.
+  useEffect(() => {
+    setPage(1);
   }, [searchTerm, statusFilter, fromDate, toDate]);
 
   const visibleRecords = useMemo(() => records, [records]);
+  const detailCharges = detailRecord ? getCharges(detailRecord) : [];
+  const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const activeTypeRows = (summary.byType || []).filter((row) => Number(row.total_count || 0) > 0);
   const statusCards = [
     { label: "Unpaid", value: summary.summary?.Unpaid?.count || 0, amount: summary.summary?.Unpaid?.total_amount || 0, className: "summary-card-warning" },
     { label: "Paid", value: summary.summary?.Paid?.count || 0, amount: summary.summary?.Paid?.total_amount || 0, className: "summary-card-success" },
@@ -94,6 +115,10 @@ export default function PaymentMonitoring() {
     }
   }
 
+  function openDetail(record) {
+    setDetailRecord(record);
+  }
+
   function resetFilters() {
     setSearchTerm("");
     setStatusFilter("All");
@@ -111,16 +136,36 @@ export default function PaymentMonitoring() {
         <div className="page-header-actions"><PrintReportButton category="payments" /></div>
       </div>
 
-      <div className="summary-grid">
-        <div className="summary-card summary-card-info"><span className="summary-label">Total Transactions</span><strong>{summary.overall?.total_payments || 0}</strong></div>
-        <div className="summary-card summary-card-success"><span className="summary-label">Total Amount</span><strong>{formatMoney(summary.overall?.total_amount)}</strong></div>
+        <div className="summary-grid">
+          <div className="summary-card summary-card-info"><span className="summary-label">Total Transactions</span><strong>{summary.overall?.total_payments || 0}</strong><small>All recorded payments</small></div>
+          <div className="summary-card summary-card-success"><span className="summary-label">Total Collected</span><strong>{formatMoney(summary.overall?.total_amount)}</strong><small>Paid payments only</small></div>
         {statusCards.map((card) => <div className={`summary-card ${card.className}`} key={card.label}><span className="summary-label">{card.label}</span><strong>{card.value}</strong><small>{formatMoney(card.amount)}</small></div>)}
       </div>
+
+      {(activeTypeRows.length > 0 || Number(summary.todayCount || 0) > 0) && (
+        <div className="pm-insight-row">
+          {Number(summary.todayCount || 0) > 0 && (
+            <p className="pr-flag-summary pr-flag-summary--info">
+              <Stethoscope size={15} aria-hidden="true" />
+              <strong>{summary.todayCount}</strong> payment{summary.todayCount !== 1 ? 's' : ''} created today.
+            </p>
+          )}
+          {activeTypeRows.map((row) => {
+            const Icon = TYPE_ICON[row.payment_type] || Stethoscope;
+            return (
+              <p className="pr-flag-summary" key={row.payment_type}>
+                <Icon size={15} aria-hidden="true" />
+                <strong>{row.total_count}</strong> {row.payment_type} · {formatMoney(row.type_amount)}
+              </p>
+            );
+          })}
+        </div>
+      )}
 
       <div className="panel-card table-panel-card">
         <div className="table-header-row">
           <div><h2>Consultation Payments</h2><p>One payment transaction is created for each completed consultation.</p></div>
-          <div className="table-meta">{visibleRecords.length} records</div>
+          <div className="table-meta">{totalRecords} record{totalRecords !== 1 ? 's' : ''}</div>
         </div>
         <div className="toolbar-row pm-toolbar">
           <div className="search-wrap"><Search size={16} aria-hidden="true" /><input type="text" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search reference, pet, or owner..." aria-label="Search payment records" /></div>
@@ -143,15 +188,114 @@ export default function PaymentMonitoring() {
                   <td data-label="Services"><div className="pm-service-cell"><TypeIcon size={14} /><span>{charges.length ? `${charges.length} service${charges.length === 1 ? "" : "s"}` : record.payment_type || "Consultation"}</span></div></td>
                   <td data-label="Amount"><strong>{formatMoney(record.total_amount)}</strong></td>
                   <td data-label="Status"><span className={statusClass(record.payment_status)}>{record.payment_status || "Unpaid"}</span></td>
-                  <td data-label="Action"><div className="table-actions"><select className="pm-status-select" value={record.payment_status || "Unpaid"} onChange={(event) => updateStatus(record.id, event.target.value)} disabled={updatingId === record.id} aria-label={`Update status for ${record.payment_reference || "payment"}`}><option value="Unpaid">Unpaid</option><option value="Paid">Paid</option><option value="Cancelled">Cancelled</option></select><button type="button" className="btn-icon-action" onClick={() => setDetailRecord(record)} aria-label={`View ${record.payment_reference || "payment"}`} title="View details"><Eye size={15} /></button></div></td>
+                  <td data-label="Action"><div className="pm-action-cell"><button type="button" className="pm-view-btn" onClick={() => openDetail(record)} aria-label={`View ${record.payment_reference || "payment"}`} title="View payment details"><Eye size={14} aria-hidden="true" /> View</button><select className="pm-status-select" value={record.payment_status || "Unpaid"} onChange={(event) => updateStatus(record.id, event.target.value)} disabled={updatingId === record.id} aria-label={`Update status for ${record.payment_reference || "payment"}`}><option value="Unpaid">Unpaid</option><option value="Paid">Paid</option><option value="Cancelled">Cancelled</option></select></div></td>
                 </tr>;
               })}
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="pr-pagination">
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={safePage === 1}
+            >
+              Previous
+            </button>
+            <span className="pr-pagination-info">
+              Page {safePage} of {totalPages} · {totalRecords} records
+            </span>
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={safePage === totalPages}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
-      {detailRecord && <div className="logout-modal-overlay" onClick={() => setDetailRecord(null)}><div className="barangay-pets-modal" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="pm-detail-title"><div className="barangay-pets-modal-header"><div className="barangay-pets-modal-title"><div className="barangay-pets-modal-icon"><Stethoscope /></div><div><h3 id="pm-detail-title">Payment details</h3><p>{detailRecord.payment_reference || "Consultation payment"}</p></div></div><button type="button" className="barangay-modal-close" onClick={() => setDetailRecord(null)} aria-label="Close">×</button></div><div className="pm-detail-content"><div className="clinical-detail-grid"><div className="clinical-detail-item"><span>Status</span><strong><span className={statusClass(detailRecord.payment_status)}>{detailRecord.payment_status || "Unpaid"}</span></strong></div><div className="clinical-detail-item"><span>Amount</span><strong>{formatMoney(detailRecord.total_amount)}</strong></div><div className="clinical-detail-item"><span>Consultation Date</span><strong>{formatDate(detailRecord.consultation_date)}</strong></div><div className="clinical-detail-item"><span>Patient</span><strong>{detailRecord.pet_name || "—"} {detailRecord.pet_code ? `· ${detailRecord.pet_code}` : ""}</strong></div><div className="clinical-detail-item"><span>Pet Owner</span><strong>{detailRecord.owner_name || "—"}</strong></div><div className="clinical-detail-item"><span>Veterinarian</span><strong>{detailRecord.veterinarian_name || detailRecord.recorded_by_name || "—"}</strong></div></div><div className="field-group pm-status-editor"><label htmlFor="detail-payment-status">Update payment status</label><select id="detail-payment-status" value={detailRecord.payment_status || "Unpaid"} onChange={(event) => updateStatus(detailRecord.id, event.target.value)} disabled={updatingId === detailRecord.id}>{STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}</select></div><div className="clinical-detail-section"><h4>Charges</h4><div className="pm-detail-items"><div className="pm-detail-items-row pm-detail-items-head"><span>Service</span><span>Qty</span><span>Amount</span></div>{getCharges(detailRecord).map((charge, index) => <div className="pm-detail-items-row" key={`${charge.catalog_product_id || charge.description || "charge"}-${index}`}><span>{charge.description || charge.name || "Service"}</span><span>{charge.quantity || 1}</span><span>{formatMoney(charge.line_total ?? charge.amount ?? (Number(charge.unit_price || charge.price || 0) * Number(charge.quantity || 1)))}</span></div>)}<div className="pm-detail-items-row pm-detail-items-total"><span>Total</span><span /><strong>{formatMoney(detailRecord.total_amount)}</strong></div></div></div><div className="pm-audit-note"><UserRound size={14} /> Clinical charges are created by the veterinarian. Staff can update payment status only.</div></div></div></div>}
+      {detailRecord && createPortal(
+        <div className="pm-receipt-overlay" onClick={() => setDetailRecord(null)}>
+          <div className="pm-receipt-modal" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="pm-detail-title">
+            <div className="pm-receipt-actions">
+              <div>
+                <h3 id="pm-detail-title">Payment Receipt</h3>
+                <p>{detailRecord.payment_reference || "Consultation payment"}</p>
+              </div>
+              <div className="pm-receipt-actions-buttons">
+                <select className="pm-status-select" value={detailRecord.payment_status || "Unpaid"} onChange={(event) => updateStatus(detailRecord.id, event.target.value)} disabled={updatingId === detailRecord.id} aria-label="Update payment status">{STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}</select>
+                <button type="button" className="btn-secondary btn-sm" onClick={() => window.print()}><Printer size={14} aria-hidden="true" /> Print</button>
+                <button type="button" className="btn-primary btn-sm" onClick={() => setDetailRecord(null)}>Close</button>
+              </div>
+            </div>
+
+            <div className="pm-receipt-sheet">
+              <div className="pm-receipt-head">
+                <div className="pm-receipt-head-brand">
+                  <img className="pm-receipt-head-logo" src={LOGO_URL} alt="City of Cabuyao logo" />
+                  <div className="pm-receipt-head-title">
+                    <span className="pm-receipt-head-city">City of Cabuyao</span>
+                    <span className="pm-receipt-head-office">Veterinary Office</span>
+                    <span className="pm-receipt-head-sub">Official Payment Receipt</span>
+                  </div>
+                </div>
+                <div className="pm-receipt-orbox">
+                  <span>Amount Due</span>
+                  <strong>{formatMoney(detailRecord.total_amount)}</strong>
+                </div>
+              </div>
+
+              <div className="pm-receipt-meta">
+                <div className="pm-receipt-meta-row"><span className="pm-receipt-meta-label">Status</span><strong><span className={statusClass(detailRecord.payment_status)}>{detailRecord.payment_status || "Unpaid"}</span></strong></div>
+                <div className="pm-receipt-meta-row"><span className="pm-receipt-meta-label">Reference No.</span><strong>{detailRecord.payment_reference || "—"}</strong></div>
+                <div className="pm-receipt-meta-row"><span className="pm-receipt-meta-label">Consultation Date</span><strong>{formatDate(detailRecord.consultation_date)}</strong></div>
+                <div className="pm-receipt-meta-row"><span className="pm-receipt-meta-label">Payment Type</span><strong>{detailRecord.payment_type || "Consultation"}</strong></div>
+                <div className="pm-receipt-meta-row"><span className="pm-receipt-meta-label">Patient</span><strong>{detailRecord.pet_name || "—"}{detailRecord.pet_code ? ` · ${detailRecord.pet_code}` : ""}</strong></div>
+                <div className="pm-receipt-meta-row"><span className="pm-receipt-meta-label">Pet Owner</span><strong>{detailRecord.owner_name || "—"}</strong></div>
+                <div className="pm-receipt-meta-row pm-receipt-meta-row--full"><span className="pm-receipt-meta-label">Veterinarian</span><strong>{detailRecord.veterinarian_name || detailRecord.recorded_by_name || "—"}</strong></div>
+              </div>
+
+              <div className="pm-receipt-items">
+                <div className="pm-receipt-items-head"><span>Service</span><span>Qty</span><span>Unit Price</span><span>Amount</span></div>
+                {detailCharges.map((charge, index) => (
+                  <div className="pm-receipt-items-row" key={`${charge.catalog_product_id || charge.description || "charge"}-${index}`}>
+                    <span>{charge.description || charge.name || "Service"}</span>
+                    <span>{charge.quantity || 1}</span>
+                    <span>{formatMoney(charge.unit_price ?? charge.price ?? 0)}</span>
+                    <span>{formatMoney(charge.line_total ?? charge.amount ?? 0)}</span>
+                  </div>
+                ))}
+                {detailCharges.length === 0 && (
+                  <div className="pm-receipt-items-row">
+                    <span>{detailRecord.payment_type || "Consultation"}</span>
+                    <span>1</span>
+                    <span>{formatMoney(detailRecord.total_amount)}</span>
+                    <span>{formatMoney(detailRecord.total_amount)}</span>
+                  </div>
+                )}
+                <div className="pm-receipt-items-total"><span className="pm-receipt-items-total-label">Total</span><strong>{formatMoney(detailRecord.total_amount)}</strong></div>
+              </div>
+
+              <p className="pm-receipt-desc">
+                <strong>Payment status:</strong> {detailRecord.payment_status || "Unpaid"} — clinical charges are recorded by the veterinarian; Staff updates the payment status.
+              </p>
+
+              <div className="pm-receipt-sign">
+                <div className="pm-receipt-sign-label">Received by</div>
+                <div className="pm-receipt-sign-token">{staffName || "_______________________"}</div>
+                <div className="pm-receipt-sign-role">Staff / Cashier{staffName ? " · e-signed" : ""}</div>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

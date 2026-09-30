@@ -1,0 +1,20 @@
+# Vercel reinstalls deps during its build step — no need to upload local copies
+node_modules/
+
+# Backend runs on your local server (Cloudflare tunnel), not Vercel
+backend/
+
+# Git history not needed for deployment
+.git/
+
+# Runtime / local-only artifacts
+*.log
+
+# Local dev TLS certs
+frontend/certs/
+
+# Documentation and design assets not used in the build
+*.pdf
+*.docx
+*.doc
+*.sql

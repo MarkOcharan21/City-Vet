@@ -25,6 +25,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import NotificationBell from "../components/notifications/NotificationBell";
+import GlobalLoadingOverlay from "../components/GlobalLoadingOverlay";
 import SimulateOfflineToggle from "../components/dev/SimulateOfflineToggle";
 import { ProfileForm, PasswordForm } from "../pages/owner/OwnerSettings";
 
@@ -141,6 +142,12 @@ export default function OwnerLayout() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setPageLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Close mobile sidebar on route change
   useEffect(() => {
@@ -340,6 +347,8 @@ export default function OwnerLayout() {
           </div>
         </div>
       )}
+
+      <GlobalLoadingOverlay visible={pageLoading} message="Loading dashboard..." />
     </div>
   );
 }

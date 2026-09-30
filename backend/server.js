@@ -45,6 +45,7 @@ const vaccinationRoutes = require("./src/routes/vaccinationRoutes");
 const clinicalRoutes = require("./src/routes/clinicalRoutes");
 const clinicQueueRoutes = require("./src/routes/clinicQueueRoutes");
 const medicineRoutes = require("./src/routes/medicineRoutes");
+const regimenRoutes = require("./src/routes/regimenRoutes");
 const paymentMonitoringRoutes = require("./src/routes/paymentMonitoringRoutes");
 const catalogRoutes = require("./src/routes/catalogRoutes");
 const paymentHistoryRoutes = require("./src/routes/paymentHistoryRoutes");
@@ -160,6 +161,8 @@ app.use("/api/clinical", clinicalRoutes);
 app.use("/api/clinic-queue", clinicQueueRoutes);
 
 app.use("/api/medicines", medicineRoutes);
+
+app.use("/api/regimens", regimenRoutes);
 
 app.use("/api/payment-monitoring", paymentMonitoringRoutes);
 
@@ -299,7 +302,9 @@ async function startSchedulers() {
   await ensureConsultationRecordsAutoIncrement();
   await ensurePrescriptionsAutoIncrement();
   await ensurePrescriptionItemsAutoIncrement();
+  await ensureMedicineDosingColumns();
   await ensureDefaultMedicines();
+  await ensureConditionRegimens();
   await ensureTableAutoIncrement('payments');
   await ensureConsultationBatchesTable();
   await ensureClinicQueueTable();
@@ -695,22 +700,66 @@ async function ensureTableAutoIncrement(tableName) {
   }
 }
 
-async function ensureDefaultMedicines() {
-  const defaultMedicines = [
-    ['Amoxicillin', 'Antibiotic for bacterial infections'],
-    ['Doxycycline', 'Antibiotic for tick-borne and respiratory infections'],
-    ['Metronidazole', 'Treatment for diarrhea and protozoal infections'],
-    ['Ivermectin', 'Dewormer and mange treatment'],
-    ['Pyrantel Pamoate', 'Dewormer for roundworms and hookworms'],
-    ['Carprofen', 'Pain and inflammation relief'],
-    ['Chlorpheniramine', 'Antihistamine for allergies'],
-    ['Vitamin B Complex', 'Nutritional supplement'],
-    ['Enrofloxacin (Baytril)', 'Broad-spectrum antibiotic'],
-    ['Frontline Spray', 'Flea and tick control'],
-    ['Prednisolone', 'Anti-inflammatory for skin and allergy conditions'],
-    ['Oral Rehydration Salts', 'Fluid replacement for dehydration'],
+// Dosing defaults live on the medicines row so a newly added medicine can carry
+// its own regimen, instead of being invisible to the auto-fill lookup.
+// [name, description, category, dosage, frequency, duration, instructions]
+const DEFAULT_MEDICINES = [
+  ['Amoxicillin', 'Antibiotic for bacterial infections', 'Antibiotic', '1 tablet', 'Twice daily', '7 days', 'Give after meals.'],
+  ['Doxycycline', 'Antibiotic for tick-borne and respiratory infections', 'Antibiotic', '1 tablet', 'Once daily', '7 days', 'Give with plenty of water.'],
+  ['Metronidazole', 'Treatment for diarrhea and protozoal infections', 'Antibiotic', '1 tablet', 'Twice daily', '5 days', 'Give after meals.'],
+  ['Ivermectin', 'Dewormer and mange treatment', 'Dewormer', '0.2 mL', 'Once', 'Single dose', 'May be repeated after 14 days if needed.'],
+  ['Pyrantel Pamoate', 'Dewormer for roundworms and hookworms', 'Dewormer', '1 mL', 'Once', 'Single dose', 'Repeat after 2 weeks for deworming completion.'],
+  ['Carprofen', 'Pain and inflammation relief', 'Pain Relief', '1 tablet', 'Once daily', '5 days', 'Give with food to avoid stomach upset.'],
+  ['Chlorpheniramine', 'Antihistamine for allergies', 'Antihistamine', '1 tablet', 'Twice daily', '5 days', 'May cause drowsiness.'],
+  ['Vitamin B Complex', 'Nutritional supplement', 'Supplement', '1 mL', 'Once daily', '7 days', ''],
+  ['Enrofloxacin (Baytril)', 'Broad-spectrum antibiotic', 'Antibiotic', '1 tablet', 'Once daily', '7 days', 'Give with water.'],
+  ['Frontline Spray', 'Flea and tick control', 'Flea & Tick', '2 sprays', 'Once', 'Monthly', 'Apply against the direction of fur growth.'],
+  ['Prednisolone', 'Anti-inflammatory for skin and allergy conditions', 'Anti-inflammatory', '1 tablet', 'Once daily', '5 days', 'Taper dose as advised by the veterinarian.'],
+  ['Oral Rehydration Salts', 'Fluid replacement for dehydration', 'Supportive', '1 sachet', 'Every 8 hours', '3 days', 'Mix with clean water before giving.'],
+];
+
+// Adds the dosing columns to an existing database and backfills the seeded
+// medicines. Idempotent: it only touches rows that are still missing data.
+async function ensureMedicineDosingColumns() {
+  const newColumns = [
+    ['category', 'VARCHAR(60) DEFAULT NULL'],
+    ['default_dosage', 'VARCHAR(100) DEFAULT NULL'],
+    ['default_frequency', 'VARCHAR(100) DEFAULT NULL'],
+    ['default_duration', 'VARCHAR(100) DEFAULT NULL'],
+    ['default_instructions', 'VARCHAR(255) DEFAULT NULL'],
   ];
 
+  try {
+    const [existing] = await db.query('SHOW COLUMNS FROM medicines');
+    const present = new Set(existing.map((column) => column.Field));
+
+    for (const [name, definition] of newColumns) {
+      if (present.has(name)) continue;
+      await db.query(`ALTER TABLE medicines ADD COLUMN \`${name}\` ${definition}`);
+      console.log(`✅ Added ${name} column to medicines table.`);
+    }
+
+    // Match on name so a re-seeded or renamed row is not overwritten.
+    for (const [name, , category, dosage, frequency, duration, instructions] of DEFAULT_MEDICINES) {
+      await db.query(
+        `UPDATE medicines
+         SET category = COALESCE(category, ?),
+             default_dosage = COALESCE(default_dosage, ?),
+             default_frequency = COALESCE(default_frequency, ?),
+             default_duration = COALESCE(default_duration, ?),
+             default_instructions = COALESCE(default_instructions, ?)
+         WHERE medicine_name = ?`,
+        [category, dosage, frequency, duration, instructions, name],
+      );
+    }
+
+    console.log('✅ Medicine dosing defaults are in place.');
+  } catch (error) {
+    console.warn('⚠️ Failed to ensure medicine dosing columns:', error.message);
+  }
+}
+
+async function ensureDefaultMedicines() {
   try {
     const [[{ total }]] = await db.query('SELECT COUNT(*) AS total FROM medicines');
 
@@ -719,16 +768,244 @@ async function ensureDefaultMedicines() {
       return;
     }
 
-    for (const [medicineName, description] of defaultMedicines) {
+    for (const [medicineName, description, category, dosage, frequency, duration, instructions] of DEFAULT_MEDICINES) {
       await db.query(
-        'INSERT INTO medicines (medicine_name, description) VALUES (?, ?)',
-        [medicineName, description],
+        `INSERT INTO medicines
+           (medicine_name, description, category, default_dosage, default_frequency, default_duration, default_instructions)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [medicineName, description, category, dosage, frequency, duration, instructions],
       );
     }
 
-    console.log(`✅ Seeded ${defaultMedicines.length} default medicines.`);
+    console.log(`✅ Seeded ${DEFAULT_MEDICINES.length} default medicines.`);
   } catch (error) {
     console.warn('⚠️ Failed to ensure default medicines:', error.message);
+  }
+}
+
+// The consultation quick templates, stored so a clinic can edit a regimen
+// without a redeploy. Values are copies of the ones the workspace had hardcoded
+// in JS, kept identical on purpose.
+// [name, complaint, diagnosis, treatment, sort_order]
+const DEFAULT_CONDITION_REGIMENS = [
+  [
+    'Anti-Rabies Vaccination',
+    'Owner brought the pet in for anti-rabies vaccination.',
+    'Healthy pet presented for routine anti-rabies vaccination. No signs of illness observed.',
+    'Administered anti-rabies vaccine. Advised owner to monitor injection site and keep pet indoors for the rest of the day.',
+    1,
+  ],
+  [
+    'Deworming',
+    'Owner brought the pet in for routine deworming.',
+    'Routine deworming visit. Pet in generally good condition.',
+    'Administered broad-spectrum dewormer. Advise repeat deworming after 3 months.',
+    2,
+  ],
+  [
+    'Skin Infection',
+    'Owner reports persistent itching and hair loss.',
+    'Presence of itching, redness, and hair loss on affected skin area.',
+    'Prescribed medicated shampoo and antihistamines as needed. Follow-up check after 2 weeks.',
+    3,
+  ],
+  [
+    'Respiratory Infection',
+    'Pet has been coughing and has nasal discharge.',
+    'Coughing and nasal discharge observed; possible upper respiratory tract infection.',
+    'Prescribed antibiotics for 7 days. Isolate pet from other animals until cleared.',
+    4,
+  ],
+  [
+    'Wound Care',
+    'Owner reports an open wound on the pet\'s body.',
+    'Open wound noted on body; cleaned and assessed during consultation.',
+    'Cleaned and dressed wound. Prescribed antibiotics and pain relief as needed.',
+    5,
+  ],
+  [
+    'Flea and Tick Infestation',
+    'Owner reports excessive scratching and visible fleas or ticks.',
+    'Flea and tick infestation observed on physical examination.',
+    'Applied topical flea and tick treatment. Advised owner to treat the pet\'s environment and recheck after 2 weeks.',
+    6,
+  ],
+  [
+    'Vomiting and Diarrhea',
+    'Pet has been experiencing vomiting and diarrhea for the past day.',
+    'Gastrointestinal upset; possible dietary indiscretion or infection.',
+    'Prescribed anti-emetic and gastrointestinal medication. Advised bland diet and recheck if symptoms persist.',
+    7,
+  ],
+  [
+    'Ear Infection',
+    'Owner reports head shaking and ear discharge.',
+    'Otitis externa; ear canal inflammation with discharge observed.',
+    'Prescribed ear medication and cleaning solution. Advised owner to clean ears daily for 7 days.',
+    8,
+  ],
+  [
+    'Vaccination (Routine)',
+    'Owner brought the pet in for routine vaccination.',
+    'Healthy pet presented for routine vaccination. No signs of illness observed.',
+    'Administered core vaccine. Advised owner to monitor for adverse reactions and schedule next dose.',
+    9,
+  ],
+];
+
+// Which stocked catalog item represents which medicine. Only links that resolve
+// to an existing medicine row are stored; the rest stay charge-only because no
+// dosing data exists for them (vaccines, syringes, gauze, topicals).
+// [catalog product_name, medicine_name]
+const CATALOG_MEDICINE_LINKS = [
+  ['Antibiotic', 'Amoxicillin'],
+  ['Anti-inflammatory', 'Carprofen'],
+  ['Pain Reliever / Analgesic', 'Carprofen'],
+  ['Antihistamine', 'Chlorpheniramine'],
+  ['Gastrointestinal Medication', 'Metronidazole'],
+  ['Anti-diarrheal Medication', 'Metronidazole'],
+  ['Dewormer', 'Pyrantel Pamoate'],
+  ['Broad-Spectrum Dewormer', 'Ivermectin'],
+  ['Flea and Tick Medication', 'Frontline Spray'],
+  ['Flea/Tick Topical Treatment', 'Frontline Spray'],
+  ['Vitamin B Complex', 'Vitamin B Complex'],
+];
+
+const REGIMEN_MEDICINES = {
+  'Anti-Rabies Vaccination': [],
+  Deworming: [['Pyrantel Pamoate', null, null, null, null]],
+  'Skin Infection': [
+    ['Amoxicillin', null, null, null, null],
+    ['Chlorpheniramine', null, null, null, null],
+  ],
+  'Respiratory Infection': [
+    ['Amoxicillin', null, null, null, null],
+    ['Doxycycline', null, null, null, null],
+  ],
+  'Wound Care': [
+    ['Amoxicillin', null, null, null, null],
+    ['Carprofen', null, null, null, null],
+  ],
+  'Flea and Tick Infestation': [['Frontline Spray', null, null, null, null]],
+  'Vomiting and Diarrhea': [
+    ['Metronidazole', null, null, null, null],
+    ['Oral Rehydration Salts', null, null, null, null],
+  ],
+  'Ear Infection': [['Enrofloxacin (Baytril)', null, null, null, null]],
+  'Vaccination (Routine)': [],
+};
+
+/**
+ * Creates the condition-regimen tables and the catalog link, then seeds them.
+ * Idempotent throughout: safe to run on every boot, and it only ever fills
+ * rows that are still empty so clinic edits are never overwritten.
+ */
+async function ensureConditionRegimens() {
+  try {
+    await db.query(
+      `CREATE TABLE IF NOT EXISTS condition_regimens (
+         id int(11) NOT NULL AUTO_INCREMENT,
+         name varchar(120) NOT NULL,
+         complaint varchar(255) DEFAULT NULL,
+         diagnosis varchar(255) DEFAULT NULL,
+         treatment varchar(255) DEFAULT NULL,
+         sort_order int(11) NOT NULL DEFAULT 0,
+         active tinyint(1) NOT NULL DEFAULT 1,
+         created_at timestamp NOT NULL DEFAULT current_timestamp(),
+         updated_at timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+         PRIMARY KEY (id),
+         UNIQUE KEY name (name)
+       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`,
+    );
+
+    await db.query(
+      `CREATE TABLE IF NOT EXISTS condition_regimen_items (
+         id int(11) NOT NULL AUTO_INCREMENT,
+         regimen_id int(11) NOT NULL,
+         medicine_id int(11) NOT NULL,
+         dosage varchar(100) DEFAULT NULL,
+         frequency varchar(100) DEFAULT NULL,
+         duration varchar(100) DEFAULT NULL,
+         instructions varchar(255) DEFAULT NULL,
+         sort_order int(11) NOT NULL DEFAULT 0,
+         created_at timestamp NOT NULL DEFAULT current_timestamp(),
+         PRIMARY KEY (id),
+         UNIQUE KEY regimen_medicine (regimen_id, medicine_id),
+         KEY regimen_id (regimen_id),
+         KEY medicine_id (medicine_id)
+       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`,
+    );
+
+    const [catalogColumns] = await db.query('SHOW COLUMNS FROM catalog_products');
+    if (!catalogColumns.some((column) => column.Field === 'medicine_id')) {
+      await db.query('ALTER TABLE catalog_products ADD COLUMN `medicine_id` int(11) DEFAULT NULL');
+      await db.query('ALTER TABLE catalog_products ADD KEY `medicine_id` (`medicine_id`)');
+      console.log('✅ Added medicine_id column to catalog_products.');
+    }
+
+    // Seed templates. UNIQUE(name) makes this safe across restarts.
+    for (const [name, complaint, diagnosis, treatment, sortOrder] of DEFAULT_CONDITION_REGIMENS) {
+      await db.query(
+        `INSERT INTO condition_regimens (name, complaint, diagnosis, treatment, sort_order, active)
+         VALUES (?, ?, ?, ?, ?, 1)
+         ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)`,
+        [name, complaint, diagnosis, treatment, sortOrder],
+      );
+    }
+
+    let itemCount = 0;
+    for (const [regimenName, medicines] of Object.entries(REGIMEN_MEDICINES)) {
+      const [[regimen]] = await db.query('SELECT id FROM condition_regimens WHERE name = ?', [regimenName]);
+      if (!regimen) continue;
+
+      for (let i = 0; i < medicines.length; i += 1) {
+        const [medicineName, dosage, frequency, duration, instructions] = medicines[i];
+        const [[medicine]] = await db.query('SELECT id FROM medicines WHERE medicine_name = ?', [medicineName]);
+        if (!medicine) {
+          console.warn(`⚠️ Regimen "${regimenName}" skipped: medicine "${medicineName}" is not in the list.`);
+          continue;
+        }
+
+        const [result] = await db.query(
+          `INSERT INTO condition_regimen_items
+             (regimen_id, medicine_id, dosage, frequency, duration, instructions, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order)`,
+          [regimen.id, medicine.id, dosage, frequency, duration, instructions, i],
+        );
+        itemCount += result.affectedRows || 0;
+      }
+    }
+
+    // Link catalog items to medicines. Matched on name; never clobbers a link a
+    // clinic has already set by hand.
+    let linkCount = 0;
+    for (const [productName, medicineName] of CATALOG_MEDICINE_LINKS) {
+      const [[medicine]] = await db.query('SELECT id FROM medicines WHERE medicine_name = ?', [medicineName]);
+      if (!medicine) {
+        console.warn(`⚠️ Catalog link skipped: medicine "${medicineName}" is not in the list.`);
+        continue;
+      }
+
+      const [result] = await db.query(
+        `UPDATE catalog_products SET medicine_id = ?
+         WHERE LOWER(product_name) = LOWER(?) AND medicine_id IS NULL`,
+        [medicine.id, productName],
+      );
+      linkCount += result.affectedRows || 0;
+    }
+
+    const [[{ regimenTotal }]] = await db.query('SELECT COUNT(*) AS regimenTotal FROM condition_regimens');
+    const [[{ itemTotal }]] = await db.query('SELECT COUNT(*) AS itemTotal FROM condition_regimen_items');
+    const [[{ linkedTotal }]] = await db.query(
+      'SELECT COUNT(*) AS linkedTotal FROM catalog_products WHERE medicine_id IS NOT NULL',
+    );
+
+    console.log(
+      `✅ Condition regimens ready: ${regimenTotal} templates, ${itemTotal} regimen medicines, ${linkedTotal} catalog links.`,
+    );
+  } catch (error) {
+    console.warn('⚠️ Failed to ensure condition regimens:', error.message);
   }
 }
 
@@ -971,6 +1248,21 @@ async function ensureConsultationPaymentSchema() {
     await addIndexIfMissing('consultation_charges', 'consultation_charges_catalog_product_id', 'KEY `consultation_charges_catalog_product_id` (`catalog_product_id`)');
     await addForeignKeyIfMissing('consultation_charges', 'fk_consultation_charges_consultation', 'consultation_id', 'consultation_records', 'id', 'CASCADE');
     await addForeignKeyIfMissing('consultation_charges', 'fk_consultation_charges_catalog', 'catalog_product_id', 'catalog_products', 'id', 'RESTRICT');
+
+    // Handoff buffer for the cross-device pet QR scan. Previously only created by a
+    // manual script, so a fresh deploy failed the scan endpoints.
+    if (!(await tableExists('mobile_scan_sessions'))) {
+      await db.query(`
+        CREATE TABLE mobile_scan_sessions (
+          session_id VARCHAR(64) NOT NULL,
+          pet_data MEDIUMTEXT NOT NULL,
+          scan_mode VARCHAR(20) NOT NULL DEFAULT 'single',
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (session_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+      `);
+    }
 
     await addColumnIfMissing('payment_monitoring', 'or_number', 'VARCHAR(100) DEFAULT NULL');
     await addColumnIfMissing('payment_monitoring', 'or_amount', 'DECIMAL(10,2) NOT NULL DEFAULT 0.00');

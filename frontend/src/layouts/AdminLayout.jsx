@@ -22,6 +22,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import NotificationBell from "../components/notifications/NotificationBell";
+import GlobalLoadingOverlay from "../components/GlobalLoadingOverlay";
 
 function fmtDate(d) {
   const date = d instanceof Date ? d : new Date(d);
@@ -40,6 +41,12 @@ export default function AdminLayout() {
   const [showLogOutModal, setShowLogOutModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setPageLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Close sidebar on route change (mobile)
   useEffect(() => {
@@ -211,6 +218,8 @@ export default function AdminLayout() {
           </div>
         </div>
       )}
+
+      <GlobalLoadingOverlay visible={pageLoading} message="Loading dashboard..." />
     </div>
   );
 }

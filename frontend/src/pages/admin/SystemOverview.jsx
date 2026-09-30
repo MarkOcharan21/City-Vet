@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Megaphone } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js';
@@ -7,6 +7,7 @@ import ChartDataLabels from 'chartjs-plugin-datalabels';
 import api from '../../services/api';
 import SummaryCard from '../../components/SummaryCard';
 import AnnouncementWidget from "../../components/announcements/AnnouncementWidget";
+import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, ChartDataLabels);
 
@@ -59,7 +60,7 @@ export default function SystemOverview() {
   const [charts, setCharts] = useState(null);
   const [dashboard, setDashboard] = useState(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     api.get('/analytics/summary').then((res) => setSummary(res.data.summary)).catch(console.error);
     api.get('/analytics/charts').then((res) => setCharts(res.data)).catch(console.error);
     api.get('/analytics/dashboard?filter=all')
@@ -71,6 +72,12 @@ export default function SystemOverview() {
       }))
       .catch(console.error);
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useAutoRefresh(fetchData);
 
   const males = charts?.petsBySex?.find((s) => s.sex === 'Male')?.total || 0;
   const females = charts?.petsBySex?.find((s) => s.sex === 'Female')?.total || 0;

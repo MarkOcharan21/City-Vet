@@ -249,13 +249,6 @@ export function validateVaccinationRecord(data) {
   return buildResult(errors);
 }
 
-export function validatePrescription(data) {
-  const errors = {};
-  if (!data.pet_id) errors.pet_id = 'Select a pet.';
-  if (!data.medicine_id) errors.medicine_id = 'Select a medicine.';
-  return buildResult(errors);
-}
-
 export function validateRecordRequest(data) {
   const errors = {};
   if (!data.pet_id) errors.pet_id = 'Select a pet.';

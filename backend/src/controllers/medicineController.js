@@ -1,16 +1,23 @@
 const db = require('../config/db');
-const { createNotification } = require('../services/notificationService');
 const {
   validationError,
   validatePrescription,
 } = require('../utils/validation');
+const { insertPrescription, notifyPrescriptionOwner } = require('../services/prescriptionService');
 const { logAudit } = require('../middleware/auditMiddleware');
 const { vetNameExpr } = require('../utils/vetNameFormat');
 
-// GET /api/medicines/list  (dropdown data)
+// GET /api/medicines/list  (dropdown data + dosing defaults for the auto-fill)
 async function getMedicineList(req, res) {
   try {
-    const [rows] = await db.query('SELECT * FROM medicines');
+    const [rows] = await db.query(
+      `SELECT m.id, m.medicine_name, m.description, m.category,
+              m.default_dosage, m.default_frequency, m.default_duration, m.default_instructions,
+              cp.price AS price
+       FROM medicines m
+       LEFT JOIN catalog_products cp ON cp.medicine_id = m.id
+       ORDER BY m.medicine_name`
+    );
     res.json({ success: true, medicines: rows });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Could not load medicine list.', error: error.message });
@@ -82,11 +89,14 @@ async function addPrescription(req, res) {
     let resolvedConsultationId = consultation_id;
 
     if (!resolvedConsultationId) {
+      // Only reuse a consultation that actually went through the billing pipeline.
+      // A record with no charges is a leftover stub, not a billable visit.
       const [[latestConsultation]] = await db.query(
-        `SELECT id
-         FROM consultation_records
-         WHERE pet_id = ?
-         ORDER BY consultation_date DESC, created_at DESC
+        `SELECT cr.id
+         FROM consultation_records cr
+         WHERE cr.pet_id = ?
+           AND EXISTS (SELECT 1 FROM consultation_charges cc WHERE cc.consultation_id = cr.id)
+         ORDER BY cr.consultation_date DESC, cr.created_at DESC
          LIMIT 1`,
         [pet_id]
       );
@@ -94,13 +104,14 @@ async function addPrescription(req, res) {
       if (latestConsultation) {
         resolvedConsultationId = latestConsultation.id;
       } else {
-        const today = new Date().toISOString().slice(0, 10);
-        const [consultationResult] = await db.query(
-          `INSERT INTO consultation_records (pet_id, consultation_date, vet_id)
-           VALUES (?, ?, ?)`,
-          [Number(pet_id), today, req.user.id]
-        );
-        resolvedConsultationId = consultationResult.insertId;
+        // A prescription used to fabricate an empty consultation row here, which
+        // produced no payment transaction and broke the one-consultation-one-payment
+        // rule. Prescriptions now hang off a real saved consultation.
+        return res.status(409).json({
+          success: false,
+          message:
+            'This patient has no saved consultation yet. Save the consultation first so its payment transaction is created, then attach the prescription to it.',
+        });
       }
     }
 
@@ -111,58 +122,9 @@ async function addPrescription(req, res) {
       });
     }
 
-    const [prescriptionResult] = await db.query(
-      'INSERT INTO prescriptions (consultation_id) VALUES (?)',
-      [resolvedConsultationId]
-    );
-    const prescriptionId = prescriptionResult.insertId;
+    const prescriptionId = await insertPrescription(db, resolvedConsultationId, items);
 
-    if (!prescriptionId) {
-      return res.status(500).json({
-        success: false,
-        message: 'Could not save prescription. Please restart the server and try again.',
-      });
-    }
-
-    for (const item of items) {
-      await db.query(
-        `INSERT INTO prescription_items (prescription_id, medicine_id, quantity, dosage, frequency, duration, instructions)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          prescriptionId,
-          Number(item.medicine_id),
-          item.quantity || null,
-          item.dosage || null,
-          item.frequency || null,
-          item.duration || null,
-          item.instructions || null,
-        ]
-      );
-    }
-
-    const [[pet]] = await db.query(
-      `SELECT p.name, po.user_id
-       FROM consultation_records cr
-       JOIN pets p ON cr.pet_id = p.id
-       JOIN pet_owners po ON p.pet_owner_id = po.id
-       WHERE cr.id = ?`,
-      [resolvedConsultationId]
-    );
-
-    if (pet?.user_id) {
-      try {
-        await createNotification(
-          pet.user_id,
-          'Medicine Record Added',
-          `${pet.name} has a new medicine prescription.`,
-          'System',
-          false,
-          'clinical-medicine'
-        );
-      } catch (notificationError) {
-        console.warn('Prescription saved but notification failed:', notificationError.message);
-      }
-    }
+    const notifiedPetName = await notifyPrescriptionOwner(resolvedConsultationId);
 
     res.status(201).json({ success: true, message: 'Prescription saved.', prescriptionId });
 
@@ -171,7 +133,7 @@ async function addPrescription(req, res) {
       entity_type: 'prescription',
       entity_id: prescriptionId,
       new_value: { consultation_id: resolvedConsultationId, items_count: items.length },
-      description: `Prescription saved for "${pet?.name || pet_id}" with ${items.length} item(s)`
+      description: `Prescription saved for "${notifiedPetName || pet_id}" with ${items.length} item(s)`
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Could not save prescription.', error: error.message });

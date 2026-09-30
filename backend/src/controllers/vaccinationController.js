@@ -422,6 +422,8 @@ async function recordVaccination(req, res) {
       ]
     );
 
+    if (global.io) global.io.emit("data-changed", { type: "vaccination-recorded" });
+
     // Notification: Vaccination Updated
 
     await createNotification(
