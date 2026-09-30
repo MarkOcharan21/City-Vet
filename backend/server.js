@@ -77,6 +77,7 @@ const {
 // ===================================
 
 const app = express();
+app.set("trust proxy", 1);
 
 function getLanIp() {
   try {
@@ -117,6 +118,15 @@ app.use(
     "/uploads",
     express.static(path.join(__dirname, "uploads"))
 );
+
+app.use(express.static(path.join(__dirname, "public")));
+
+app.get("*", (req, res) => {
+  if (req.path.startsWith("/api/")) {
+    return res.status(404).json({ message: "API route not found" });
+  }
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 app.get("/qr/:token", (req, res) => {
   const frontendOrigin = (process.env.FRONTEND_URL || "http://localhost:5178").replace(/\/$/, "");
