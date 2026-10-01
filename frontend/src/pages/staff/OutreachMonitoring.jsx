@@ -143,8 +143,8 @@ export default function OutreachMonitoring() {
     try {
       const response = await api.get("/outreach/summary");
       if (response.data.success) setSummary(response.data.summary);
-    } catch (_) {
-      /* ignore */
+    } catch (err) {
+      console.error("Failed to load outreach summary:", err);
     }
   }
 
@@ -649,6 +649,7 @@ export default function OutreachMonitoring() {
   const programQrPath = (freshQr && freshQr.qrImagePath) || program?.qr_image_path || selectedRecord?.qr_image_path || null;
   const resolvedProgramQrPath = programQrPath ? resolveMediaUrl(programQrPath) : null;
   const programQrToken = (freshQr && freshQr.qrToken) || program?.qr_token || selectedRecord?.qr_token || "";
+  const qrImageLoading = qrOpen && !resolvedProgramQrPath;
 
   return (
     <div className="page">
@@ -1163,11 +1164,17 @@ export default function OutreachMonitoring() {
 
             {programQrPath ? (
               <>
-                <img
-                  src={resolvedProgramQrPath}
-                  alt="Program QR"
-                  style={{ width: 220, height: 220, border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}
-                />
+                {qrImageLoading ? (
+                  <div style={{ width: 220, height: 220, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}>
+                    <Loader2 size={32} />
+                  </div>
+                ) : (
+                  <img
+                    src={resolvedProgramQrPath}
+                    alt="Program QR"
+                    style={{ width: 220, height: 220, border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}
+                  />
+                )}
                 <p style={{ fontSize: 12, color: "#9CA3AF", wordBreak: "break-all", margin: "8px 0 14px" }}>
                   {programQrToken}
                 </p>
