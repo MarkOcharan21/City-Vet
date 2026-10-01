@@ -24,12 +24,14 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      - key: BACKEND_URL
+        value: https://city-vet-system.onrender.com
       - key: CLOUDINARY_CLOUD_NAME
         value: gyxwgqh9
       - key: CLOUDINARY_API_KEY
-        value: "REMOVED_ROTATE_IN_RENDER"
+        sync: false
       - key: CLOUDINARY_API_SECRET
-        value: REMOVED_ROTATE_IN_RENDER
+        sync: false
       - key: EMAIL_HOST
         value: smtp.gmail.com
       - key: EMAIL_PORT
