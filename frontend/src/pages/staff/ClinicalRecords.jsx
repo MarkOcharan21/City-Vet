@@ -28,7 +28,8 @@ import { emptyPrescriptionItem, rederivePrescription, buildRegimen } from "../..
 import printPrescriptionSlip from "../../utils/prescriptionPrint";
 import PrintReportButton from "../../components/staff/PrintReportButton";
 import StatusBadge from "../../components/StatusBadge";
-import { hasValue, formatDate, formatAge, healthFlags, flagLabel } from "../../utils/petDisplay";
+import { hasValue, formatDate, formatAge } from "../../utils/petDisplay";
+import PetHealthNotesModal from "../../components/PetHealthNotesModal";
 
 const DEFAULT_CONSULTATION_PRODUCT_NAME = "Consultation Fee";
 
@@ -87,6 +88,7 @@ export default function ClinicalRecords() {
   const searchDebounceRef = useRef(null);
   const [savedReceipt, setSavedReceipt] = useState(null);
   const successModalRef = useRef(null);
+  const [healthPet, setHealthPet] = useState(null);
 
   function loadPets() {
     return api.get("/pets").then((res) => {
@@ -546,7 +548,6 @@ export default function ClinicalRecords() {
                       <th>Pet</th>
                       <th>Owner</th>
                       <th>Sex / Age</th>
-                      <th>Health Notes</th>
                       <th>Status</th>
                       <th>Actions</th>
                     </tr>
@@ -554,7 +555,7 @@ export default function ClinicalRecords() {
                   <tbody>
                     {visiblePickerPets.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="empty-state-cell">
+                        <td colSpan="5" className="empty-state-cell">
                           {isPickerSearching
                             ? 'No pets match your search.'
                             : 'No pets available.'}
@@ -563,9 +564,6 @@ export default function ClinicalRecords() {
                     ) : (
                       visiblePickerPets.map((pet) => {
                         const age = formatAge(pet.birthdate);
-                        const flags = healthFlags(pet);
-                        const shownFlags = flags.slice(0, 2);
-                        const extraFlags = flags.length - shownFlags.length;
 
                         return (
                           <tr key={pet.id}>
@@ -614,36 +612,6 @@ export default function ClinicalRecords() {
                               </div>
                             </td>
 
-                            <td data-label="Health Notes">
-                              {flags.length === 0 ? (
-                                <span className="pr-flag pr-flag--none">None noted</span>
-                              ) : (
-                                <div className="pr-flags">
-                                  {shownFlags.map((flag) => (
-                                    <span
-                                      key={flag.key}
-                                      className={`pr-flag pr-flag--${flag.tone}`}
-                                      title={flag.label}
-                                    >
-                                      <flag.Icon size={12} aria-hidden="true" />
-                                      {flagLabel(flag.key)}
-                                    </span>
-                                  ))}
-                                  {extraFlags > 0 && (
-                                    <span
-                                      className="pr-flag pr-flag--more"
-                                      title={flags
-                                        .slice(2)
-                                        .map((f) => f.label)
-                                        .join(', ')}
-                                    >
-                                      +{extraFlags}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-
                             <td data-label="Status">
                               <div className="pr-status">
                                 <StatusBadge status={pet.status} />
@@ -658,6 +626,13 @@ export default function ClinicalRecords() {
                                   onClick={() => selectFromSearch(pet)}
                                 >
                                   <Stethoscope size={14} /> Select
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-secondary btn-sm"
+                                  onClick={() => setHealthPet(pet)}
+                                >
+                                  View
                                 </button>
                               </div>
                             </td>
@@ -1102,6 +1077,7 @@ export default function ClinicalRecords() {
           </div>
         </div>
       )}
+    {healthPet && <PetHealthNotesModal pet={healthPet} onClose={() => setHealthPet(null)} />}
     </div>
   );
 }
