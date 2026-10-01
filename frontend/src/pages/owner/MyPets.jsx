@@ -23,7 +23,7 @@ import { resolveMediaUrl } from '../../utils/mediaUrl';
 import PetStatusItem from '../../components/PetStatusItem';
 import StatusBadge from '../../components/StatusBadge';
 import PetEditModal from '../../components/PetEditModal';
-import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import GlobalLoadingOverlay from '../../components/GlobalLoadingOverlay';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorState from '../../components/ui/ErrorState';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -113,7 +113,7 @@ export default function MyPets() {
   }
 
   if (showLoading) {
-    return <LoadingSpinner text="Loading your pets..." />;
+    return <GlobalLoadingOverlay visible message="Loading your pets..." />;
   }
 
   if (error) {

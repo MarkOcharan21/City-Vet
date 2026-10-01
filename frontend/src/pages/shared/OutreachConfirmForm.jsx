@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import api from "../../services/api";
 import { ALL_CABUYAO_BARANGAYS } from "../../data/cabuyaoBarangays";
+import GlobalLoadingOverlay from "../../components/GlobalLoadingOverlay";
 
 // ─── helpers ────────────────────────────────────────────────────
 
@@ -436,12 +437,7 @@ export default function OutreachConfirmForm() {
   // ── Loading / error states ────────────────────────────────────
 
   if (loading) {
-    return (
-      <div style={{ textAlign: "center", padding: "60px 16px" }}>
-        <Loader2 size={32} color={GREEN} className="spin" style={{ marginBottom: 12 }} />
-        <p style={{ color: "#6B7280" }}>Loading form...</p>
-      </div>
-    );
+    return <GlobalLoadingOverlay visible message="Loading confirm form..." />;
   }
 
   if (error) {

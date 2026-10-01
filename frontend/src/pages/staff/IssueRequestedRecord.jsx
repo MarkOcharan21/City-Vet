@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, Download, Eye, FileText, CheckCircle2 } from 'lucide-react';
 import api from '../../services/api';
-import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import GlobalLoadingOverlay from '../../components/GlobalLoadingOverlay';
 import useMinLoading from '../../hooks/useMinLoading';
 import StatusBadge from '../../components/StatusBadge';
 import toast from 'react-hot-toast';
@@ -124,7 +124,7 @@ export default function IssueRequestedRecord() {
       </div>
 
       {loading ? (
-        <LoadingSpinner text="Loading requests..." />
+        <GlobalLoadingOverlay visible message="Loading requests..." />
       ) : (
         <div className="panel-card table-panel-card">
           <div className="table-header-row">

@@ -374,7 +374,7 @@ async function getConsultationPaymentSummary(req, res) {
   }
 }
 
-async function updateConsultationPaymentStatus(req, res) {
+async function updatePaymentStatus(req, res) {
   const id = Number(req.params.id);
   const status = String(req.body?.status || req.body?.payment_status || "").trim();
   if (!Number.isInteger(id) || id < 1) {
@@ -385,7 +385,7 @@ async function updateConsultationPaymentStatus(req, res) {
   }
   try {
     const [[existing]] = await db.query(
-      `SELECT id, consultation_id, payment_reference, payment_status
+      `SELECT id, payment_reference, payment_status, payment_type, pet_owner_id, pet_id, total_amount
        FROM payment_monitoring
        WHERE id = ?
        LIMIT 1`,
@@ -393,9 +393,6 @@ async function updateConsultationPaymentStatus(req, res) {
     );
     if (!existing) {
       return res.status(404).json({ success: false, message: "Payment record not found." });
-    }
-    if (existing.consultation_id == null && !existing.payment_reference) {
-      return res.status(409).json({ success: false, message: "Only consultation-linked payment records can be updated here." });
     }
     if (global.io) global.io.emit("data-changed", { type: "payment-updated" });
 
@@ -415,7 +412,7 @@ async function updateConsultationPaymentStatus(req, res) {
       entity_id: id,
       old_value: { payment_status: existing.payment_status },
       new_value: { payment_status: status },
-      description: `Consultation payment ${existing.payment_reference || id} changed to ${status}`,
+      description: `${existing.payment_type || 'Payment'} ${existing.payment_reference || id} changed to ${status}`,
     }).catch((error) => console.warn("Payment status audit log failed:", error.message));
   } catch (error) {
     res.status(500).json({ success: false, message: "Could not update payment status.", error: error.message });
@@ -427,5 +424,5 @@ module.exports = {
   searchOwners,
   listConsultationPayments,
   getConsultationPaymentSummary,
-  updateConsultationPaymentStatus,
+  updatePaymentStatus,
 };

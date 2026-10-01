@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import api from '../../services/api';
-import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import GlobalLoadingOverlay from '../../components/GlobalLoadingOverlay';
 import ErrorState from '../../components/ui/ErrorState';
 
 // ─── helpers ────────────────────────────────────────────────
@@ -372,7 +372,7 @@ export default function PaymentHistory() {
     setToDate('');
   }
 
-  if (showLoading) return <LoadingSpinner text="Loading payment history..." />;
+  if (showLoading) return <GlobalLoadingOverlay visible message="Loading payment history..." />;
 
   if (error) {
     return <ErrorState title="Unable to load payment history" message={error} onRetry={loadHistory} />;

@@ -427,7 +427,13 @@ async function listTransactions(req, res) {
 async function verifyTransaction(req, res) {
   const { id } = req.params;
   try {
-    const [[tx]] = await db.query("SELECT * FROM outreach_transactions WHERE id = ?", [id]);
+    const [[tx]] = await db.query(
+      `SELECT ot.*, op.program_name
+       FROM outreach_transactions ot
+       LEFT JOIN outreach_programs op ON op.id = ot.outreach_id
+       WHERE ot.id = ?`,
+      [id]
+    );
     if (!tx) {
       return res.status(404).json({ success: false, message: "Transaction not found." });
     }
@@ -443,6 +449,35 @@ async function verifyTransaction(req, res) {
        WHERE id = ?`,
       [req.user.id || null, id]
     );
+
+    // Create payment_monitoring record for pet owner
+    if (tx.pet_owner_id && tx.pet_id) {
+      const paymentReference = `OUTR-${tx.id}-${Date.now()}`;
+      const items = await db.query(
+        "SELECT service_name, amount FROM outreach_transaction_items WHERE transaction_id = ?",
+        [id]
+      );
+      const itemsJson = JSON.stringify(items[0].map(it => ({ service_name: it.service_name, amount: Number(it.amount) })));
+
+      await db.query(
+        `INSERT INTO payment_monitoring (
+          pet_owner_id, pet_id, payment_type, payment_reference, payment_status,
+          total_amount, or_amount, or_date, or_time, payment_items,
+          recorded_by, remarks, created_at
+        ) VALUES (?, ?, 'Outreach', ?, 'Paid', ?, ?, CURDATE(), CURTIME(), ?, ?, ?, NOW())`,
+        [
+          tx.pet_owner_id,
+          tx.pet_id,
+          paymentReference,
+          tx.total_amount,
+          tx.total_amount,
+          itemsJson,
+          req.user.id || null,
+          `Outreach program: ${tx.program_name || 'Unknown'}`
+        ]
+      );
+    }
+
     res.json({ success: true, message: "Transaction marked as Verified / Paid." });
 
     await logAudit(req, {

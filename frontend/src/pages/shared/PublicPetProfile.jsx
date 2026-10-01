@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../../services/api";
 import DigitalPetBooklet from "../../components/booklet/DigitalPetBooklet";
+import GlobalLoadingOverlay from "../../components/GlobalLoadingOverlay";
 
 export default function PublicPetProfile() {
   const { token } = useParams();
@@ -32,7 +33,7 @@ export default function PublicPetProfile() {
   }
 
   if (loading) {
-    return <h2 style={{ textAlign: "center", padding: "60px 0" }}>Loading...</h2>;
+    return <GlobalLoadingOverlay visible message="Loading pet profile..." />;
   }
 
   if (error) {

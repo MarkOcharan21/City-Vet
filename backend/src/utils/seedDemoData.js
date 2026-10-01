@@ -524,6 +524,7 @@ async function seedTask2() {
     { type: "Consultation", amount: 250 },
     { type: "Vaccination", amount: 300 },
     { type: "Medicine", amount: 150 },
+    { type: "Outreach", amount: 0 },
   ]);
 
   const [[staffRow]] = await db.query(

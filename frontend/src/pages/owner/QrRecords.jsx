@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import api from "../../services/api";
-import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import GlobalLoadingOverlay from "../../components/GlobalLoadingOverlay";
 import useMinLoading from "../../hooks/useMinLoading";
 import StatusBadge from "../../components/StatusBadge";
 import DigitalPetBooklet from "../../components/booklet/DigitalPetBooklet";
@@ -121,7 +121,7 @@ export default function QrRecords() {
         </p>
 
         {showLoading ? (
-          <LoadingSpinner text="Loading QR records..." />
+          <GlobalLoadingOverlay visible message="Loading QR records..." />
         ) : (
           <div className="qr-row-list">
             {qrCodes.map((qr) => {

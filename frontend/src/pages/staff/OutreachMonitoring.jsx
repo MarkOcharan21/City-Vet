@@ -26,6 +26,8 @@ import api from "../../services/api";
 import { ALL_CABUYAO_BARANGAYS } from "../../data/cabuyaoBarangays";
 import PrintReportButton from "../../components/staff/PrintReportButton";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import GlobalLoadingOverlay from "../../components/GlobalLoadingOverlay";
+import useMinLoading from "../../hooks/useMinLoading";
 import { resolveMediaUrl } from "../../utils/mediaUrl";
 
 const STATUS_COLORS = {
@@ -93,6 +95,7 @@ export default function OutreachMonitoring() {
   const [summary, setSummary] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const showLoading = useMinLoading(loading);
 
   const [statusFilter, setStatusFilter] = useState("");
   const [barangayFilter, setBarangayFilter] = useState("");
@@ -196,14 +199,6 @@ export default function OutreachMonitoring() {
   }
 
   const totals = summary ? summary.totals : null;
-
-  const byBarangay = useMemo(
-    () =>
-      (summary ? summary.byBarangay : []).filter((b) =>
-        barangayFilter ? b.barangay === barangayFilter : true
-      ),
-    [summary, barangayFilter]
-  );
 
   const shownPrograms = useMemo(() => {
     const term = programSearch.trim().toLowerCase();
@@ -646,8 +641,8 @@ export default function OutreachMonitoring() {
 
   // ---------------- render ----------------
 
-  if (loading) {
-    return <div style={{ textAlign: "center", padding: "60px 0" }}>Loading...</div>;
+  if (showLoading) {
+    return <GlobalLoadingOverlay visible message="Loading outreach program payment monitoring..." />;
   }
 
   const selectedRecord = selectedId ? programs.find((p) => String(p.id) === String(selectedId)) : null;
@@ -882,57 +877,6 @@ export default function OutreachMonitoring() {
 
       {selectedId && program && (
         <>
-          {/* per barangay */}
-          <div className="panel-card" style={{ marginTop: 16 }}>
-            <div className="table-header-row">
-              <div>
-                <h2>Per Barangay</h2>
-                <p>Breakdown of transactions and payments per barangay.</p>
-              </div>
-              <div className="table-meta">{byBarangay.length} barangay</div>
-            </div>
-            <div className="toolbar-row">
-              <select value={barangayFilter} onChange={(e) => setBarangayFilter(e.target.value)} aria-label="Filter by barangay">
-                <option value="">All Barangays</option>
-                {ALL_CABUYAO_BARANGAYS.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="table-wrapper">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Barangay</th>
-                    <th>Transactions</th>
-                    <th>Paid</th>
-                    <th>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {byBarangay.length === 0 ? (
-                    <tr>
-                      <td colSpan="4" className="empty-state-cell">
-                        No transactions recorded yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    byBarangay.map((b) => (
-                      <tr key={b.barangay}>
-                        <td data-label="Barangay" style={{ fontWeight: 600 }}>{b.barangay}</td>
-                        <td data-label="Transactions">{b.total}</td>
-                        <td data-label="Paid">{b.verified}</td>
-                        <td data-label="Amount">{pesoSymbol.format(b.amount)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
           {/* transactions */}
           <div className="panel-card" style={{ marginTop: 16 }}>
             <div className="table-header-row">

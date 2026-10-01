@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import GlobalLoadingOverlay from "../../components/GlobalLoadingOverlay";
 import useMinLoading from "../../hooks/useMinLoading";
 import {
   BellRing,
@@ -247,7 +247,7 @@ export default function OwnerDashboard() {
   const visibleActivity = showAllActivity ? activity : activity.slice(0, VISIBLE_ACTIVITY);
   const petsFailed = errors.pets || (!loading && slices.pets === undefined);
 
-  if (showLoading) return <LoadingSpinner text="Loading your dashboard..." />;
+  if (showLoading) return <GlobalLoadingOverlay visible message="Loading your dashboard..." />;
 
   return (
     <div className="page owner-dashboard">

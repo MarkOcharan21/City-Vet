@@ -13,7 +13,7 @@ import {
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import StatusBadge from '../../components/StatusBadge';
-import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import GlobalLoadingOverlay from '../../components/GlobalLoadingOverlay';
 import EmptyState from '../../components/ui/EmptyState';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import DraftEditorModal from '../../components/owner/DraftEditorModal';
@@ -200,7 +200,7 @@ export default function DraftRegistration() {
   }
 
   if (showLoading) {
-    return <LoadingSpinner text="Loading your drafts..." />;
+    return <GlobalLoadingOverlay visible message="Loading your drafts..." />;
   }
 
   if (allDrafts.length === 0) {

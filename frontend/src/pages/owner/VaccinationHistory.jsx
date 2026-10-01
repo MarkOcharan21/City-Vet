@@ -19,7 +19,7 @@ import {
 import api from '../../services/api';
 import StatusBadge from '../../components/StatusBadge';
 import ErrorState from '../../components/ui/ErrorState';
-import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import GlobalLoadingOverlay from '../../components/GlobalLoadingOverlay';
 
 // ─── helpers ────────────────────────────────────────────────
 
@@ -1049,7 +1049,7 @@ export default function VaccinationHistory() {
 
   // ── Render states ──────────────────────────────────────────
 
-  if (showLoading) return <LoadingSpinner text="Loading vaccination records..." />;
+  if (showLoading) return <GlobalLoadingOverlay visible message="Loading vaccination records..." />;
 
   if (error) {
     return (

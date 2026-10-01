@@ -311,7 +311,7 @@ export default function NotificationBell() {
             key={popCount}
             size={18}
             color="#fff"
-            className={`notification-bell__icon${popping ? " is-popping" : ""}`}
+            className={`notification-bell__icon${unread > 0 ? " has-unread" : ""}`}
           />
 
           {unread > 0 && (

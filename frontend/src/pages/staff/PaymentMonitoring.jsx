@@ -131,7 +131,7 @@ export default function PaymentMonitoring() {
       <div className="page-header-row">
         <div>
           <h1>Payment Monitoring</h1>
-          <p className="page-intro">Monitor consultation charges created by the veterinarian and update payment status.</p>
+          <p className="page-intro">Monitor all clinic charges (consultations, vaccinations, medicines, outreach) and update payment status.</p>
         </div>
         <div className="page-header-actions"><PrintReportButton category="payments" /></div>
       </div>
@@ -164,7 +164,7 @@ export default function PaymentMonitoring() {
 
       <div className="panel-card table-panel-card">
         <div className="table-header-row">
-          <div><h2>Consultation Payments</h2><p>One payment transaction is created for each completed consultation.</p></div>
+          <div><h2>Payments</h2><p>All clinic charges — consultations, vaccinations, medicines, and outreach programs.</p></div>
           <div className="table-meta">{totalRecords} record{totalRecords !== 1 ? 's' : ''}</div>
         </div>
         <div className="toolbar-row pm-toolbar">
@@ -178,7 +178,7 @@ export default function PaymentMonitoring() {
           <table className="data-table pm-table">
             <thead><tr><th>Reference</th><th>Date</th><th>Patient</th><th>Services</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
             <tbody>
-              {loading ? <tr><td colSpan="7" className="empty-state-cell">Loading payment records...</td></tr> : visibleRecords.length === 0 ? <tr><td colSpan="7" className="empty-state-cell">{searchTerm || statusFilter !== "All" || fromDate || toDate ? "No payment records match your filters." : "No consultation payments yet."}</td></tr> : visibleRecords.map((record) => {
+              {loading ? <tr><td colSpan="7" className="empty-state-cell">Loading payment records...</td></tr> : visibleRecords.length === 0 ? <tr><td colSpan="7" className="empty-state-cell">{searchTerm || statusFilter !== "All" || fromDate || toDate ? "No payment records match your filters." : "No payments recorded yet."}</td></tr> : visibleRecords.map((record) => {
                 const charges = getCharges(record);
                 const TypeIcon = TYPE_ICON[record.payment_type] || Stethoscope;
                 return <tr key={record.id}>
@@ -283,7 +283,7 @@ export default function PaymentMonitoring() {
               </div>
 
               <p className="pm-receipt-desc">
-                <strong>Payment status:</strong> {detailRecord.payment_status || "Unpaid"} — clinical charges are recorded by the veterinarian; Staff updates the payment status.
+                <strong>Payment status:</strong> {detailRecord.payment_status || "Unpaid"} — clinic charges recorded by the veterinarian; Staff updates the payment status.
               </p>
 
               <div className="pm-receipt-sign">

@@ -19,7 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import api from '../../services/api';
-import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import GlobalLoadingOverlay from '../../components/GlobalLoadingOverlay';
 import ErrorState from '../../components/ui/ErrorState';
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -1289,7 +1289,7 @@ export default function ClinicalMedicineRecords() {
 
   useEffect(() => { load(); }, []);
 
-  if (showLoading) return <LoadingSpinner text="Loading records..." />;
+  if (showLoading) return <GlobalLoadingOverlay visible message="Loading records..." />;
 
   if (error) {
     return <ErrorState title="Unable to load records" message={error} onRetry={load} />;

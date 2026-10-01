@@ -3,6 +3,7 @@ import { KeyRound, Save, User } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import GlobalLoadingOverlay from '../../components/GlobalLoadingOverlay';
 import ErrorState from '../../components/ui/ErrorState';
 
 // Barangay list (mirrors backend constant — read-only on frontend)
@@ -69,7 +70,9 @@ export function ProfileForm({ compact = false, onSaved }) {
     }
   }
 
-  if (loading) return <LoadingSpinner text="Loading profile…" fullPage={false} />;
+  if (loading) return compact
+    ? <LoadingSpinner text="Loading profile…" fullPage={false} />
+    : <GlobalLoadingOverlay visible message="Loading your profile..." />;
   if (error)   return <ErrorState title="Could not load profile" message={error} onRetry={load} />;
 
   return (

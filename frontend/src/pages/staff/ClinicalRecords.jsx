@@ -21,6 +21,7 @@ import api from "../../services/api";
 import { resolveMediaUrl } from "../../utils/mediaUrl";
 import toast from "react-hot-toast";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import GlobalLoadingOverlay from "../../components/GlobalLoadingOverlay";
 import useMinLoading from "../../hooks/useMinLoading";
 import FieldError from "../../components/ui/FieldError";
 import { validateClinicalRecord } from "../../utils/validation";
@@ -451,7 +452,7 @@ export default function ClinicalRecords() {
     }
   }
 
-  if (showLoading) return <LoadingSpinner text="Loading consultation workspace..." />;
+  if (showLoading) return <GlobalLoadingOverlay visible message="Loading consultation workspace..." />;
 
   const prescriptionItems = prescription.filter((item) => String(item.medicine_id || "").trim() !== "");
 

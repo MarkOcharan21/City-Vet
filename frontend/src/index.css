@@ -1843,6 +1843,8 @@ body:has(.clinic-access-page)::before {
 }
 .notification-dropdown {
   scrollbar-width: none;
+  transform-origin: top right;
+  animation: notification-dropdown-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .notification-dropdown::-webkit-scrollbar {
   display: none;
@@ -1855,8 +1857,11 @@ body:has(.clinic-access-page)::before {
   display: block;
 }
 
-.notification-bell__icon.is-popping {
-  animation: notification-bell-ring 0.9s ease-in-out;
+/* Continuous shake while anything is unread — the bell keeps ringing until
+   the notifications are actually viewed. The React `key` on the icon remounts
+   it when a new one arrives so the loop visibly restarts from 0 degrees. */
+.notification-bell__icon.has-unread {
+  animation: notification-bell-ring 1s ease-in-out infinite;
   transform-origin: 50% 15%;
   filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.95));
 }
@@ -1900,10 +1905,18 @@ body:has(.clinic-access-page)::before {
   60%      { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
 }
 
+/* Dropdown pops in with a light scale + fade, settled from the bell corner. */
+@keyframes notification-dropdown-pop {
+  0%   { opacity: 0; transform: scale(0.88) translateY(-6px); }
+  60%  { transform: scale(1.02) translateY(1px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .notification-bell__icon.is-popping,
+  .notification-bell__icon.has-unread,
   .notification-bell__badge--unread,
-  .notification-bell__badge--unread.is-popping {
+  .notification-bell__badge--unread.is-popping,
+  .notification-dropdown {
     animation: none;
   }
 }
