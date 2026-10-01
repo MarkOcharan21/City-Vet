@@ -4,7 +4,6 @@ import {
   MapPin,
   PawPrint,
   Search,
-  Stethoscope,
   ShieldAlert,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -56,7 +55,6 @@ function formatAge(birthdate) {
 export default function PetRecords() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const isVet = user?.role === 'Veterinarian';
 
   const [pets, setPets] = useState([]);
   const [search, setSearch] = useState('');
@@ -146,10 +144,6 @@ export default function PetRecords() {
   const refreshAfterSave = () => {
     loadPets();
     if (bookletPet) openBooklet(bookletPet);
-  };
-
-  const startConsultation = (pet) => {
-    navigate(`/veterinarian/clinical-records?pet_id=${pet.id}`);
   };
 
   const hasActiveFilters = Boolean(status || barangay || species);
@@ -361,33 +355,24 @@ export default function PetRecords() {
                         </div>
                       </td>
 
-                      <td data-label="Actions" className="pr-actions-col">
-                        <div className="table-actions">
-                          {isVet && (
-                            <button
-                              type="button"
-                              className="btn-primary btn-sm"
-                              onClick={() => startConsultation(p)}
-                            >
-                              <Stethoscope size={14} /> Consult
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            className="btn-secondary btn-sm"
-                            onClick={() => openBooklet(p)}
-                          >
-                            Booklet
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-secondary btn-sm"
-                            onClick={() => setHealthPet(p)}
-                          >
-                            View
-                          </button>
-                        </div>
-                      </td>
+<td data-label="Actions" className="pr-actions-col">
+                         <div className="table-actions table-action-group">
+                           <button
+                             type="button"
+                             className="btn-secondary btn-sm"
+                             onClick={() => openBooklet(p)}
+                           >
+                             Booklet
+                           </button>
+                           <button
+                             type="button"
+                             className="btn-secondary btn-sm"
+                             onClick={() => setHealthPet(p)}
+                           >
+                             View
+                           </button>
+                         </div>
+                       </td>
                     </tr>
                   );
                 })

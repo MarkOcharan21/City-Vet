@@ -618,24 +618,24 @@ export default function ClinicalRecords() {
                               </div>
                             </td>
 
-                            <td data-label="Actions">
-                              <div className="table-actions">
-                                <button
-                                  type="button"
-                                  className="btn-primary btn-sm"
-                                  onClick={() => selectFromSearch(pet)}
-                                >
-                                  <Stethoscope size={14} /> Select
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn-secondary btn-sm"
-                                  onClick={() => setHealthPet(pet)}
-                                >
-                                  View
-                                </button>
-                              </div>
-                            </td>
+<td data-label="Actions">
+                               <div className="table-actions table-action-group">
+                                 <button
+                                   type="button"
+                                   className="btn-primary btn-sm"
+                                   onClick={() => selectFromSearch(pet)}
+                                 >
+                                   <Stethoscope size={14} /> Select
+                                 </button>
+                                 <button
+                                   type="button"
+                                   className="btn-secondary btn-sm"
+                                   onClick={() => setHealthPet(pet)}
+                                 >
+                                   View
+                                 </button>
+                               </div>
+                             </td>
                           </tr>
                         );
                       })
