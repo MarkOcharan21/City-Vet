@@ -25,11 +25,11 @@ services:
       - key: CORS_ORIGINS
         sync: false
       - key: CLOUDINARY_CLOUD_NAME
-        sync: false
+        value: gyxwgqh9
       - key: CLOUDINARY_API_KEY
-        sync: false
+        value: "REMOVED_ROTATE_IN_RENDER"
       - key: CLOUDINARY_API_SECRET
-        sync: false
+        value: REMOVED_ROTATE_IN_RENDER
       - key: EMAIL_HOST
         value: smtp.gmail.com
       - key: EMAIL_PORT
