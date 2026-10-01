@@ -426,8 +426,11 @@ async function listTransactions(req, res) {
 
 async function verifyTransaction(req, res) {
   const { id } = req.params;
+  const connection = await db.getConnection();
   try {
-    const [[tx]] = await db.query(
+    await connection.beginTransaction();
+
+    const [[tx]] = await connection.query(
       `SELECT ot.*, op.program_name
        FROM outreach_transactions ot
        LEFT JOIN outreach_programs op ON op.id = ot.outreach_id
@@ -435,48 +438,53 @@ async function verifyTransaction(req, res) {
       [id]
     );
     if (!tx) {
+      await connection.rollback();
+      connection.release();
       return res.status(404).json({ success: false, message: "Transaction not found." });
     }
     if (tx.status === "Rejected") {
+      await connection.rollback();
+      connection.release();
       return res.status(400).json({ success: false, message: "Rejected transactions cannot be verified. Issue a new QR instead." });
     }
 
     if (global.io) global.io.emit("data-changed", { type: "transaction-verified" });
 
-    await db.query(
+    await connection.query(
       `UPDATE outreach_transactions
        SET status = 'Verified', verified_at = NOW(), verified_by = ?, rejection_reason = NULL
        WHERE id = ?`,
       [req.user.id || null, id]
     );
 
-    // Create payment_monitoring record for pet owner
-    if (tx.pet_owner_id && tx.pet_id) {
-      const paymentReference = `OUTR-${tx.id}-${Date.now()}`;
-      const items = await db.query(
-        "SELECT service_name, amount FROM outreach_transaction_items WHERE transaction_id = ?",
-        [id]
-      );
-      const itemsJson = JSON.stringify(items[0].map(it => ({ service_name: it.service_name, amount: Number(it.amount) })));
+    // Create payment_monitoring record for pet owner (even if walk-in, store owner_name for matching)
+    const paymentReference = `OUTR-${tx.id}-${Date.now()}`;
+    const [items] = await connection.query(
+      "SELECT service_name, amount FROM outreach_transaction_items WHERE transaction_id = ?",
+      [id]
+    );
+    const itemsJson = JSON.stringify(items.map(it => ({ service_name: it.service_name, amount: Number(it.amount) })));
 
-      await db.query(
-        `INSERT INTO payment_monitoring (
-          pet_owner_id, pet_id, payment_type, payment_reference, payment_status,
-          total_amount, or_amount, or_date, or_time, payment_items,
-          recorded_by, remarks, created_at
-        ) VALUES (?, ?, 'Outreach', ?, 'Paid', ?, ?, CURDATE(), CURTIME(), ?, ?, ?, NOW())`,
-        [
-          tx.pet_owner_id,
-          tx.pet_id,
-          paymentReference,
-          tx.total_amount,
-          tx.total_amount,
-          itemsJson,
-          req.user.id || null,
-          `Outreach program: ${tx.program_name || 'Unknown'}`
-        ]
-      );
-    }
+    await connection.query(
+      `INSERT INTO payment_monitoring (
+        pet_owner_id, pet_id, payment_type, payment_reference, payment_status,
+        total_amount, or_amount, or_date, or_time, payment_items,
+        recorded_by, remarks, created_at
+      ) VALUES (?, ?, 'Outreach', ?, 'Paid', ?, ?, CURDATE(), CURTIME(), ?, ?, ?, NOW())`,
+      [
+        tx.pet_owner_id || null,
+        tx.pet_id || null,
+        paymentReference,
+        tx.total_amount,
+        tx.total_amount,
+        itemsJson,
+        req.user.id || null,
+        `Outreach program: ${tx.program_name || 'Unknown'}; Owner: ${tx.owner_name || 'Walk-in'}`
+      ]
+    );
+
+    await connection.commit();
+    connection.release();
 
     res.json({ success: true, message: "Transaction marked as Verified / Paid." });
 
@@ -489,6 +497,8 @@ async function verifyTransaction(req, res) {
       description: `Verified outreach transaction "${tx.owner_name || tx.pet_name || tx.id}" — ₱${tx.total_amount}`
     });
   } catch (error) {
+    await connection.rollback();
+    connection.release();
     console.error("Verify outreach transaction error:", error);
     res.status(500).json({ success: false, message: "Could not verify transaction.", error: error.message });
   }
