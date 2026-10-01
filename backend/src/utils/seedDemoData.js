@@ -1,10 +1,10 @@
-// seedDemoData.js — demo data for the advisor demo.
+﻿// seedDemoData.js â€” demo data for the advisor demo.
 //
 // Run:  npm run demo:seed   (or: node src/utils/seedDemoData.js)
 //
 // Idempotent: safe to re-run at any point (skips records that already exist).
 // Sections (each task adds more):
-//   Task 1 — demo accounts (// ========== TASK 1 ==========)
+//   Task 1 â€” demo accounts (// ========== TASK 1 ==========)
 //
 // Demo credentials (all use password: Demo1234!)
 //   demo.owner1@cityvet.gov.ph  Owner  Ella Villanueva   (San Isidro)
@@ -181,7 +181,7 @@ async function ensurePet(ownerId, data) {
 }
 
 // =====================================================
-// TASK 1 — demo accounts
+// TASK 1 â€” demo accounts
 // =====================================================
 async function seedTask1() {
   log("\n========== TASK 1: demo accounts ==========");
@@ -357,7 +357,7 @@ async function seedTask1() {
 }
 
 // =====================================================
-// TASK 2 — payment module
+// TASK 2 â€” payment module
 // =====================================================
 // Rejection happens at the *payment* level (validation_status='Rejected');
 // the official_receipt stays 'Pending' so the owner can resubmit it.
@@ -402,7 +402,7 @@ async function ensurePaymentTypes(defs) {
         "INSERT INTO payment_types (id, type_name, default_amount) VALUES (?, ?, ?)",
         [maxId, d.type, d.amount]
       );
-      log(`  + payment_type ${d.type} (default ₱${d.amount})`);
+      log(`  + payment_type ${d.type} (default â‚±${d.amount})`);
       map[d.type] = maxId;
     } else {
       map[d.type] = rows[0].id;
@@ -441,7 +441,7 @@ async function ensureOfficialReceipt({ ownerId, staffId, orNumber, paymentDate, 
     [ownerId, orNumber, total, paymentDate]
   );
   const orId = orRes.insertId;
-  log(`  + official_receipt ${orNumber} (₱${total.toFixed(2)})`);
+  log(`  + official_receipt ${orNumber} (â‚±${total.toFixed(2)})`);
 
   let hasRejected = false;
   for (const it of items) {
@@ -470,7 +470,7 @@ async function ensureOfficialReceipt({ ownerId, staffId, orNumber, paymentDate, 
     await db.query("UPDATE pet_owners SET is_payment_current = TRUE WHERE id = ?", [ownerId]);
     log(`  . OR ${orNumber} -> Verified`);
   } else if (hasRejected) {
-    log(`  . OR ${orNumber} -> Pending (has rejected payment → resubmit demo)`);
+    log(`  . OR ${orNumber} -> Pending (has rejected payment â†’ resubmit demo)`);
   }
   return orId;
 }
@@ -621,7 +621,7 @@ async function seedTask2() {
 }
 
 // =====================================================
-// TASK 3 — clinical module
+// TASK 3 â€” clinical module
 // =====================================================
 
 async function ensureConsultation({ ownerId, petName, diagnosis, treatmentPlan, cDate, followUp, vetId }) {
@@ -655,7 +655,7 @@ async function ensurePrescription({ consultationId, items }) {
     return dup[0].id;
   }
   const [r] = await db.query(
-    "INSERT INTO prescriptions (consultation_id, prescribed_date) VALUES (?, CURDATE())",
+    "INSERT INTO prescriptions (consultation_id, prescribed_date) VALUES (?, CURRENT_DATE)",
     [consultationId]
   );
   const rxId = r.insertId;
@@ -737,7 +737,7 @@ async function seedTask3() {
 
   c = await ensureConsultation({
     ownerId: o1.id, petName: "Snow",
-    diagnosis: "Routine wellness — 5-in-1 booster vaccination",
+    diagnosis: "Routine wellness â€” 5-in-1 booster vaccination",
     treatmentPlan: "Administered 5-in-1 vaccine; next dose due 2027-07-15.",
     cDate: "2026-07-15", followUp: "2027-07-15", vetId,
   });
@@ -753,7 +753,7 @@ async function seedTask3() {
   // --- Owner 1: Biskwit ---
   c = await ensureConsultation({
     ownerId: o1.id, petName: "Biskwit",
-    diagnosis: "Healthy adult — annual physical exam",
+    diagnosis: "Healthy adult â€” annual physical exam",
     treatmentPlan: "Stool exam requested; schedule anti-rabies booster before 2026-09-20.",
     cDate: "2026-09-10", followUp: "2026-09-20", vetId,
   });
@@ -798,7 +798,7 @@ async function seedTask3() {
   // --- Owner 2: Thor ---
   c = await ensureConsultation({
     ownerId: o2.id, petName: "Thor",
-    diagnosis: "Healthy — annual wellness exam",
+    diagnosis: "Healthy â€” annual wellness exam",
     treatmentPlan: "Deworming given; schedule anti-rabies booster by 2027-09-08.",
     cDate: "2026-07-05", followUp: "2026-09-30", vetId,
   });
@@ -837,7 +837,7 @@ async function seedTask3() {
 }
 
 // =====================================================
-// TASK 4 — community module (outreach, requests, announcements, drafts)
+// TASK 4 â€” community module (outreach, requests, announcements, drafts)
 // =====================================================
 
 async function ensureProgramName(id, name) {
@@ -874,7 +874,7 @@ async function ensureService(outreachId, serviceName, amount) {
       "INSERT INTO outreach_program_services (outreach_id, service_name, amount) VALUES (?, ?, ?)",
       [outreachId, serviceName, amount]
     );
-    log(`  + service "${serviceName}" (₱${amount}) on program #${outreachId}`);
+    log(`  + service "${serviceName}" (â‚±${amount}) on program #${outreachId}`);
   }
 }
 
@@ -925,7 +925,7 @@ async function upsertOutreachTransaction({ outreachId, ownerName, petName, owner
       [r.insertId, it.name, it.amount]
     );
   }
-  log(`  + outreach tx #${r.insertId}: ${ownerName}/${petName} (${status}) ₱${total}`);
+  log(`  + outreach tx #${r.insertId}: ${ownerName}/${petName} (${status}) â‚±${total}`);
   return r.insertId;
 }
 

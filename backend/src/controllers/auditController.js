@@ -1,4 +1,5 @@
-const db = require('../config/db');
+﻿const db = require('../config/db');
+const { daysAgo } = require('../config/sql');
 
 const STAFF_ROLES = ['Staff', 'Veterinarian'];
 const STAFF_ACTIONS = ['LOGIN', 'CHECK_IN'];
@@ -207,7 +208,7 @@ async function getAuditStats(req, res) {
     const baseJoin = `
       FROM audit_logs al
       JOIN users u ON al.user_id = u.id
-      WHERE al.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      WHERE al.created_at >= ${daysAgo(30)}
       ${staffFilter.clause}
     `;
 
@@ -234,7 +235,7 @@ async function getAuditStats(req, res) {
       `SELECT COUNT(*) as total
        FROM audit_logs al
        JOIN users u ON al.user_id = u.id
-       WHERE DATE(al.created_at) = CURDATE()
+       WHERE DATE(al.created_at) = CURRENT_DATE
        ${staffFilter.clause}`,
       staffFilter.params
     );
@@ -505,7 +506,7 @@ async function getComprehensiveAuditStats(req, res) {
     const [actionStats] = await db.query(
       `SELECT al.action, COUNT(*) as count
        FROM audit_logs al
-       WHERE al.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+       WHERE al.created_at >= ${daysAgo(30)}
        GROUP BY al.action
        ORDER BY count DESC`
     );
@@ -513,7 +514,7 @@ async function getComprehensiveAuditStats(req, res) {
     const [entityStats] = await db.query(
       `SELECT al.entity_type, COUNT(*) as count
        FROM audit_logs al
-       WHERE al.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+       WHERE al.created_at >= ${daysAgo(30)}
        GROUP BY al.entity_type
        ORDER BY count DESC`
     );
@@ -521,20 +522,20 @@ async function getComprehensiveAuditStats(req, res) {
     const [totalLogs] = await db.query(
       `SELECT COUNT(*) as total
        FROM audit_logs al
-       WHERE al.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)`
+       WHERE al.created_at >= ${daysAgo(30)}`
     );
 
     const [todayLogs] = await db.query(
       `SELECT COUNT(*) as total
        FROM audit_logs al
-       WHERE DATE(al.created_at) = CURDATE()`
+       WHERE DATE(al.created_at) = CURRENT_DATE`
     );
 
     const [userStats] = await db.query(
       `SELECT COALESCE(al.staff_name, u.full_name, u.email) AS user_name, u.role, COUNT(*) as count
        FROM audit_logs al
        LEFT JOIN users u ON al.user_id = u.id
-       WHERE al.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+       WHERE al.created_at >= ${daysAgo(30)}
        GROUP BY COALESCE(al.staff_name, u.full_name, u.email), u.role
        ORDER BY count DESC
        LIMIT 10`

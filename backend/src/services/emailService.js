@@ -14,28 +14,56 @@ const transporter = nodemailer.createTransport({
 });
 
 function isEmailConfigured() {
-  return Boolean(
-    process.env.EMAIL_HOST &&
-    process.env.EMAIL_USER &&
-    process.env.EMAIL_PASS
-  );
+  const pass = (process.env.EMAIL_PASS || '').replace(/\s/g, '');
+  const norm = pass.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const placeholderTokens = [
+    'yourapppassword',
+    'yourpassword',
+    'youremail',
+    'yourapikey',
+    'apppassword',
+    'changeme',
+    'changethis',
+    'placeholder',
+    'replace',
+    'example',
+    'xxxx',
+  ];
+  const looksPlaceholder =
+    norm.length === 0 || placeholderTokens.some((t) => norm.includes(t));
+  return Boolean(process.env.EMAIL_HOST && process.env.EMAIL_USER) && !looksPlaceholder;
 }
 
 async function sendMail({ to, subject, text, html }) {
   if (!isEmailConfigured()) {
-    console.warn(`Email config is missing. Skipping email to ${to}: ${subject}`);
+    console.warn(`Email config is missing or still a placeholder. Skipping email to ${to}: ${subject}`);
     return false;
   }
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM || 'no-reply@cityvet.com',
-    to,
-    subject,
-    text,
-    html,
-  });
-
-  return true;
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || 'no-reply@cityvet.com',
+      to,
+      subject,
+      text,
+      html,
+    });
+    return true;
+  } catch (error) {
+    const code = error && (error.code || error.responseCode);
+    console.warn(
+      `Email send failed for ${to} (${subject})` +
+        (code ? ` [${code}]` : '') +
+        ': ' +
+        (error && error.message)
+    );
+    if (code === 'EAUTH' || code === '535') {
+      console.warn(
+        'SMTP rejected the credentials. If the Gmail app password was revoked or rotated, update EMAIL_PASS in backend/.env and restart the backend.'
+      );
+    }
+    throw error;
+  }
 }
 
 async function sendResetCodeEmail(email, code, resetUrl) {

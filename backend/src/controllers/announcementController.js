@@ -250,7 +250,7 @@ async function updateAnnouncement(req, res) {
       `UPDATE announcements
        SET title = ?, message = ?, image = ?, audience = ?,
            scheduled_at = ?, is_sent = ?,
-           sent_at = IF(?, NULL, IFNULL(sent_at, NOW()))
+           sent_at = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(sent_at, NOW()) END
        WHERE id = ?`,
       [
         title,

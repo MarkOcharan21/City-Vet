@@ -1,23 +1,23 @@
-// seedKaizenRecords.js — consultation + medicine (prescription) demo records
+﻿// seedKaizenRecords.js â€” consultation + medicine (prescription) demo records
 // for owner "Kaizen Brix S. Trinidad" so his owner portal (Consultation &
 // Medicine Records, dashboard activity, due/follow-up summaries) has data.
 //
 // Run:  node src/utils/seedKaizenRecords.js
 //
 // Two phases, each idempotent (safe to run more than once):
-//   Phase 1 — recent records → show up under "Active Medications"
+//   Phase 1 â€” recent records â†’ show up under "Active Medications"
 //             (skipped if the owner already has any prescription)
-//   Phase 2 — older records (> 60 days) → populate "Medication History"
+//   Phase 2 â€” older records (> 60 days) â†’ populate "Medication History"
 //             (skipped if the owner already has a prescription older than 60 days)
-//   Phase 3 — Digital Pet Booklet completeness: every section of the booklet
+//   Phase 3 â€” Digital Pet Booklet completeness: every section of the booklet
 //             (Pet Profile, Vaccinations, Medical History, Medications,
 //             Preventive Care, Procedures, Emergency) is filled with distinct,
-//             non-empty records so no "—" placeholder ever renders.
+//             non-empty records so no "â€”" placeholder ever renders.
 //             Skips work already done (idempotent).
-//   Phase 4 — Payment records (Paid + Verified) for every pet so
-//             "Payment Status / latest payment" reads never show "—".
+//   Phase 4 â€” Payment records (Paid + Verified) for every pet so
+//             "Payment Status / latest payment" reads never show "â€”".
 //             Skips any pet that already has a payment (idempotent).
-//   Phase 5 — Record requests covering every request type (all Pending)
+//   Phase 5 â€” Record requests covering every request type (all Pending)
 //             so the staff "Issue Requested Records" page can render and
 //             print each type-specific document format.
 //             Skips any pet+type pair already requested (idempotent).
@@ -213,7 +213,7 @@ async function seed() {
        JOIN consultation_records cr ON pr.consultation_id = cr.id
        JOIN pets p ON cr.pet_id = p.id
        JOIN pet_owners po ON p.pet_owner_id = po.id
-       WHERE po.id = ? AND pr.prescribed_date < DATE_SUB(CURDATE(), INTERVAL ? DAY)`,
+       WHERE po.id = ? AND pr.prescribed_date < CURRENT_DATE - ?`,
       [owner.owner_id, ACTIVE_WINDOW_DAYS]
     );
 
@@ -276,7 +276,7 @@ async function seed() {
     }
 
     // ======================================================
-    // Phase 3 — Digital Pet Booklet completeness
+    // Phase 3 â€” Digital Pet Booklet completeness
     // ======================================================
     const COMPLAINT_BY_DIAGNOSIS = [
       { match: "Tick fever", complaint: "Fever, lethargy and reduced appetite" },
@@ -325,7 +325,7 @@ async function seed() {
 
     const petId = (name) => pets.find((p) => p.name.toLowerCase() === name.toLowerCase())?.id;
 
-    // 3a. Medical History — every consultation needs a complaint.
+    // 3a. Medical History â€” every consultation needs a complaint.
     const [conDocs] = await db.query(
       `SELECT c.id, c.diagnosis
        FROM consultation_records c
@@ -344,7 +344,7 @@ async function seed() {
       );
     }
 
-    // 3b. Vaccination Record — fill missing remarks / next-due dates.
+    // 3b. Vaccination Record â€” fill missing remarks / next-due dates.
     // NOTE: vaccination_records.id is unreliable in this DB (every row is 0),
     // so updates key on pet_id + vaccine_id instead of id.
     const [vacDocs] = await db.query(
@@ -363,19 +363,19 @@ async function seed() {
         [VACCINATION_NOTES[row.vaccine_name] || "Vaccination administered at the City Veterinary Clinic.", row.pet_id, row.vaccine_id]
       );
     }
-    // Registration-fee pseudo-row has no next due date → set a one-year date so
-    // the booklet's "Next Due" column never renders "—".
+    // Registration-fee pseudo-row has no next due date â†’ set a one-year date so
+    // the booklet's "Next Due" column never renders "â€”".
     await conn.query(
       `UPDATE vaccination_records v
        JOIN vaccines vac ON v.vaccine_id = vac.id
        JOIN pets p ON v.pet_id = p.id
        JOIN pet_owners po ON p.pet_owner_id = po.id
-       SET v.next_due_date = DATE_ADD(v.date_administered, INTERVAL 365 DAY), v.status = 'Updated'
+       SET v.next_due_date = v.date_administered + 365, v.status = 'Updated'
        WHERE po.id = ? AND vac.id = 0 AND v.next_due_date IS NULL`,
       [owner.owner_id]
     );
 
-    // 3c. Molly has no vaccination record yet → seed her first puppy dose.
+    // 3c. Molly has no vaccination record yet â†’ seed her first puppy dose.
     const mollyId = petId("Molly");
     if (mollyId) {
       const [[{ mollyVax }]] = await db.query(
@@ -394,7 +394,7 @@ async function seed() {
       }
     }
 
-    // 3d. Preventive care — seed one distinct record per pet that has none.
+    // 3d. Preventive care â€” seed one distinct record per pet that has none.
     for (const [petName, pc] of Object.entries(PREVENTIVE_BY_PET)) {
       const pid = petId(petName);
       if (!pid) continue;
@@ -412,7 +412,7 @@ async function seed() {
       }
     }
 
-    // 3e. Procedures — seed one distinct procedure per pet that has none.
+    // 3e. Procedures â€” seed one distinct procedure per pet that has none.
     for (const proc of PROCEDURES_BY_PET) {
       const pid = petId(proc.pet);
       if (!pid) continue;
@@ -430,7 +430,7 @@ async function seed() {
       }
     }
 
-    // 3f. Emergency info — fill the per-pet medical flags left as NULL.
+    // 3f. Emergency info â€” fill the per-pet medical flags left as NULL.
     for (const [petName, e] of Object.entries(EMERGENCY_BY_PET)) {
       const pid = petId(petName);
       if (!pid) continue;
@@ -464,11 +464,11 @@ async function seed() {
     );
 
     // ======================================================
-    // Phase 4 — Payment status for every pet.
-    // Owner "Payment Status" / "Payment" reads show "—" when the
+    // Phase 4 â€” Payment status for every pet.
+    // Owner "Payment Status" / "Payment" reads show "â€”" when the
     // latest payment subquery runs against an empty payments table.
     // Seed one Paid + Verified payment per pet (skipped if the pet
-    // already has any payment row — idempotent).
+    // already has any payment row â€” idempotent).
     // ======================================================
     const PAYMENTS_BY_PET = {
       Choco:   { type_id: 1, or_number: "OR-2026-0903-0001", amount: 250.00, payment_date: "2026-09-03 08:30:00" },
@@ -503,11 +503,11 @@ async function seed() {
           pay.payment_date,
         ]
       );
-      console.log(`  seeded payment (${pay.or_number}, ₱${pay.amount.toFixed(2)}) for ${petName}.`);
+      console.log(`  seeded payment (${pay.or_number}, â‚±${pay.amount.toFixed(2)}) for ${petName}.`);
     }
 
     // ======================================================
-    // Phase 5 — one record request per request type (all Pending).
+    // Phase 5 â€” one record request per request type (all Pending).
     // ======================================================
     const REQUEST_SEEDS = [
       { pet: "Choco", type: "Vaccination Card", purpose: "Travel requirement for pet taxi", format: "PDF", comments: "Certified copy of the 5-in-1 vaccination record." },

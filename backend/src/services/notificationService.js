@@ -1,5 +1,9 @@
-const db = require("../config/db");
+﻿const db = require("../config/db");
 const { sendNotificationEmail } = require("./emailService");
+
+// Schema/table holding the connection's own objects. PostgreSQL defaults to
+// "public"; MySQL ignores this and always resolves the current database.
+const currentSchema = () => (db.dialect === 'postgres' ? 'public' : process.env.DB_NAME);
 
 let linkColumnChecked = false;
 let hasLinkColumn = false;
@@ -20,9 +24,20 @@ async function ensureLinkColumnSupport() {
   if (linkColumnChecked) return hasLinkColumn;
 
   try {
-    const [columns] = await db.query("SHOW COLUMNS FROM notifications LIKE 'link'");
-    hasLinkColumn = columns.length > 0;
-  } catch {
+    // information_schema works on both engines, so the MySQL-only
+    // SHOW COLUMNS ... LIKE introspection is not needed here.
+    const [rows] = await db.query(
+      `SELECT 1 AS found
+         FROM information_schema.columns
+        WHERE table_schema = ? AND table_name = 'notifications' AND column_name = 'link'
+        LIMIT 1`,
+      [currentSchema()]
+    );
+    hasLinkColumn = rows.length > 0;
+  } catch (err) {
+    // A failed probe must not break notifications, but it should be visible:
+    // silently dropping the link column would look like data loss.
+    console.warn('Could not detect notifications.link column:', err.message);
     hasLinkColumn = false;
   }
 
@@ -82,7 +97,7 @@ async function createNotification(
   if (!force) {
     const [existing] = await db.query(
       `SELECT id FROM notifications
-       WHERE user_id = ? AND title = ? AND DATE(created_at) = CURDATE()
+       WHERE user_id = ? AND title = ? AND DATE(created_at) = CURRENT_DATE
        LIMIT 1`,
       [userId, title]
     );

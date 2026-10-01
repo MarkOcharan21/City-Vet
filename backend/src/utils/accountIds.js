@@ -1,4 +1,5 @@
 const db = require("../config/db");
+const { lastSegment, toInt } = require("../config/sql");
 
 const ROLE_PREFIXES = {
   Staff: "STF",
@@ -16,7 +17,7 @@ async function nextAccountId(role) {
   const year = new Date().getFullYear();
 
   const [[{ maxSeq }]] = await db.query(
-    `SELECT COALESCE(MAX(CAST(SUBSTRING_INDEX(account_id, '-', -1) AS UNSIGNED)), 0) AS maxSeq
+    `SELECT COALESCE(MAX(${toInt(lastSegment("account_id", "-"))}), 0) AS maxSeq
      FROM users
      WHERE account_id LIKE ?`,
     [`${prefix}-${year}-%`]

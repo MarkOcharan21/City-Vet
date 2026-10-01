@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const db = require('../config/db');
+const { toText } = require('../config/sql');
 const {
   trim,
   validationError,
@@ -25,7 +26,7 @@ function resolveFrontendUrl(req) {
 async function getAllUsers(req, res) {
   try {
     const [rows] = await db.query(
-      `SELECT u.id, u.email, COALESCE(u.account_id, CONCAT('ACC-', LPAD(u.id, 6, '0'))) AS account_id, u.role AS role_name, u.status, u.full_name,
+      `SELECT u.id, u.email, COALESCE(u.account_id, CONCAT('ACC-', LPAD(${toText('u.id')}, 6, '0'))) AS account_id, u.role AS role_name, u.status, u.full_name,
               u.created_at, COALESCE(u.last_login, u.created_at) AS last_login
        FROM users u
        LEFT JOIN pet_owners po ON po.user_id = u.id

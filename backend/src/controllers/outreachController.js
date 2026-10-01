@@ -1,4 +1,5 @@
 const db = require("../config/db");
+const { sumBool } = require("../config/sql");
 const { generateOutreachQr, generateQrToken } = require("../utils/outreachQrGenerator");
 const { logAudit } = require("../middleware/auditMiddleware");
 
@@ -32,7 +33,7 @@ async function getPrograms(req, res) {
       SELECT
         op.*,
         COUNT(ot.id) AS total_transactions,
-        SUM(ot.status = 'Verified') AS verified_transactions,
+        ${sumBool("ot.status = 'Verified'")} AS verified_transactions,
         COALESCE(SUM(CASE WHEN ot.status='Verified' THEN ot.total_amount ELSE 0 END), 0) AS verified_amount
       FROM outreach_programs op
       LEFT JOIN outreach_transactions ot ON ot.outreach_id = op.id
@@ -258,10 +259,10 @@ async function buildProgramSummary(outreachId) {
   const [rows] = await db.query(
     `SELECT
        COUNT(*) AS total,
-       COALESCE(SUM(ot.status='Pending'),0) AS pending,
-       COALESCE(SUM(ot.status='Submitted'),0) AS submitted,
-       COALESCE(SUM(ot.status='Verified'),0) AS verified,
-       COALESCE(SUM(ot.status='Rejected'),0) AS rejected,
+       COALESCE(${sumBool("ot.status = 'Pending'")},0) AS pending,
+       COALESCE(${sumBool("ot.status = 'Submitted'")},0) AS submitted,
+       COALESCE(${sumBool("ot.status = 'Verified'")},0) AS verified,
+       COALESCE(${sumBool("ot.status = 'Rejected'")},0) AS rejected,
        COALESCE(SUM(ot.total_amount),0) AS totalAmount,
        COALESCE(SUM(CASE WHEN ot.status='Verified' THEN ot.total_amount ELSE 0 END),0) AS verifiedAmount,
        COUNT(DISTINCT ot.pet_owner_id) AS linkedOwners,
@@ -275,7 +276,7 @@ async function buildProgramSummary(outreachId) {
     `SELECT
        ot.barangay,
        COUNT(*) AS total,
-       COALESCE(SUM(ot.status='Verified'),0) AS verified,
+       COALESCE(${sumBool("ot.status = 'Verified'")},0) AS verified,
        COALESCE(SUM(ot.total_amount),0) AS amount
      FROM outreach_transactions ot ${where}
      GROUP BY ot.barangay

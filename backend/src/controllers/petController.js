@@ -1,4 +1,5 @@
-const db = require("../config/db");
+﻿const db = require("../config/db");
+const { nullSafeEq } = require("../config/sql");
 const path = require("path");
 const {
   RegistrationError,
@@ -110,7 +111,7 @@ async function reportLost(req, res) {
       entity_id: id,
       old_value,
       new_value: { is_lost: 1, last_seen: last_seen || null, reward: reward || null },
-      description: `Pet "${pet.name}" reported lost${reward ? ` with reward ₱${reward}` : ''}`
+      description: `Pet "${pet.name}" reported lost${reward ? ` with reward â‚±${reward}` : ''}`
     });
   } catch (error) {
     res.status(500).json({ success: false, message: "Unable to report lost pet.", error: error.message });
@@ -323,12 +324,12 @@ async function getMyPets(req, res) {
               (SELECT COUNT(*) FROM vaccination_records vr
                  WHERE vr.pet_id = p.id
                    AND vr.next_due_date IS NOT NULL
-                   AND vr.next_due_date < CURDATE()
+                   AND vr.next_due_date < CURRENT_DATE
               ) AS overdue_vaccinations,
               (SELECT COUNT(*) FROM vaccination_records vr
                  WHERE vr.pet_id = p.id
                    AND vr.next_due_date IS NOT NULL
-                   AND vr.next_due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+                   AND vr.next_due_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 7
               ) AS due_soon_vaccinations,
               (SELECT payment_status FROM payments py WHERE py.pet_id = p.id ORDER BY py.created_at DESC LIMIT 1) AS latest_payment_status,
               (SELECT validation_status FROM payments py WHERE py.pet_id = p.id ORDER BY py.created_at DESC LIMIT 1) AS latest_payment_validation
@@ -366,12 +367,12 @@ async function getPetById(req, res) {
               (SELECT COUNT(*) FROM vaccination_records vr
                  WHERE vr.pet_id = p.id
                    AND vr.next_due_date IS NOT NULL
-                   AND vr.next_due_date < CURDATE()
+                   AND vr.next_due_date < CURRENT_DATE
               ) AS overdue_vaccinations,
               (SELECT COUNT(*) FROM vaccination_records vr
                  WHERE vr.pet_id = p.id
                    AND vr.next_due_date IS NOT NULL
-                   AND vr.next_due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+                   AND vr.next_due_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 7
               ) AS due_soon_vaccinations,
               (SELECT payment_status FROM payments py WHERE py.pet_id = p.id ORDER BY py.created_at DESC LIMIT 1) AS latest_payment_status,
               (SELECT validation_status FROM payments py WHERE py.pet_id = p.id ORDER BY py.created_at DESC LIMIT 1) AS latest_payment_validation
@@ -473,7 +474,7 @@ async function updatePet(req, res) {
        WHERE pet_owner_id = ?
          AND LOWER(name) = LOWER(?)
          AND species_id = ?
-         AND birthdate <=> ?
+         AND ${nullSafeEq('birthdate', '?')}
          AND id != ?`,
       [pet.pet_owner_id, name.trim(), species_id, birthdate || null, id],
     );
@@ -561,7 +562,7 @@ async function updatePet(req, res) {
 }
 
 // GET /api/pets/search  (Staff/Admin/Vet - lightweight, server-side pet search for pickers)
-// Never loads the full pet table — returns only the top matches so it scales to
+// Never loads the full pet table â€” returns only the top matches so it scales to
 // hundreds of thousands of registrations.
 async function searchPets(req, res) {
   const { q, barangay, status } = req.query;
@@ -682,7 +683,7 @@ async function getAllPets(req, res) {
     const params = [];
 
     if (search) {
-      // pet_code is searchable too — staff/vets look patients up by the ID
+      // pet_code is searchable too â€” staff/vets look patients up by the ID
       // printed on the physical record, booklet, and QR code.
       query +=
         " AND (p.name LIKE ? OR p.pet_code LIKE ? OR po.full_name LIKE ? OR b.breed_name LIKE ? OR p.breed_custom LIKE ?)";
@@ -823,7 +824,7 @@ async function deletePet(req, res) {
   const { id } = req.params;
 
   try {
-    // Check pet exists — use LEFT JOIN so id=0 in pet_owners doesn't block lookup
+    // Check pet exists â€” use LEFT JOIN so id=0 in pet_owners doesn't block lookup
     const [[pet]] = await db.query(
       `SELECT p.name, po.user_id FROM pets p
        LEFT JOIN pet_owners po ON p.pet_owner_id = po.id
@@ -840,16 +841,16 @@ async function deletePet(req, res) {
       return res.status(403).json({ success: false, message: 'You can only delete your own pet.' });
     }
 
-    // Disable FK checks, delete everything, re-enable
-    await db.query('SET FOREIGN_KEY_CHECKS = 0');
-    await db.query('DELETE FROM prescriptions WHERE consultation_id IN (SELECT id FROM consultation_records WHERE pet_id = ?)', [id]);
-    await db.query('DELETE FROM consultation_records WHERE pet_id = ?', [id]);
-    await db.query('DELETE FROM vaccination_records WHERE pet_id = ?', [id]);
-    await db.query('DELETE FROM payments WHERE pet_id = ?', [id]);
-    await db.query('DELETE FROM qr_codes WHERE pet_id = ?', [id]);
-    await db.query('DELETE FROM record_requests WHERE pet_id = ?', [id]);
-    await db.query('DELETE FROM pets WHERE id = ?', [id]);
-    await db.query('SET FOREIGN_KEY_CHECKS = 1');
+// MySQL's SET FOREIGN_KEY_CHECKS has no PostgreSQL equivalent. The FKs were
+      // created ON DELETE CASCADE, so removing the pet removes its dependents;
+      // the explicit deletes below only cover rows that are not cascaded.
+      await db.query('DELETE FROM prescriptions WHERE consultation_id IN (SELECT id FROM consultation_records WHERE pet_id = ?)', [id]);
+      await db.query('DELETE FROM consultation_records WHERE pet_id = ?', [id]);
+      await db.query('DELETE FROM vaccination_records WHERE pet_id = ?', [id]);
+      await db.query('DELETE FROM payments WHERE pet_id = ?', [id]);
+      await db.query('DELETE FROM qr_codes WHERE pet_id = ?', [id]);
+      await db.query('DELETE FROM record_requests WHERE pet_id = ?', [id]);
+      await db.query('DELETE FROM pets WHERE id = ?', [id]);
 
     // Notify the owner
     try {
@@ -878,7 +879,6 @@ async function deletePet(req, res) {
       description: `Deleted pet registration "${pet.name}"`
     });
   } catch (error) {
-    await db.query('SET FOREIGN_KEY_CHECKS = 1').catch(() => {});
     console.error('Delete pet error:', error);
     res.status(500).json({ success: false, message: 'Failed to delete pet registration.', error: error.message });
   }

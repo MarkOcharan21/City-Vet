@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: city-vet-system
+    runtime: node
+    plan: free
+    buildCommand: |
+      cd backend && npm install --omit=dev
+      cd ../frontend && npm install && npm run build
+      rm -rf ../backend/public && cp -r dist ../backend/public
+    startCommand: cd backend && node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL_POOLER
+        sync: false
+      - key: DB_TYPE
+        value: postgres
+      - key: DB_SSL
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_SECURE
+        value: "false"
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false

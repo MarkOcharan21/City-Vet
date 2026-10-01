@@ -121,12 +121,9 @@ app.use(
 
 app.use(express.static(path.join(__dirname, "public")));
 
-app.get("*", (req, res) => {
-  if (req.path.startsWith("/api/")) {
-    return res.status(404).json({ message: "API route not found" });
-  }
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+// NOTE: the SPA fallback lives at the very bottom of this file, after every API
+// route is mounted. A catch-all `app.get("*")` placed up here would swallow
+// every subsequent GET /api/... request and answer 404 before the routers run.
 
 app.get("/qr/:token", (req, res) => {
   const frontendOrigin = (process.env.FRONTEND_URL || "http://localhost:5178").replace(/\/$/, "");
@@ -203,7 +200,21 @@ app.use("/api/audit", auditRoutes);
 app.use("/api/owner", ownerProfileRoutes);
 
 // ===================================
-// MySQL Connection
+// SPA fallback (must stay last)
+// ===================================
+// Serves the built frontend for client-side routes. Registered after every API
+// router on purpose: as a catch-all it intercepts any GET that no router above
+// claimed, so putting it earlier would return index.html (or a 404) for real
+// API endpoints instead of letting them 404 properly.
+app.get("*", (req, res) => {
+  if (req.path.startsWith("/api/")) {
+    return res.status(404).json({ message: "API route not found" });
+  }
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// ===================================
+// Database Connection
 // ===================================
 
 (async () => {
@@ -212,13 +223,13 @@ app.use("/api/owner", ownerProfileRoutes);
 
         const connection = await db.getConnection();
 
-        console.log("✅ Connected to MySQL.");
+        console.log(`✅ Connected to ${db.dialect === 'postgres' ? 'PostgreSQL (Supabase)' : 'MySQL'}.`);
 
         connection.release();
 
     } catch (err) {
 
-        console.error("❌ Failed to connect to MySQL.");
+        console.error(`❌ Failed to connect to ${db.dialect === 'postgres' ? 'PostgreSQL (Supabase)' : 'MySQL'}.`);
 
         console.error("Error details:", err.message);
 
@@ -297,31 +308,42 @@ io.on("connection", (socket) => {
 
 // Start schedulers after database is ready
 async function startSchedulers() {
-  await ensureResetColumns();
-  await ensureVerifyColumns();
-  await ensureUserIdentityColumns();
-  await ensureStatusColumn();
-  await ensureAccountColumns();
-  await ensureStaffNameColumn();
-  await ensureAnnouncementColumns();
-  await ensureNotificationTypes();
-  await ensureRecordRequestsAutoIncrement();
-  await ensureRecordRequestCommentsColumn();
-  await ensureDraftAutoIncrement();
-  await ensureMedicinesAutoIncrement();
-  await ensureConsultationRecordsAutoIncrement();
-  await ensurePrescriptionsAutoIncrement();
-  await ensurePrescriptionItemsAutoIncrement();
-  await ensureMedicineDosingColumns();
-  await ensureDefaultMedicines();
-  await ensureConditionRegimens();
-  await ensureTableAutoIncrement('payments');
-  await ensureConsultationBatchesTable();
-  await ensureClinicQueueTable();
-  await ensurePaymentMonitoringTable();
-  await ensureCatalogTable();
-  await ensureConsultationPaymentSchema();
-  await ensureOutreachTables();
+  // The ensure*() helpers below are legacy MySQL-schema bootstrap guards
+  // written in MySQL DDL (ALTER ... MODIFY, SHOW COLUMNS, CREATE TABLE (...),
+  // DATABASE()). They are no-ops on a healthy schema either way.
+  //
+  // On PostgreSQL they are skipped outright rather than translated: the PG
+  // schema is authoritative and was built from MySQL's SHOW CREATE TABLE, and
+  // verified column-for-column (38 tables / 360 columns, nullability included)
+  // by _diff_schema.cjs. Translating 25 DDL helpers would add moving parts
+  // without changing the outcome.
+  if (db.dialect !== 'postgres') {
+    await ensureResetColumns();
+    await ensureVerifyColumns();
+    await ensureUserIdentityColumns();
+    await ensureStatusColumn();
+    await ensureAccountColumns();
+    await ensureStaffNameColumn();
+    await ensureAnnouncementColumns();
+    await ensureNotificationTypes();
+    await ensureRecordRequestsAutoIncrement();
+    await ensureRecordRequestCommentsColumn();
+    await ensureDraftAutoIncrement();
+    await ensureMedicinesAutoIncrement();
+    await ensureConsultationRecordsAutoIncrement();
+    await ensurePrescriptionsAutoIncrement();
+    await ensurePrescriptionItemsAutoIncrement();
+    await ensureMedicineDosingColumns();
+    await ensureDefaultMedicines();
+    await ensureConditionRegimens();
+    await ensureTableAutoIncrement('payments');
+    await ensureConsultationBatchesTable();
+    await ensureClinicQueueTable();
+    await ensurePaymentMonitoringTable();
+    await ensureCatalogTable();
+    await ensureConsultationPaymentSchema();
+    await ensureOutreachTables();
+  }
 
   startNotificationScheduler();
   startAnnouncementScheduler();

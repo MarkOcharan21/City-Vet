@@ -1,58 +1,101 @@
 const mysql = require('mysql2');
+const { Pool } = require('pg');
+const { createExecutor } = require('./pgCompat');
 require('dotenv').config();
 
-// Support BOTH Railway/Render-style DATABASE_URL (mysql://user:pass@host:port/db)
-// and the classic individual DB_* env vars used locally on XAMPP.
-function configFromDatabaseUrl(url) {
-  if (!url || !url.startsWith('mysql://')) return null;
-  try {
-    const u = new URL(url);
-    return {
-      host: u.hostname,
-      port: u.port ? Number(u.port) : 3306,
-      user: decodeURIComponent(u.username),
-      password: decodeURIComponent(u.password),
-      database: decodeURIComponent(u.pathname.replace(/^\//, '')),
-      ssl: undefined,
-    };
-  } catch (err) {
-    console.error('[db] invalid DATABASE_URL:', err.message);
-    return null;
-  }
+/**
+ * Driver selection
+ * ----------------
+ *   DATABASE_URL / DATABASE_URL_POOLER = postgresql://...  -> PostgreSQL (Supabase)
+ *   otherwise, or DB_TYPE=postgres                           -> PostgreSQL
+ *   DB_TYPE=mysql                                            -> MySQL (fallback)
+ *
+ * Supabase's direct host (db.<ref>.supabase.co) is IPv6-only, so DATABASE_URL_POOLER
+ * points at Supavisor (aws-0-<region>.pooler.supabase.com:5432). Port 5432 is
+ * required rather than 6543: this app uses real multi-statement transactions
+ * via getConnection(), which transaction-mode pooling cannot support.
+ *
+ * MySQL stays fully supported. Switch back by unsetting DATABASE_URL_POOLER /
+ * DATABASE_URL and setting DB_TYPE=mysql.
+ */
+
+function resolveUrl() {
+  return process.env.DATABASE_URL_POOLER || process.env.DATABASE_URL || process.env.MYSQL_URL;
 }
 
-const fromUrl = configFromDatabaseUrl(process.env.DATABASE_URL || process.env.MYSQL_URL);
+function isPostgresUrl(url) {
+  return typeof url === 'string' && /^postgres(ql)?:\/\//i.test(url);
+}
 
-// Some shared/external hosts (e.g. FreeSQLDatabase) cap concurrent
-// connections tightly, so the pool size is configurable. Default to 10 for
-// self-hosted XAMPP/MySQL, but allow operators to drop it (DB_POOL_LIMIT=3)
-// on shared plans.
-const poolLimit = Number(process.env.DB_POOL_LIMIT) || (fromUrl ? 5 : 10);
+const url = resolveUrl();
+const isPostgres =
+  isPostgresUrl(url) || (process.env.DB_TYPE || '').toLowerCase() === 'postgres';
 
-// Do NOT force SSL unless the host actually supports it. FreeSQLDatabase does
-// NOT offer TLS, so DB_SSL must stay false/empty there — otherwise every pool
-// connect fails with "Server does not support secure connection" (and repeated
-// failures get the client host blocked by max_connect_errors).
-const sslOpt = process.env.DB_SSL === 'true' || process.env.DB_SSL === '1'
-  ? { ssl: { rejectUnauthorized: false } }
-  : {};
+if (isPostgres) {
+  if (!isPostgresUrl(url)) {
+    throw new Error(
+      `[db] DB_TYPE=postgres but no postgresql:// URL found (DATABASE_URL_POOLER / DATABASE_URL). Current value: ${url}`
+    );
+  }
 
-const pool = mysql.createPool({
-  ...(fromUrl || {
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-  }),
-  ...sslOpt,
-  waitForConnections: true,
-  connectionLimit: poolLimit,
-  queueLimit: 0,
-  // Keeps dead pooled connections from lingering during shared-host hiccups.
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 10000,
-});
+  const pool = new Pool({
+    connectionString: url,
+    ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false },
+    max: Number(process.env.DB_POOL_LIMIT) || 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 30000,
+  });
 
-const promisePool = pool.promise();
+  // a pool-level error must not take the process down
+  pool.on('error', (err) => {
+    console.error('[db] idle client error:', err.message);
+  });
 
-module.exports = promisePool;
+  const exec = createExecutor(pool);
+  exec.dialect = 'postgres';
+  module.exports = exec;
+} else {
+  function configFromDatabaseUrl(raw) {
+    if (!raw || !raw.startsWith('mysql://')) return null;
+    try {
+      const u = new URL(raw);
+      return {
+        host: u.hostname,
+        port: u.port ? Number(u.port) : 3306,
+        user: decodeURIComponent(u.username),
+        password: decodeURIComponent(u.password),
+        database: decodeURIComponent(u.pathname.replace(/^\//, '')),
+        ssl: undefined,
+      };
+    } catch (err) {
+      console.error('[db] invalid database URL:', err.message);
+      return null;
+    }
+  }
+
+  const fromUrl = configFromDatabaseUrl(url);
+  const poolLimit = Number(process.env.DB_POOL_LIMIT) || (fromUrl ? 5 : 10);
+  const sslOpt =
+    process.env.DB_SSL === 'true' || process.env.DB_SSL === '1'
+      ? { ssl: { rejectUnauthorized: false } }
+      : {};
+
+  const pool = mysql.createPool({
+    ...(fromUrl || {
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+    }),
+    ...sslOpt,
+    waitForConnections: true,
+    connectionLimit: poolLimit,
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000,
+  });
+
+  const promisePool = pool.promise();
+  promisePool.dialect = 'mysql';
+  module.exports = promisePool;
+}

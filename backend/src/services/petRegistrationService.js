@@ -1,4 +1,5 @@
 const db = require("../config/db");
+const { nullSafeEq } = require("../config/sql");
 const { createNotification, notifyUsersByRoles } = require("./notificationService");
 const { validatePetRegistration, PET_SEX_VALUES } = require("../utils/validation");
 
@@ -58,7 +59,7 @@ async function registerPetForOwner(userId, formData) {
      WHERE pet_owner_id = ?
        AND LOWER(name) = LOWER(?)
        AND species_id = ?
-       AND birthdate <=> ?`,
+       AND ${nullSafeEq('birthdate', '?')}`,
     [petOwnerId, name.trim(), species_id, birthdate || null],
   );
 
@@ -112,20 +113,26 @@ async function registerPetForOwner(userId, formData) {
     [petOwnerId],
   );
 
+  // force=true: every registration must notify, even if the same owner (or
+  // staff) already has a "Pet Registration" / "New Pet Registration" entry
+  // earlier today — otherwise a second registration in the same day is
+  // silently dropped by the per-day dedupe in createNotification.
   await createNotification(
     owner.user_id,
     "Pet Registration",
-    `${name.trim()} has been successfully registered.`,
+    `${name.trim()} (${petCode}) has been submitted and is awaiting verification.`,
     "Registration",
-    false,
+    true,
     "my-pets"
   );
 
   await notifyUsersByRoles(
     ["Staff", "Veterinarian", "Admin"],
     "New Pet Registration",
-    `${owner.full_name}'s pet ${name.trim()} is awaiting verification.`,
-    "Registration"
+    `${owner.full_name}'s pet ${name.trim()} (${petCode}) is awaiting verification.`,
+    "Registration",
+    null,
+    true
   );
 
   return {

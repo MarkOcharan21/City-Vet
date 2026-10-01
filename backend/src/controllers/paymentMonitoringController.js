@@ -342,7 +342,7 @@ async function getConsultationPaymentSummary(req, res) {
     const [[today]] = await db.query(
       `SELECT COUNT(*) AS count
        ${NORMALIZED_PAYMENT_FROM}
-       WHERE ${filters.where} AND DATE(pm.created_at) = CURDATE()`,
+       WHERE ${filters.where} AND DATE(pm.created_at) = CURRENT_DATE`,
       filters.params,
     );
     const byStatus = statusRows.map((row) => ({

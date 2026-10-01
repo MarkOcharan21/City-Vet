@@ -1,4 +1,5 @@
-const db = require("../config/db");
+﻿const db = require("../config/db");
+const { dateFormat, timeOfDay } = require("../config/sql");
 
 // =========================================
 // OWNER PAYMENT HISTORY
@@ -49,8 +50,8 @@ async function fetchClinicRecords(ownerId, filters = {}) {
        pm.payment_reference,
        COALESCE(pm.payment_status, 'Unpaid') AS payment_status,
        COALESCE(pm.total_amount, 0) AS amount,
-       DATE_FORMAT(${paymentDate}, '%Y-%m-%d') AS payment_date,
-       TIME(pm.created_at) AS payment_time,
+       ${dateFormat(paymentDate, "date")} AS payment_date,
+       ${timeOfDay("pm.created_at")} AS payment_time,
        COALESCE(pm.remarks, 'Consultation charges') AS description,
        pm.payment_items,
        pm.payment_type,
@@ -106,11 +107,11 @@ async function fetchOutreachRecords(ownerName, filters = {}) {
        ot.total_amount,
        ot.status,
        ot.rejection_reason,
-       DATE_FORMAT(ot.service_date, '%Y-%m-%d') AS service_date,
-       DATE_FORMAT(ot.service_time, '%H:%i:%s') AS service_time,
-       DATE_FORMAT(ot.submitted_at, '%Y-%m-%d %H:%i:%s') AS submitted_at,
-       DATE_FORMAT(ot.verified_at, '%Y-%m-%d %H:%i:%s') AS verified_at,
-       DATE_FORMAT(ot.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+       ${dateFormat("ot.service_date", "date")} AS service_date,
+       ${dateFormat("ot.service_time", "time")} AS service_time,
+       ${dateFormat("ot.submitted_at", "datetime")} AS submitted_at,
+       ${dateFormat("ot.verified_at", "datetime")} AS verified_at,
+       ${dateFormat("ot.created_at", "datetime")} AS created_at,
        CONCAT(op.program_name) AS program_name
      FROM outreach_transactions ot
      LEFT JOIN outreach_programs op ON op.id = ot.outreach_id

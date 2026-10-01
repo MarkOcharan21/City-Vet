@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+﻿const crypto = require('crypto');
 const db = require('../config/db');
 const { notifyUsersByRoles } = require('../services/notificationService');
 const { logAudit } = require('../middleware/auditMiddleware');
@@ -440,11 +440,11 @@ async function listEntries(req, res) {
     conditions.push('q.status = ?');
     params.push(requestedStatus);
   } else if (requestedStatus) {
-    conditions.push('DATE(q.checked_in_at) = CURDATE()');
+    conditions.push('DATE(q.checked_in_at) = CURRENT_DATE');
     conditions.push('q.status = ?');
     params.push(requestedStatus);
   } else {
-    conditions.push('(DATE(q.checked_in_at) = CURDATE() OR q.status IN (?, ?))');
+    conditions.push('(DATE(q.checked_in_at) = CURRENT_DATE OR q.status IN (?, ?))');
     params.push(...ACTIVE_STATUSES);
   }
 
@@ -601,7 +601,7 @@ async function updateStatus(req, res) {
     transactionStarted = true;
 
     const [currentRows] = await connection.query(
-      `${QUEUE_SELECT} WHERE q.id = ? LIMIT 1 FOR UPDATE`,
+      `${QUEUE_SELECT} WHERE q.id = ? LIMIT 1 FOR UPDATE OF q`,
       [entryId],
     );
     current = currentRows[0] || null;

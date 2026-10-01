@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const db = require('../config/db');
+const { isPg } = require('../config/sql');
 const { createNotification, notifyUsersByRoles } = require('../services/notificationService');
 const { sendDueReminder } = require('../services/dueReminderService');
 const {
@@ -362,7 +363,7 @@ async function addClinicalRecord(req, res) {
         created = true;
       }
     } else {
-      const [existingRows] = await connection.query(`SELECT id, pet_id, consultation_date, created_at, TIMESTAMPDIFF(SECOND, created_at, NOW()) AS age_seconds FROM consultation_records WHERE pet_id = ? AND queue_id IS NULL ORDER BY id DESC LIMIT 1 FOR UPDATE`, [petId]);
+      const [existingRows] = await connection.query(`SELECT id, pet_id, consultation_date, created_at, EXTRACT(EPOCH FROM (NOW() - created_at)) AS age_seconds FROM consultation_records WHERE pet_id = ? AND queue_id IS NULL ORDER BY id DESC LIMIT 1 FOR UPDATE`, [petId]);
       const existing = existingRows[0];
       // Only replay a previous walk-in when it is plausibly the same submission:
       // same consultation date and written moments ago. A genuine follow-up visit
@@ -528,7 +529,15 @@ async function receiveMobileScanResult(req, res) {
     await db.query(
       `INSERT INTO mobile_scan_sessions (session_id, pet_data, scan_mode, created_at, updated_at)
        VALUES (?, ?, ?, NOW(), NOW())
-       ON DUPLICATE KEY UPDATE pet_data = VALUES(pet_data), scan_mode = VALUES(scan_mode), updated_at = NOW()`,
+       ${isPg()
+         ? `ON CONFLICT (session_id) DO UPDATE
+              SET pet_data = EXCLUDED.pet_data,
+                  scan_mode = EXCLUDED.scan_mode,
+                  updated_at = NOW()`
+         : `ON DUPLICATE KEY UPDATE
+              pet_data = VALUES(pet_data),
+                  scan_mode = VALUES(scan_mode),
+                  updated_at = NOW()`}`,
       [sessionId, JSON.stringify(next), scanMode]
     );
     res.json({ success: true, message: "Scan result stored.", count: next.length });

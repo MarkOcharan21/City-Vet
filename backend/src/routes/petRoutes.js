@@ -28,7 +28,7 @@ router.get('/', auth, requireRole(['Staff', 'Admin', 'Veterinarian']), getAllPet
 router.get('/search', auth, requireRole(['Staff', 'Admin', 'Veterinarian']), searchPets);
 router.get('/by-owner/:ownerId', auth, requireRole(['Staff', 'Admin', 'Veterinarian']), getPetsByOwner);
 router.get('/:id', auth, requireRole(['Owner', 'Staff', 'Admin', 'Veterinarian']), getPetById);
-router.put('/:id', auth, requireRole(["Owner", "Staff", "Admin", "Veterinarian"]), uploadPetPhoto.single("photo"), updatePet);
+router.put('/:id', auth, requireRole(["Owner", "Admin"]), uploadPetPhoto.single("photo"), updatePet);
 
 router.put(
   "/:id/health",
@@ -37,10 +37,13 @@ router.put(
   updatePetHealth
 );
 
+// Owner identity + emergency contact are owner-administered. Staff and
+// veterinarians may read them and edit clinical health notes, but must not
+// rewrite contact details — only the owner or an admin may do that.
 router.put(
   "/:id/owner-info",
   auth,
-  requireRole(["Staff", "Admin", "Veterinarian"]),
+  requireRole(["Admin"]),
   updatePetOwnerInfo
 );
 

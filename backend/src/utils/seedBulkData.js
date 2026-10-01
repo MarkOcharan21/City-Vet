@@ -28,6 +28,7 @@ const { generateQrForPet } = require("./qrGenerator");
 const { generatePaymentQR } = require("./qrHelper");
 const { generatePmToken, writeReceiptQrImage } = require("./qrReceipt");
 const { generateOutreachQr, generateQrToken } = require("./outreachQrGenerator");
+const { isPg } = require("../config/sql");
 
 const PASSWORD = "Demo1234!";
 const MARKER_EMAIL = "bulk.seed.run@cityvet.gov.ph";
@@ -615,7 +616,7 @@ async function insertPmRecord(staffId, ownerId, pet) {
   const pmToken = generatePmToken();
   const med = pt === "Medicine" ? randPick(REF.medicines) : null;
   const orTime = `${String(randInt(8, 16)).padStart(2, "0")}:${String(randInt(0, 59)).padStart(2, "0")}:00`;
-  await db.query(
+  const [pmInsert] = await db.query(
     `INSERT INTO payment_monitoring
        (or_number, or_amount, or_date, or_time, or_description, payment_items, or_photo_path,
         ocr_text, ocr_confidence, pet_owner_id, payment_type, medicine_id, medicine_quantity,
@@ -627,7 +628,7 @@ async function insertPmRecord(staffId, ownerId, pet) {
       med ? amount : null, staffId, pmToken,
     ]
   );
-  const id = (await db.query("SELECT LAST_INSERT_ID() AS id"))[0][0].id;
+  const id = pmInsert.insertId;
   try {
     const qrp = await writeReceiptQrImage(pmToken);
     await db.query("UPDATE payment_monitoring SET receipt_qr_path = ? WHERE id = ?", [qrp, id]);
@@ -780,7 +781,7 @@ async function seed() {
 
   // 3) Pets: one per new owner + extras on existing owners -------------------
   const [exRows] = await db.query(
-    "SELECT id, full_name, barangay FROM pet_owners ORDER BY RAND() LIMIT ?",
+    `SELECT id, full_name, barangay FROM pet_owners ORDER BY ${isPg() ? "RANDOM()" : "RAND()"} LIMIT ?`,
     [EXTRA_PETS]
   );
   const extraOwners = exRows.map((e) => ({
@@ -996,12 +997,12 @@ async function seed() {
   console.log(`  .. ${auditCount} audit log entries`);
 
   // 13) Marker + summary -----------------------------------------------------
-  await db.query(
-    `INSERT INTO users (email, password, role, status, full_name, created_at)
-     VALUES (?, ?, 'Admin', 'active', 'Bulk Seed Marker', NOW())
-     ON DUPLICATE KEY UPDATE email = email`,
-    [MARKER_EMAIL, nextHash()]
-  );
+await db.query(
+      `INSERT INTO users (email, password, role, status, full_name, created_at)
+       VALUES (?, ?, 'Admin', 'active', 'Bulk Seed Marker', NOW())
+       ${isPg() ? 'ON CONFLICT (email) DO NOTHING' : 'ON DUPLICATE KEY UPDATE email = email'}`,
+      [MARKER_EMAIL, nextHash()]
+    );
 
   const [[totals]] = await db.query(
     `SELECT

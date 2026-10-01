@@ -1,4 +1,4 @@
-const db = require('../config/db');
+﻿const db = require('../config/db');
 const { logAudit } = require('../middleware/auditMiddleware');
 const { vetNameExpr } = require('../utils/vetNameFormat');
 
@@ -61,7 +61,7 @@ async function getMyQrCodes(req, res) {
         (SELECT COUNT(*) FROM vaccination_records vr
            WHERE vr.pet_id = p.id
              AND vr.next_due_date IS NOT NULL
-             AND vr.next_due_date < CURDATE()
+             AND vr.next_due_date < CURRENT_DATE
         ) AS overdue_vaccinations,
         (SELECT vr.date_administered FROM vaccination_records vr
            WHERE vr.pet_id = p.id
@@ -119,7 +119,7 @@ async function getMyQrCodes(req, res) {
 
 // GET /api/qr/scan/:token  (anyone with a valid login can scan and trace a pet)
 // This is the "trigger" described in the manuscript: scanning just retrieves
-// the pet's full record — registration, vaccination, clinical, payment.
+// the pet's full record â€” registration, vaccination, clinical, payment.
 async function scanQrToken(req, res) {
   const { token } = req.params;
   try {
@@ -223,7 +223,7 @@ async function scanQrToken(req, res) {
     );
     // Consultation charges are billed into payment_monitoring. The legacy payments
     // table is no longer written by the app but still holds historical records, so
-    // the booklet reads both and merges them — otherwise every consultation charge
+    // the booklet reads both and merges them â€” otherwise every consultation charge
     // the clinic bills would be missing from the pet's booklet.
     const [payments] = await db.query(
       `
@@ -491,7 +491,7 @@ async function scanOwnerQr(req, res) {
       action: 'VIEW',
       entity_type: 'qr',
       entity_id: rows[0].pet_id,
-      description: `QR scanned to match owner "${rows[0].full_name}" — ${rows[0].pet_name} (${rows[0].pet_code})`
+      description: `QR scanned to match owner "${rows[0].full_name}" â€” ${rows[0].pet_name} (${rows[0].pet_code})`
     });
   } catch (error) {
     console.error('Scan owner QR error:', error);

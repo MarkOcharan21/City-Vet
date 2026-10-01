@@ -1,5 +1,6 @@
-const db = require("../config/db");
+﻿const db = require("../config/db");
 const { vetNameExpr } = require("../utils/vetNameFormat");
+const { dateFormat, mondayIndex } = require("../config/sql");
 
 const BARANGAY_LIST = [
   'Baclaran', 'Banay-banay', 'Banlic', 'Bigaa', 'Butong', 'Casile', 'Diezmo',
@@ -13,16 +14,20 @@ function normalizeFilter(filter) {
 }
 
 function dateWhere(column, filter) {
+    // CURRENT_DATE, EXTRACT() and `date + integer` behave the same on MySQL and
+    // PostgreSQL, so only the weekday helper needs a dialect switch.
+    // mondayIndex() is 0 for Monday .. 6 for Sunday.
+    const monday = mondayIndex();
     switch (normalizeFilter(filter)) {
         case "today":
-            return `${column} >= CURDATE() AND ${column} < CURDATE() + INTERVAL 1 DAY`;
-        // This Week — from Monday of the current week up to (but not including) next Monday.
+            return `${column} >= CURRENT_DATE AND ${column} < CURRENT_DATE + 1`;
+        // This Week â€” from Monday of the current week up to (but not including) next Monday.
         case "week":
-            return `${column} >= DATE_ADD(CURDATE(), INTERVAL -WEEKDAY(CURDATE()) DAY) AND ${column} < DATE_ADD(CURDATE(), INTERVAL (7 - WEEKDAY(CURDATE())) DAY)`;
+            return `${column} >= CURRENT_DATE - ${monday} AND ${column} < CURRENT_DATE + (7 - ${monday})`;
         case "month":
-            return `YEAR(${column}) = YEAR(CURDATE()) AND MONTH(${column}) = MONTH(CURDATE())`;
+            return `EXTRACT(YEAR FROM ${column}) = EXTRACT(YEAR FROM CURRENT_DATE) AND EXTRACT(MONTH FROM ${column}) = EXTRACT(MONTH FROM CURRENT_DATE)`;
         case "year":
-            return `YEAR(${column}) = YEAR(CURDATE())`;
+            return `EXTRACT(YEAR FROM ${column}) = EXTRACT(YEAR FROM CURRENT_DATE)`;
         default:
             return "1=1";
     }
@@ -169,12 +174,12 @@ async function getDashboardAnalytics(req, res) {
 
         const [vaccinations] = await db.query(`
             SELECT
-                DATE_FORMAT(date_administered, '%b %Y') AS month,
+                ${dateFormat("date_administered", "month")} AS month,
                 COUNT(*) AS total
             FROM vaccination_records
             WHERE ${vaccDate}
-            GROUP BY YEAR(date_administered), MONTH(date_administered)
-            ORDER BY YEAR(date_administered), MONTH(date_administered)
+            GROUP BY 1
+            ORDER BY MIN(date_administered)
         `);
 
         const [qrStats] = await db.query(`
@@ -212,20 +217,20 @@ async function getDashboardAnalytics(req, res) {
 
         const [registrations] = await db.query(`
             SELECT
-                DATE_FORMAT(created_at, '%b %Y') AS month,
+                ${dateFormat("created_at", "month")} AS month,
                 COUNT(*) AS total
             FROM pets
             WHERE ${petDateSimple}
-            GROUP BY YEAR(created_at), MONTH(created_at)
-            ORDER BY YEAR(created_at), MONTH(created_at)
+            GROUP BY 1
+            ORDER BY MIN(created_at)
         `);
 
         const [vaccinationStatus] = await db.query(`
             SELECT
                 CASE
                     WHEN latest.next_due_date IS NULL THEN 'No Record'
-                    WHEN latest.next_due_date < CURDATE() THEN 'Overdue'
-                    WHEN latest.next_due_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'Due Soon'
+                    WHEN latest.next_due_date < CURRENT_DATE THEN 'Overdue'
+                    WHEN latest.next_due_date <= CURRENT_DATE + 30 THEN 'Due Soon'
                     ELSE 'Up to Date'
                 END AS status,
                 COUNT(*) AS total
@@ -249,8 +254,8 @@ async function getDashboardAnalytics(req, res) {
             GROUP BY
                 CASE
                     WHEN latest.next_due_date IS NULL THEN 'No Record'
-                    WHEN latest.next_due_date < CURDATE() THEN 'Overdue'
-                    WHEN latest.next_due_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'Due Soon'
+                    WHEN latest.next_due_date < CURRENT_DATE THEN 'Overdue'
+                    WHEN latest.next_due_date <= CURRENT_DATE + 30 THEN 'Due Soon'
                     ELSE 'Up to Date'
                 END
             ORDER BY total DESC
@@ -258,13 +263,13 @@ async function getDashboardAnalytics(req, res) {
 
         const [paymentRevenue] = await db.query(`
             SELECT
-                DATE_FORMAT(created_at, '%b %Y') AS month,
+                ${dateFormat("created_at", "month")} AS month,
                 COALESCE(SUM(amount), 0) AS total
             FROM payments
             WHERE payment_status = 'Paid'
             AND ${paymentSummaryDate}
-            GROUP BY YEAR(created_at), MONTH(created_at)
-            ORDER BY YEAR(created_at), MONTH(created_at)
+            GROUP BY 1
+            ORDER BY MIN(created_at)
         `);
 
         const [recentPets] = await db.query(`
@@ -384,7 +389,7 @@ async function getSummary(req, res) {
             FROM pets p
             LEFT JOIN vaccination_records vr ON p.id = vr.pet_id
             WHERE vr.next_due_date IS NOT NULL
-            AND vr.next_due_date <= CURDATE()
+            AND vr.next_due_date <= CURRENT_DATE
         `);
 
         const [[pendingPayments]] = await db.query(`
@@ -567,14 +572,14 @@ async function getBarangayHeatmap(req, res) {
                     COALESCE(SUM(
                         CASE
                             WHEN vax.pet_id IS NOT NULL
-                            AND (vax.next_due_date IS NULL OR vax.next_due_date >= CURDATE())
+                            AND (vax.next_due_date IS NULL OR vax.next_due_date >= CURRENT_DATE)
                             THEN 1 ELSE 0
                         END
                     ), 0) AS vaccinated_pets,
                     COALESCE(SUM(
                         CASE
                             WHEN vax.next_due_date IS NOT NULL
-                            AND vax.next_due_date < CURDATE()
+                            AND vax.next_due_date < CURRENT_DATE
                             THEN 1 ELSE 0
                         END
                     ), 0) AS overdue_pets,

@@ -1,4 +1,5 @@
-const db = require("../config/db");
+﻿const db = require("../config/db");
+const { timeOfDay, groupConcat } = require("../config/sql");
 const { vetNameExpr } = require("../utils/vetNameFormat");
 
 // ---------------------------------------------------------------------------
@@ -51,7 +52,7 @@ function rangeClause(column, from, to) {
 }
 
 // ---------------------------------------------------------------------------
-// Category builders — each returns { summaryCards, table }
+// Category builders â€” each returns { summaryCards, table }
 // ---------------------------------------------------------------------------
 
 async function buildPets(from, to) {
@@ -266,7 +267,7 @@ async function buildPayments(from, to) {
     `
     SELECT
       ${paymentDate} AS payment_date,
-      TIME(pm.created_at) AS payment_time,
+      ${timeOfDay("pm.created_at")} AS payment_time,
       pm.payment_reference,
       COALESCE(pm.payment_status, 'Unpaid') AS payment_status,
       COALESCE(pm.total_amount, 0) AS amount,
@@ -334,7 +335,7 @@ async function buildOutreach(from, to) {
     FROM outreach_transactions ot
     JOIN outreach_programs op ON ot.outreach_id = op.id
     LEFT JOIN (
-      SELECT transaction_id, GROUP_CONCAT(service_name SEPARATOR ', ') AS services
+      SELECT transaction_id, ${groupConcat("service_name", ", ")} AS services
       FROM outreach_transaction_items
       GROUP BY transaction_id
     ) oi ON oi.transaction_id = ot.id
