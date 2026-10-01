@@ -5,8 +5,6 @@ import {
   PawPrint,
   Search,
   Stethoscope,
-  Syringe,
-  HeartPulse,
   ShieldAlert,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -14,6 +12,7 @@ import api from '../../services/api';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import StatusBadge from '../../components/StatusBadge';
 import DigitalPetBooklet from '../../components/booklet/DigitalPetBooklet';
+import PetHealthNotesModal from '../../components/PetHealthNotesModal';
 import { resolveMediaUrl } from '../../utils/mediaUrl';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -29,6 +28,16 @@ function hasValue(value) {
   return value != null && String(value).trim() !== '';
 }
 
+// Safety-critical context a vet should see before opening a consultation.
+function hasHealthNotes(pet) {
+  return (
+    hasValue(pet.allergies) ||
+    hasValue(pet.current_medication) ||
+    hasValue(pet.important_conditions) ||
+    hasValue(pet.special_instructions)
+  );
+}
+
 // "7 mo" / "2y 3m" — vets read age at a glance, not a raw birthdate.
 function formatAge(birthdate) {
   if (!hasValue(birthdate)) return null;
@@ -42,21 +51,6 @@ function formatAge(birthdate) {
   const years = Math.floor(months / 12);
   const rest = Math.floor(months % 12);
   return rest ? `${years}y ${rest}m` : `${years}y`;
-}
-
-// Safety-critical context a vet should see before opening a consultation.
-function healthFlags(pet) {
-  const flags = [];
-  if (hasValue(pet.allergies)) {
-    flags.push({ key: 'allergies', label: pet.allergies, tone: 'danger', Icon: ShieldAlert });
-  }
-  if (hasValue(pet.current_medication)) {
-    flags.push({ key: 'medication', label: pet.current_medication, tone: 'warn', Icon: Syringe });
-  }
-  if (hasValue(pet.important_conditions)) {
-    flags.push({ key: 'conditions', label: pet.important_conditions, tone: 'warn', Icon: HeartPulse });
-  }
-  return flags;
 }
 
 export default function PetRecords() {
@@ -75,6 +69,7 @@ export default function PetRecords() {
   const [bookletData, setBookletData] = useState(null);
   const [bookletToken, setBookletToken] = useState(null);
   const [bookletPet, setBookletPet] = useState(null);
+  const [healthPet, setHealthPet] = useState(null);
 
   function loadPets() {
     setLoading(true);
@@ -117,7 +112,7 @@ export default function PetRecords() {
   const visiblePets = filteredPets.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const flaggedCount = useMemo(
-    () => filteredPets.filter((p) => healthFlags(p).length > 0).length,
+    () => filteredPets.filter((p) => hasHealthNotes(p)).length,
     [filteredPets],
   );
 
@@ -280,8 +275,8 @@ export default function PetRecords() {
         {flaggedCount > 0 && !loading && (
           <p className="pr-flag-summary">
             <ShieldAlert size={15} aria-hidden="true" />
-            <strong>{flaggedCount}</strong> of these records carry allergies, medication, or medical
-            conditions — review before starting a consultation.
+            <strong>{flaggedCount}</strong> of these records carry health notes — open{' '}
+            <strong>View</strong> to read them before starting a consultation.
           </p>
         )}
 
@@ -292,21 +287,20 @@ export default function PetRecords() {
                 <th>Pet</th>
                 <th>Owner</th>
                 <th>Sex / Age</th>
-                <th>Health Notes</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th className="pr-actions-col">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="empty-state-cell">
+                  <td colSpan="5" className="empty-state-cell">
                     <LoadingSpinner text="Loading pet records..." fullPage={false} />
                   </td>
                 </tr>
               ) : visiblePets.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="empty-state-cell">
+                  <td colSpan="5" className="empty-state-cell">
                     {hasActiveFilters || search.trim()
                       ? 'No pet records match your filters.'
                       : 'No pet records found.'}
@@ -315,9 +309,6 @@ export default function PetRecords() {
               ) : (
                 visiblePets.map((p) => {
                   const age = formatAge(p.birthdate);
-                  const flags = healthFlags(p);
-                  const shownFlags = flags.slice(0, 2);
-                  const extraFlags = flags.length - shownFlags.length;
 
                   return (
                     <tr key={p.id}>
@@ -364,50 +355,13 @@ export default function PetRecords() {
                         </div>
                       </td>
 
-                      <td data-label="Health Notes">
-                        {flags.length === 0 ? (
-                          <span className="pr-flag pr-flag--none">None noted</span>
-                        ) : (
-                          <div className="pr-flags">
-                            {shownFlags.map((flag) => (
-                              <span
-                                key={flag.key}
-                                className={`pr-flag pr-flag--${flag.tone}`}
-                                title={flag.label}
-                              >
-                                <flag.Icon size={12} aria-hidden="true" />
-                                {flag.key === 'allergies'
-                                  ? 'Allergy'
-                                  : flag.key === 'medication'
-                                    ? 'Medication'
-                                    : 'Condition'}
-                              </span>
-                            ))}
-                            {extraFlags > 0 && (
-                              <span
-                                className="pr-flag pr-flag--more"
-                                title={flags
-                                  .slice(2)
-                                  .map((f) => f.label)
-                                  .join(', ')}
-                              >
-                                +{extraFlags}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-
                       <td data-label="Status">
                         <div className="pr-status">
                           <StatusBadge status={p.status} />
-                          {Number(p.is_lost) === 1 && (
-                            <span className="pr-flag pr-flag--danger">Lost</span>
-                          )}
                         </div>
                       </td>
 
-                      <td data-label="Actions">
+                      <td data-label="Actions" className="pr-actions-col">
                         <div className="table-actions">
                           {isVet && (
                             <button
@@ -424,6 +378,13 @@ export default function PetRecords() {
                             onClick={() => openBooklet(p)}
                           >
                             Booklet
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary btn-sm"
+                            onClick={() => setHealthPet(p)}
+                          >
+                            View
                           </button>
                         </div>
                       </td>
@@ -472,6 +433,8 @@ export default function PetRecords() {
           </div>
         </div>
       )}
+
+      {healthPet && <PetHealthNotesModal pet={healthPet} onClose={() => setHealthPet(null)} />}
     </div>
   );
 }

@@ -154,7 +154,6 @@ export default function QrRecords() {
                     </div>
                     <div className="qr-row__chips">
                       <span className={`qr-chip qr-chip--${vax.tone}`}>{vax.label}</span>
-                      {qr.is_lost === 1 && <span className="qr-chip qr-chip--danger">Reported Lost</span>}
                     </div>
                   </div>
 

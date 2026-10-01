@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import FieldError from '../../components/ui/FieldError';
 import { showPersistentToast } from '../../components/PersistentToast';
 import { validatePetRegistration } from '../../utils/validation';
@@ -16,6 +17,7 @@ import {
   clearOfflineDraft,
   getLookups,
   saveLookups,
+  saveOfflineNotification,
 } from '../../utils/offlineDraft';
 
 const EMPTY_FORM = {
@@ -63,6 +65,7 @@ function formatCurrentAge(birthdate) {
 
 export default function PetRegistration() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const draftId = searchParams.get('draftId');
   const editingPetId = searchParams.get('petId');
@@ -255,6 +258,13 @@ export default function PetRegistration() {
       }
       try {
         await saveNow(form, photo);
+        saveOfflineNotification({
+          userId: user?.id,
+          sourceKey: 'draft-registration',
+          title: 'Draft Saved',
+          message: `${form.name || 'Your pet'} was saved offline. Continue it from Draft Registration.`,
+          type: 'System',
+        }).catch(() => {});
         showPersistentToast('You are offline. Registration saved as a draft — continue it from Draft Registration.', { tone: 'offline' });
       } catch {
         toast.error('Could not save your draft offline.');
@@ -302,6 +312,13 @@ export default function PetRegistration() {
         }
         try {
           await saveNow(form, photo);
+          saveOfflineNotification({
+            userId: user?.id,
+            sourceKey: 'draft-registration',
+            title: 'Draft Saved',
+            message: `${form.name || 'Your pet'} was saved offline after a connection loss. Continue it from Draft Registration.`,
+            type: 'System',
+          }).catch(() => {});
           showPersistentToast('Connection lost. Your registration was saved as a draft — continue it from Draft Registration.', { tone: 'offline' });
         } catch {
           setError('Registration failed. Please try again.');
@@ -326,6 +343,13 @@ export default function PetRegistration() {
         await api.post('/drafts', payload);
       }
 
+      saveOfflineNotification({
+        userId: user?.id,
+        sourceKey: 'draft-registration',
+        title: 'Draft Saved',
+        message: `${form.name || 'Your pet'} was saved as a draft.`,
+        type: 'System',
+      }).catch(() => {});
       toast.success('Saved as draft! You can finish it later from Draft Registration.');
       clearOfflineDraft().catch(() => {});
     } catch (err) {

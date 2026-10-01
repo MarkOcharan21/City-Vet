@@ -232,24 +232,6 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
         <BookletEditPanel pet={pet} role={user?.role} onSaved={onRefresh} />
       )}
 
-      {pet.is_lost === 1 && (
-        <div className="booklet-lost">
-          <div className="booklet-lost__title">
-            <TriangleAlert size={20} strokeWidth={2.5} /> LOST PET ALERT
-          </div>
-          <p className="booklet-lost__text">
-            This pet has been reported lost. If you have information, please contact the City Veterinary
-            Office immediately.
-          </p>
-          {pet.last_seen && (
-            <p className="booklet-lost__seen">
-              <strong>Last seen:</strong> {pet.last_seen}
-              {pet.reward ? <> • <strong>Reward:</strong> {pet.reward}</> : null}
-            </p>
-          )}
-        </div>
-      )}
-
       <BookletCover pet={pet} photoUrl={photoUrl} qrUrl={qrUrl} authorized={b.authorized} />
 
       <BookletTabs activeTab={activeTab} onChange={changeTab} counts={tabCounts} />
@@ -259,7 +241,7 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
       <div className="booklet-tab-panel" role="tabpanel" hidden={activeTab !== "pet-profile"}>
       <BookletSection id="pet-profile" number={2} icon={<Info size={20} />} title="Pet Profile" subtitle="Basic identification details of the registered pet">
         <div className="booklet-grid booklet-grid--4">
-          <ProfileField label="Pet Name" value={pet.name} />
+          <ProfileField label="Pet Name" value={pet.name} strong />
           <ProfileField label="Species" value={pet.species_name || "—"} />
           <ProfileField label="Breed" value={pet.breed_name || "—"} />
           <ProfileField label="Sex" value={pet.sex || "—"} />
@@ -282,7 +264,15 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
             <ProfileField label="Contact Number" value={pet.contact_number || "—"} />
             <ProfileField label="Registered Address" value={pet.address || "—"} span={2} />
             <ProfileField label="Barangay" value={pet.barangay || "—"} />
-            <ProfileField label="Emergency Contact" value={b.emergency.emergency_contact_name || "Not set"} muted />
+            <ProfileField
+              label="Emergency Contact"
+              value={
+                b.emergency.emergency_contact_name
+                  ? `${b.emergency.emergency_contact_name}${b.emergency.emergency_contact_number ? ` • ${b.emergency.emergency_contact_number}` : ""}`
+                  : "Not set"
+              }
+              muted={!b.emergency.emergency_contact_name}
+            />
           </div>
         ) : (
           <div className="booklet-private">
@@ -558,6 +548,11 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
               <span className="emergency-card__value">
                 {b.emergency.emergency_contact_name || "Not set"}
                 {b.emergency.emergency_contact_number ? ` • ${b.emergency.emergency_contact_number}` : ""}
+                {b.emergency.emergency_contact_is_owner && (
+                  <em className="emergency-card__hint">
+                    {" "}— registered owner (no separate emergency contact on file)
+                  </em>
+                )}
               </span>
             </div>
             <div className="emergency-card__row">

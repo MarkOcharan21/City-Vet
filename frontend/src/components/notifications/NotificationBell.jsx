@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
 import { io } from "socket.io-client";
@@ -8,6 +8,13 @@ import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { getNotificationPath } from "../../utils/notificationRoutes";
 import { getSocketOrigin, getSocketAuthToken } from "../../utils/socketOrigin";
+import {
+  getOfflineNotifications,
+  markOfflineNotificationRead,
+  markAllOfflineNotificationsRead,
+  deleteOfflineNotification,
+  clearOfflineNotifications,
+} from "../../utils/offlineDraft";
 
 function prependNotification(list, incoming) {
   if (!incoming?.id) return list;
@@ -15,19 +22,79 @@ function prependNotification(list, incoming) {
   return [incoming, ...list];
 }
 
+// Merge server notifications with locally-created (offline) ones. Offline
+// entries are prefixed with "local:" so they never collide with real server
+// IDs, and they are dropped once the server list contains a matching title.
+function isUnread(n) {
+  const read = n.is_read;
+  if (read === true) return false;
+  return read !== 1 && read !== "1";
+}
+
+// Offline entries are scoped per account, so they can never leak into another
+// user's bell. A local row is only suppressed when the server carries the SAME
+// sourceKey, which identifies the same underlying draft. Matching on title
+// instead would hide an unrelated server notification that happens to share a
+// subject line with a saved draft.
+function mergeNotifications(serverList, offlineList) {
+  const serverSourceKeys = new Set(
+    serverList.map((n) => n.sourceKey).filter(Boolean)
+  );
+  const merged = offlineList
+    .filter((n) => !(n.sourceKey && serverSourceKeys.has(n.sourceKey)))
+    .map((n) => ({ ...n, isLocal: true }));
+  return [...merged, ...serverList];
+}
+
 export default function NotificationBell() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState([]);
+  const [offlineNotifications, setOfflineNotifications] = useState([]);
   const [open, setOpen] = useState(false);
+  const [popCount, setPopCount] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
+  // Replay the ring on every arrival. A counter drives a React `key` so the
+  // node is remounted and the keyframes restart from 0 — toggling a boolean
+  // class cannot do this, because two notifications arriving inside one
+  // animation window would leave the className unchanged and play only once.
+  const popBell = useCallback(() => {
+    setPopCount((n) => n + 1);
+  }, []);
+
+  const popping = popCount > 0;
+  useEffect(() => {
+    if (!popCount) return undefined;
+    const timer = setTimeout(() => setPopCount(0), 1100);
+    return () => clearTimeout(timer);
+  }, [popCount]);
+
+  async function loadOfflineNotifications() {
+    try {
+      const local = await getOfflineNotifications(user?.id);
+      setOfflineNotifications(local);
+    } catch {
+      setOfflineNotifications([]);
+    }
+  }
 
   async function loadNotifications() {
     try {
       const res = await api.get("/notifications");
-      setNotifications(res.data.notifications || []);
+      const serverList = res.data.notifications || [];
+      const localList = await getOfflineNotifications(user?.id).catch(() => []);
+      setOfflineNotifications(localList);
+      setNotifications(mergeNotifications(serverList, localList));
     } catch (err) {
       console.error(err);
+      // Offline / server unreachable — still show locally-created ones.
+      const localList = await getOfflineNotifications(user?.id).catch(() => []);
+      setOfflineNotifications(localList);
+      setNotifications(localList);
+    } finally {
+      setLoaded(true);
     }
   }
 
@@ -60,9 +127,17 @@ export default function NotificationBell() {
       socket.emit("join-room", user.id);
     };
 
-    socket.on("connect", joinRoom);
-    if (socket.connected) {
+    // Reload on (re)connect so notifications that arrived while the client
+    // was offline (socket down) are picked up when the connection returns.
+    const handleConnect = () => {
       joinRoom();
+      loadNotifications();
+      loadOfflineNotifications();
+    };
+
+    socket.on("connect", handleConnect);
+    if (socket.connected) {
+      handleConnect();
     }
 
     socket.on("new-notification", (payload) => {
@@ -71,6 +146,7 @@ export default function NotificationBell() {
       } else {
         loadNotifications();
       }
+      loadOfflineNotifications();
 
       const label =
         payload?.type === "Announcement"
@@ -89,21 +165,32 @@ export default function NotificationBell() {
 
     socket.on("announcement-posted", () => {
       loadNotifications();
+      loadOfflineNotifications();
     });
 
     socket.on("notification-removed", () => {
       loadNotifications();
+      loadOfflineNotifications();
     });
 
     return () => {
-      socket.off("connect", joinRoom);
+      socket.off("connect", handleConnect);
       socket.disconnect();
     };
-  }, [user?.id, navigateToNotification]);
+  }, [user?.id, navigateToNotification, popBell]);
 
   async function markAsRead(id) {
+    const isLocal = String(id).startsWith('local-');
     try {
-      await api.put(`/notifications/${id}/read`);
+      if (isLocal) {
+        const realId = Number(String(id).replace('local-', ''));
+        await markOfflineNotificationRead(user?.id, realId);
+        setOfflineNotifications((prev) =>
+          prev.map((n) => (n.id === realId ? { ...n, is_read: 1 } : n))
+        );
+      } else {
+        await api.put(`/notifications/${id}/read`);
+      }
 
       setNotifications((prev) =>
         prev.map((n) =>
@@ -119,11 +206,11 @@ export default function NotificationBell() {
 
   async function markAllAsRead() {
     try {
-      await Promise.all(
-        notifications
-          .filter((n) => n.is_read === 0)
-          .map((n) => api.put(`/notifications/${n.id}/read`))
-      );
+      const serverUnread = notifications
+        .filter((n) => isUnread(n) && !n.isLocal)
+        .map((n) => api.put(`/notifications/${n.id}/read`));
+      await Promise.all(serverUnread);
+      await markAllOfflineNotificationsRead(user?.id);
 
       await loadNotifications();
       toast.success("All notifications marked as read.");
@@ -133,8 +220,15 @@ export default function NotificationBell() {
   }
 
   async function deleteNotification(id) {
+    const isLocal = String(id).startsWith('local-');
     try {
-      await api.delete(`/notifications/${id}`);
+      if (isLocal) {
+        const realId = Number(String(id).replace('local-', ''));
+        await deleteOfflineNotification(user?.id, realId);
+        setOfflineNotifications((prev) => prev.filter((n) => n.id !== realId));
+      } else {
+        await api.delete(`/notifications/${id}`);
+      }
       setNotifications((prev) => prev.filter((n) => n.id !== id));
       toast.success("Notification deleted.");
     } catch (err) {
@@ -145,6 +239,8 @@ export default function NotificationBell() {
   async function clearAll() {
     try {
       await api.delete("/notifications");
+      await clearOfflineNotifications(user?.id);
+      setOfflineNotifications([]);
       setNotifications([]);
       toast.success("All notifications cleared.");
     } catch (err) {
@@ -153,11 +249,13 @@ export default function NotificationBell() {
   }
 
   async function handleNotificationClick(notification) {
-    if (notification.is_read === 0) {
-      await markAsRead(notification.id);
+    if (isUnread(notification)) {
+      await markAsRead(notification.isLocal ? `local-${notification.id}` : notification.id);
     }
 
     setOpen(false);
+
+    if (notification.isLocal) return;
 
     const path = getNotificationPath(user?.role, notification);
     if (path) {
@@ -184,7 +282,15 @@ export default function NotificationBell() {
     }
   }
 
-  const unread = notifications.filter((n) => n.is_read === 0).length;
+  const unread = notifications.filter(isUnread).length;
+
+  const prevUnreadRef = useRef(null);
+  useEffect(() => {
+    if (!loaded) return;
+    const prev = prevUnreadRef.current;
+    if (unread > 0 && (prev === null || unread > prev)) popBell();
+    prevUnreadRef.current = unread;
+  }, [unread, loaded, popBell]);
 
   return (
     <div style={{ position: "relative" }}>
@@ -201,10 +307,19 @@ export default function NotificationBell() {
             alignItems: "center",
           }}
         >
-          <Bell size={18} color="#fff" />
+          <Bell
+            key={popCount}
+            size={18}
+            color="#fff"
+            className={`notification-bell__icon${popping ? " is-popping" : ""}`}
+          />
 
           {unread > 0 && (
             <span
+              key={`badge-${popCount}`}
+              className={`notification-bell__badge--unread${
+                popping ? " is-popping" : ""
+              }`}
               style={{
                 position: "absolute",
                 top: -6,
@@ -300,9 +415,11 @@ export default function NotificationBell() {
               No notifications.
             </div>
           ) : (
-            notifications.map((n) => (
+            notifications.map((n) => {
+              const reactKey = n.isLocal ? `local-${n.id}` : n.id;
+              return (
               <div
-                key={n.id}
+                key={reactKey}
                 onClick={() => handleNotificationClick(n)}
                 style={{
                   padding: 15,
@@ -313,6 +430,18 @@ export default function NotificationBell() {
               >
                 <strong>
                   {getNotificationIcon(n.type)} {n.title}
+                  {n.isLocal && (
+                    <span style={{
+                      marginLeft: 6,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: "#fff",
+                      background: "#b8860b",
+                      borderRadius: 4,
+                      padding: "1px 5px",
+                      verticalAlign: "middle",
+                    }}>OFFLINE</span>
+                  )}
                 </strong>
 
                 <br />
@@ -329,7 +458,7 @@ export default function NotificationBell() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      deleteNotification(n.id);
+                      deleteNotification(reactKey);
                     }}
                     style={{
                       border: "none",
@@ -344,7 +473,8 @@ export default function NotificationBell() {
                   </button>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       )}

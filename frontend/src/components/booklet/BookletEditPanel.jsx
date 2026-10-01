@@ -75,16 +75,16 @@ export default function BookletEditPanel({ pet, role, onSaved }) {
   const [healthError, setHealthError] = useState("");
   const [savingHealth, setSavingHealth] = useState(false);
 
-  const [lostForm, setLostForm] = useState({ last_seen: "", reward: "" });
-  const [lostError, setLostError] = useState("");
-  const [workingLost, setWorkingLost] = useState(false);
-  const [showLostForm, setShowLostForm] = useState(false);
-
   const [photo, setPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const photoInputRef = useRef(null);
 
   const isOwner = role === "Owner";
+
+  // Pet profile and owner/emergency contact are owner-administered records.
+  // Staff and veterinarians may read them and edit clinical health notes,
+  // but must not rewrite identity or contact details.
+  const canEditIdentity = role === "Owner" || role === "Admin";
 
   useEffect(() => {
     api
@@ -128,12 +128,7 @@ export default function BookletEditPanel({ pet, role, onSaved }) {
       special_instructions: pet.special_instructions || "",
     });
 
-    setLostForm({
-      last_seen: pet.last_seen || "",
-      reward: pet.reward || "",
-    });
-    setShowLostForm(false);
-    setPetError(""); setOwnerError(""); setHealthError(""); setLostError("");
+    setPetError(""); setOwnerError(""); setHealthError("");
     setPetErrors({});
   }, [pet]);
 
@@ -273,47 +268,21 @@ export default function BookletEditPanel({ pet, role, onSaved }) {
     }
   }
 
-  async function reportLost() {
-    setLostError("");
-    setWorkingLost(true);
-    try {
-      await api.put(`/pets/${pet.id}/report-lost`, {
-        last_seen: lostForm.last_seen,
-        reward: lostForm.reward,
-      });
-      toast.success("Pet has been reported as lost.");
-      onSaved?.();
-    } catch (err) {
-      setLostError(err.response?.data?.message || "Could not report lost pet.");
-    } finally {
-      setWorkingLost(false);
-    }
-  }
-
-  async function markFound() {
-    setLostError("");
-    setWorkingLost(true);
-    try {
-      await api.put(`/pets/${pet.id}/found`, {});
-      toast.success("Pet has been marked as found.");
-      onSaved?.();
-    } catch (err) {
-      setLostError(err.response?.data?.message || "Could not update pet.");
-    } finally {
-      setWorkingLost(false);
-    }
-  }
-
   return (
     <div className="booklet-edit">
       <div className="booklet-edit__intro">
         <div className="booklet-edit__intro-title">✏️ Edit Pet Booklet</div>
         <div className="booklet-edit__intro-sub">
           Changes are saved to the official records and reflected here automatically.
+          {!canEditIdentity && (
+            <> Pet profile, owner information, and emergency contact are read-only for your
+            role — ask the owner or an administrator to make corrections.</>
+          )}
         </div>
       </div>
 
       {/* 1 · Pet Profile */}
+      {canEditIdentity && (
       <SectionCard title="Pet Profile" subtitle="Basic identification details">
         <div className="booklet-edit__grid">
           <Field label="Pet Name" required>
@@ -425,8 +394,10 @@ export default function BookletEditPanel({ pet, role, onSaved }) {
           {petError ? <div className="booklet-edit__error">{petError}</div> : null}
         </div>
       </SectionCard>
+      )}
 
       {/* 2 · Owner Info & Emergency Contact */}
+      {canEditIdentity && (
       <SectionCard title="Owner Information & Emergency Contact" subtitle="Contact details shown in the Owner and Emergency tabs">
         <div className="booklet-edit__grid">
           <Field label="Owner Name" required>
@@ -499,6 +470,7 @@ export default function BookletEditPanel({ pet, role, onSaved }) {
           {ownerError ? <div className="booklet-edit__error">{ownerError}</div> : null}
         </div>
       </SectionCard>
+      )}
 
       {/* 3 · Health & Safety */}
       <SectionCard title="Health & Safety (Emergency Tab)" subtitle="Flags shown to emergency responders in the Emergency tab">
@@ -546,72 +518,6 @@ export default function BookletEditPanel({ pet, role, onSaved }) {
           )}
           {healthError ? <div className="booklet-edit__error">{healthError}</div> : null}
         </div>
-      </SectionCard>
-
-      {/* 4 · Lost pet status */}
-      <SectionCard title="Lost Pet Status" subtitle="Show a Lost Pet Alert on this booklet and public profile">
-        {pet.is_lost === 1 ? (
-          <div className="booklet-edit__lost-active">
-            <span>
-              <Check size={15} strokeWidth={2.6} /> This pet is currently reported as {pet.last_seen ? <>lost · last seen {pet.last_seen}</> : "lost"}
-              {pet.reward ? <> · reward ₱{pet.reward}</> : null}.
-            </span>
-            <button
-              type="button"
-              className="booklet-edit__btn booklet-edit__btn--danger-ghost"
-              onClick={markFound}
-              disabled={workingLost}
-            >
-              {workingLost ? <Loader size={15} className="spinner" /> : <Check size={15} strokeWidth={2.4} />} Mark as Found
-            </button>
-          </div>
-        ) : (
-          <div>
-            {!showLostForm ? (
-              <div className="booklet-edit__save-row">
-                <button
-                  type="button"
-                  className="booklet-edit__btn booklet-edit__btn--outline"
-                  onClick={() => setShowLostForm(true)}
-                >
-                  Report Lost
-                </button>
-              </div>
-            ) : (
-              <div className="booklet-edit__grid">
-                <Field label="Last Seen">
-                  <input
-                    type="text"
-                    value={lostForm.last_seen}
-                    onChange={(e) => setLostForm((prev) => ({ ...prev, last_seen: e.target.value }))}
-                    placeholder="Where the pet was last seen"
-                  />
-                </Field>
-                <Field label="Reward (₱)">
-                  <input
-                    type="number"
-                    min="0"
-                    value={lostForm.reward}
-                    onChange={(e) => setLostForm((prev) => ({ ...prev, reward: e.target.value }))}
-                    placeholder="e.g. 500"
-                  />
-                </Field>
-              </div>
-            )}
-            {showLostForm && (
-              <div className="booklet-edit__save-row">
-                {workingLost ? (
-                  <Loader size={16} className="spinner" aria-hidden="true" />
-                ) : (
-                  <button type="button" className="booklet-edit__btn booklet-edit__btn--primary" onClick={reportLost} disabled={workingLost}>
-                    <Check size={15} strokeWidth={2.4} /> Report Lost
-                  </button>
-                )}
-                {lostError ? <div className="booklet-edit__error">{lostError}</div> : null}
-              </div>
-            )}
-          </div>
-        )}
       </SectionCard>
     </div>
   );

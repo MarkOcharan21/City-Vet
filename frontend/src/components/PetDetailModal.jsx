@@ -4,7 +4,6 @@ import {
   PawPrint,
   Pencil,
   QrCode,
-  TriangleAlert,
   X,
 } from 'lucide-react';
 import StatusBadge from './StatusBadge';
@@ -75,16 +74,6 @@ export default function PetDetailModal({ pet, onClose, onEdit }) {
         <button type="button" className="pet-modal-close" onClick={onClose} aria-label="Close pet details">
           <X size={18} strokeWidth={2.5} />
         </button>
-
-        {pet.is_lost === 1 && (
-          <div className="pet-modal-lost">
-            <TriangleAlert size={18} strokeWidth={2.3} />
-            <span>
-              This pet is reported as lost.
-              {pet.last_seen ? ` Last seen: ${pet.last_seen}.` : ''}
-            </span>
-          </div>
-        )}
 
         <header className="pet-modal-header">
           <img src={photoUrl} alt={`${pet.name} photo`} className="pet-modal-photo" />

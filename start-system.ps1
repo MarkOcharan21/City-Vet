@@ -4,8 +4,10 @@ $ErrorActionPreference = "Continue"
 $Root    = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Backend = Join-Path $Root "backend"
 $LogFile = Join-Path $Root "system-start.log"
-$CfLog   = Join-Path $Root "cloudflared.log"
-$CfExe   = "C:\Program Files (x86)\cloudflared\cloudflared.exe"
+$CaddyDir   = "C:\Users\KB\caddy"
+$CaddyExe   = "C:\Users\KB\AppData\Local\Microsoft\WinGet\Packages\CaddyServer.Caddy_Microsoft.Winget.Source_8wekyb3d8bbwe\caddy.exe"
+$CaddyLog   = Join-Path $CaddyDir "caddy-err.log"
+$PublicUrl  = "https://cityvet.duckdns.org"
 
 function Log($m) {
   $ts = Get-Date -Format "HH:mm:ss"
@@ -15,34 +17,33 @@ function Log($m) {
 
 Log "==== City Vet reconnect started ===="
 
-# 0) Stop any old cloudflared so we get a fresh tunnel URL
-Log "Stopping old cloudflared processes..."
-Get-Process -Name cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+# 0) Stop Apache (port 443 conflict) and any old Caddy
+Log "Stopping Apache and old Caddy..."
+Get-Process -Name "httpd" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "caddy" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 
-# 1) Start a fresh Cloudflare quick tunnel FIRST (URL is needed before backend
-#    start, because server.js reads BACKEND_URL / FRONTEND_URL at boot).
-Log "Starting Cloudflare tunnel (cloudflared)..."
-Remove-Item $CfLog -ErrorAction SilentlyContinue
-Start-Process -FilePath $CfExe -ArgumentList "tunnel","--url","http://localhost:5000","--no-autoupdate" `
-  -RedirectStandardError $CfLog -WindowStyle Hidden
+# 1) Start Caddy (reverse proxy: HTTPS :443 -> localhost:5000)
+Log "Starting Caddy..."
+Remove-Item $CaddyLog -ErrorAction SilentlyContinue
+Start-Process -FilePath $CaddyExe -ArgumentList "run","--config","$CaddyDir\caddy.json" `
+  -WorkingDirectory $CaddyDir `
+  -RedirectStandardError $CaddyLog -WindowStyle Hidden
 
 $url = $null
-for ($i = 0; $i -lt 40; $i++) {
+for ($i = 0; $i -lt 20; $i++) {
   Start-Sleep -Seconds 2
-  $cfText = [string](Get-Content $CfLog -Raw -ErrorAction SilentlyContinue)
-  $cfMatch = [regex]::Match($cfText, 'https://[\w-]+\.trycloudflare\.com')
-  if ($cfMatch.Success) {
-    $url = $cfMatch.Value
-    break
-  }
+  try {
+    $h = Invoke-RestMethod -Uri "$PublicUrl/api/health" -TimeoutSec 10
+    if ($h.success) { $url = $PublicUrl; break }
+  } catch { }
 }
 
 if (-not $url) {
-  Log "FAILED: could not get a tunnel URL. Check cloudflared.log"
+  Log "FAILED: Caddy did not come up. Check $CaddyLog"
   exit 1
 }
-Log "Tunnel URL: $url"
+Log "Caddy URL: $url"
 
 # 2) Update backend .env BEFORE starting the backend so the running process
 #    picks up the new BACKEND_URL. FRONTEND_URL must be the public Vercel
@@ -81,7 +82,7 @@ cmd /c ("echo|set /p=`"" + $apiUrl + "`"|vercel env add VITE_API_URL development
 Log "Deploying to Vercel (this takes ~1 minute)..."
 vercel --prod --yes --archive=tgz
 
-# 6) Refresh QR images so scanned codes point to the new tunnel URL
+# 6) Refresh QR images so scanned codes point to the new backend URL
 Log "Regenerating QR images..."
 Push-Location $Backend
 node regenerate-qrcodes.js 2>$null | Out-Null

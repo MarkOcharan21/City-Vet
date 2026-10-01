@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import FieldError from '../ui/FieldError';
 import { showPersistentToast } from '../PersistentToast';
 import { validatePetRegistration } from '../../utils/validation';
@@ -23,6 +24,7 @@ import {
   getOfflineDraft,
   getLookups,
   saveLookups,
+  saveOfflineNotification,
 } from '../../utils/offlineDraft';
 
 const EMPTY_FORM = {
@@ -83,6 +85,7 @@ export default function DraftEditorModal({
   onSaved,
   onSubmitted,
 }) {
+  const { user } = useAuth();
   const [species, setSpecies]       = useState([]);
   const [breeds, setBreeds]         = useState([]);
   const [form, setForm]             = useState(EMPTY_FORM);
@@ -263,6 +266,13 @@ export default function DraftEditorModal({
     if (!online || liveOffline) {
       try {
         await persistLocally();
+        saveOfflineNotification({
+          userId: user?.id,
+          sourceKey: 'draft-editor',
+          title: 'Draft Saved',
+          message: `${storedName} was saved offline. Submit it again when you are back online.`,
+          type: 'System',
+        }).catch(() => {});
         showPersistentToast('You are offline. Draft updated — submit again when you are back online.', { tone: 'offline' });
         onSaved();
       } catch {
@@ -287,6 +297,13 @@ export default function DraftEditorModal({
       if (!err.response) {
         try {
           await persistLocally();
+          saveOfflineNotification({
+            userId: user?.id,
+            sourceKey: 'draft-editor',
+            title: 'Draft Saved',
+            message: `${storedName} was saved offline after a connection loss. Submit it again when you are back online.`,
+            type: 'System',
+          }).catch(() => {});
           showPersistentToast('Connection lost. Your draft was saved — submit again when you are back online.', { tone: 'offline' });
           onSaved();
         } catch {
@@ -306,6 +323,13 @@ export default function DraftEditorModal({
     setSavingDraft(true);
     try {
       await persistLocally();
+      saveOfflineNotification({
+        userId: user?.id,
+        sourceKey: 'draft-editor',
+        title: 'Draft Saved',
+        message: `${storedName} was saved as a draft.`,
+        type: 'System',
+      }).catch(() => {});
       toast.success('Draft saved.');
       onSaved();
     } catch (err) {

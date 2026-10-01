@@ -43,6 +43,18 @@ export function enrichBooklet(data, mode) {
     ? (Array.isArray(data?.payments) ? data.payments : [])
     : [];
 
+  // An emergency responder needs someone to call. When the pet has no separate
+  // emergency contact on file, fall back to the owner's OWN registered details
+  // so the booklet is never dead-ending on "Not set". This is real data taken
+  // from another field, not a fabricated contact.
+  //
+  // Authorized views only: the public booklet deliberately withholds the
+  // owner's phone number (see the Owner Contact row), so mirroring it into the
+  // emergency row would hand that number to anyone who scans the QR code.
+  const onFileName = (pet.emergency_contact_name || "").trim();
+  const onFileNumber = (pet.emergency_contact_number || "").trim();
+  const emergencyIsOwner = authorized && !onFileName && !onFileNumber;
+
   return {
     authorized,
     pet,
@@ -56,8 +68,11 @@ export function enrichBooklet(data, mode) {
     emergency: {
       owner_name: pet.full_name,
       owner_contact: pet.contact_number,
-      emergency_contact_name: pet.emergency_contact_name || "",
-      emergency_contact_number: pet.emergency_contact_number || "",
+      emergency_contact_name: onFileName || (emergencyIsOwner ? (pet.full_name || "") : ""),
+      emergency_contact_number: onFileNumber || (emergencyIsOwner ? (pet.contact_number || "") : ""),
+      // Lets the UI say the owner is standing in, rather than implying a
+      // separate emergency contact exists.
+      emergency_contact_is_owner: emergencyIsOwner,
       allergies: parseList(pet.allergies),
       current_medication: parseList(pet.current_medication),
       conditions: parseList(pet.important_conditions),

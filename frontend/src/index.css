@@ -1847,6 +1847,66 @@ body:has(.clinic-access-page)::before {
 .notification-dropdown::-webkit-scrollbar {
   display: none;
 }
+
+/* ── Notification bell: pops when a notification arrives ──────────
+   .is-popping is a short-lived class re-applied on every arrival so the
+   keyframes restart even if two notifications land in the same second. */
+.notification-bell__icon {
+  display: block;
+}
+
+.notification-bell__icon.is-popping {
+  animation: notification-bell-ring 0.9s ease-in-out;
+  transform-origin: 50% 15%;
+  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.95));
+}
+
+/* Steady halo while anything is unread, so a missed notification is still
+   visible even after the ring animation has finished. */
+.notification-bell__badge--unread {
+  animation: notification-bell-badge-throb 2.4s ease-in-out infinite;
+}
+
+/* On arrival, add the one-shot scale-and-settle before the halo settles. */
+.notification-bell__badge--unread.is-popping {
+  animation:
+    notification-bell-badge-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    notification-bell-badge-throb 2.4s ease-in-out 0.5s infinite;
+}
+
+@keyframes notification-bell-ring {
+  0%   { transform: rotate(0deg); }
+  10%  { transform: rotate(26deg); }
+  22%  { transform: rotate(-24deg); }
+  34%  { transform: rotate(19deg); }
+  46%  { transform: rotate(-15deg); }
+  58%  { transform: rotate(11deg); }
+  70%  { transform: rotate(-7deg); }
+  82%  { transform: rotate(4deg); }
+  92%  { transform: rotate(-2deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* Scale-and-settle the count, plus a halo ring so it reads as "new". */
+@keyframes notification-bell-badge-pop {
+  0%   { transform: scale(0.4); opacity: 0.4; }
+  55%  { transform: scale(1.22); opacity: 1; }
+  75%  { transform: scale(0.92); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes notification-bell-badge-throb {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55); }
+  60%      { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-bell__icon.is-popping,
+  .notification-bell__badge--unread,
+  .notification-bell__badge--unread.is-popping {
+    animation: none;
+  }
+}
 .sidebar-collapsed {
   width: 64px;
   min-width: 64px;
@@ -4494,20 +4554,6 @@ body:has(.clinic-access-page)::before {
 .pet-modal-close:hover {
   background: var(--color-bg);
   color: var(--color-ink);
-}
-
-.pet-modal-lost {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  background: #FEF3F2;
-  border: 1px solid #FCA5A5;
-  color: #991B1B;
-  font-size: 0.9rem;
-  font-weight: 600;
-  border-radius: 10px;
-  padding: 0.75rem 1rem;
-  margin-bottom: 1.25rem;
 }
 
 .pet-modal-header {
@@ -14345,12 +14391,6 @@ body {
   border: 1px solid transparent;
 }
 
-.pr-flag--danger {
-  background: #FEF2F2;
-  color: #DC2626;
-  border-color: rgba(220, 38, 38, 0.22);
-}
-
 .pr-flag--warn {
   background: var(--color-warning-tint);
   color: var(--color-warning);
@@ -14373,6 +14413,20 @@ body {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.3rem;
+}
+
+/* Header sits centred over the centred button group, not flush left.
+   Desktop only — the <=640px block below already stacks the actions cell
+   into a right-aligned wrap, and a higher-specificity nowrap would break it. */
+@media (min-width: 641px) {
+  .data-table th.pr-actions-col,
+  .data-table td.pr-actions-col {
+    text-align: center;
+  }
+  .data-table td.pr-actions-col .table-actions {
+    justify-content: center;
+    flex-wrap: nowrap;
+  }
 }
 
 .pr-flag-summary {

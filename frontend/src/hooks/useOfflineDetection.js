@@ -16,6 +16,64 @@ const RECOVERY_HEARTBEAT_MS = 3000;
 // making the offline notice reappear (and linger) long after going online.
 const OFFLINE_GRACE_MS = 15000;
 
+// True when the app is served from this machine. Every app request is then
+// proxied to localhost:5000, which stays reachable with WiFi off — so a
+// backend probe proves nothing about internet access in dev.
+const IS_LOCALHOST =
+  typeof window !== 'undefined' &&
+  /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/i.test(window.location.hostname);
+
+// Lightweight external endpoints used only as a dev-mode connectivity check.
+// `no-cors` keeps the response opaque (we only care that the request
+// completed), and `no-store` plus the cache buster stop a cached response from
+// faking success. Several candidates are tried because a single host being
+// blocked by a local network would otherwise pin the app in a false offline
+// state. Cloudflare is included on purpose: the whole public deployment rides
+// on a Cloudflare tunnel, so if that is reachable the backend is too.
+const EXTERNAL_PROBE_URLS = [
+  'https://cp.cloudflare.com/generate_204',
+  'https://www.gstatic.com/generate_204',
+  'https://connectivitycheck.gstatic.com/generate_204',
+];
+
+function probeOnce(url, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (controller) controller.abort();
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+
+    if (typeof fetch !== 'function' || !controller) {
+      // No way to prove internet access here — do not announce a recovery we
+      // cannot verify.
+      finish(false);
+      return;
+    }
+
+    fetch(`${url}?t=${Date.now()}`, {
+      method: 'GET',
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(() => finish(true))
+      .catch(() => finish(false));
+  });
+}
+
+function probeExternalInternet(timeoutMs = 5000) {
+  return EXTERNAL_PROBE_URLS.reduce(
+    (chain, url) => chain.then((ok) => (ok ? true : probeOnce(url, timeoutMs))),
+    Promise.resolve(false)
+  );
+}
+
 export default function useOfflineDetection({ isEditingDraft, form, photo }) {
   const [browserOnline, setBrowserOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [degraded, setDegraded] = useState(false);
@@ -37,6 +95,8 @@ export default function useOfflineDetection({ isEditingDraft, form, photo }) {
   // Tracks whether this mount has actually lost connectivity at some point —
   // prevents a spurious "You're back online!" right after page load.
   const offlineSessionRef = useRef(false);
+  // Guards against overlapping connectivity-verification probes.
+  const verifyInFlightRef = useRef(false);
 
   isEditingRef.current = isEditingDraft;
   formRef.current = form;
@@ -132,6 +192,50 @@ export default function useOfflineDetection({ isEditingDraft, form, photo }) {
       });
   }, [checkPending, flushPendingSave]);
 
+  // The browser's "online" event only means a network interface came up — on
+  // Windows/mobile it also fires when the device merely falls back to another
+  // interface (Ethernet, cellular) that has no working internet. Confirm with a
+  // real request that crosses the network boundary before announcing that the
+  // connection is back.
+  const verifyConnection = useCallback(() => {
+    // Hard gate: while the browser reports no network path there is nothing to
+    // verify, and a probe against a same-machine backend (dev) would succeed
+    // anyway and wrongly announce a recovery.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    if (Date.now() - lastRecoveryAtRef.current < OFFLINE_GRACE_MS) return;
+    // The recovery heartbeat fires every 3s while offline; without this guard
+    // several probes would overlap and the first success would announce
+    // recovery before the slower ones settle.
+    if (verifyInFlightRef.current) return;
+    verifyInFlightRef.current = true;
+
+    // `_retried` skips the interceptor's retry chain so recovery is announced
+    // as soon as the probe succeeds; `t` defeats the HTTP cache.
+    const backendProbe = api
+      .get('/health', { timeout: 6000, _retried: true, params: { t: Date.now() } })
+      .then(() => true)
+      .catch(() => false);
+
+    // In production the API sits behind the public tunnel, so a successful
+    // backend call already crossed the internet and is proof enough. On
+    // localhost the very same call is proxied to this machine and stays green
+    // with WiFi off, so demand an external request as well.
+    const confirmed = IS_LOCALHOST
+      ? backendProbe.then((backendOk) => (backendOk ? probeExternalInternet() : false))
+      : backendProbe;
+
+    confirmed
+      .then((isOnlineNow) => {
+        if (isOnlineNow) markBackOnline();
+        // Otherwise stay quiet and keep the offline notice up; the recovery
+        // heartbeat will try again shortly.
+      })
+      .catch(() => {})
+      .finally(() => {
+        verifyInFlightRef.current = false;
+      });
+  }, [markBackOnline]);
+
   // Network-error signal: a request that fails in the network layer while the
   // browser still claims to be online (server/database down, timeout) is
   // treated as offline too, so the draft safety net always applies.
@@ -148,19 +252,29 @@ export default function useOfflineDetection({ isEditingDraft, form, photo }) {
       setDegraded(true);
     };
     const apiOnline = () => {
+      if (simulatedOfflineRef.current) return;
+      // A successful response proves connectivity — but only if it actually
+      // travelled over a live network. When WiFi drops, requests that were
+      // already in flight can still resolve from the browser's buffer, and a
+      // browser that fell back to another interface reports "online". Either
+      // way that is not a real recovery, so confirm with a fresh, uncached
+      // probe instead of announcing from the stale success alone. `degraded` is
+      // cleared only inside markBackOnline so the offline notice stays visible
+      // if the probe fails.
+      if (offlineSessionRef.current) {
+        verifyConnection();
+        return;
+      }
+      // Normal state (never lost connectivity this session): just keep the
+      // flags in sync so the offline notice cannot stick.
       if (degradedRef.current) {
         degradedRef.current = false;
         setDegraded(false);
       }
-      if (simulatedOfflineRef.current) return;
-      // A successful response proves connectivity. Recover the browser flag
-      // too — the browser's own "online" event can lag or never fire, so a
-      // recovered probe is what triggers the prompt "You're back online!".
       if (!browserOnlineRef.current) {
         browserOnlineRef.current = true;
         setBrowserOnline(true);
       }
-      markBackOnline();
     };
     window.addEventListener('api:network-offline', apiOffline);
     window.addEventListener('api:network-online', apiOnline);
@@ -168,7 +282,7 @@ export default function useOfflineDetection({ isEditingDraft, form, photo }) {
       window.removeEventListener('api:network-offline', apiOffline);
       window.removeEventListener('api:network-online', apiOnline);
     };
-  }, [markBackOnline]);
+  }, [verifyConnection]);
 
   // Keep simulated-offline state in sync across components.
   useEffect(() => {
@@ -201,7 +315,11 @@ export default function useOfflineDetection({ isEditingDraft, form, photo }) {
   useEffect(() => {
     if (simulatedOffline) return;
     const interval = !browserOnline || degraded ? RECOVERY_HEARTBEAT_MS : HEARTBEAT_MS;
-    const ping = () => api.get('/health').catch(() => {});
+    // `_retried` skips the retry chain (a probe must fail fast to be
+    // meaningful) and `t` defeats the HTTP cache — without it a cached 200
+    // from before the outage would look like a live connection.
+    const ping = () =>
+      api.get('/health', { timeout: 6000, _retried: true, params: { t: Date.now() } }).catch(() => {});
     ping();
     const id = setInterval(ping, interval);
     return () => clearInterval(id);
@@ -209,10 +327,10 @@ export default function useOfflineDetection({ isEditingDraft, form, photo }) {
 
   useEffect(() => {
     const goOnline = () => {
-      setBrowserOnline(true);
-      browserOnlineRef.current = true;
-      backOnlineToastShownRef.current = false;
-      markBackOnline();
+      // The event is not proof of connectivity (interface fallback fires it
+      // too), and a cached response must not count as a live one — so probe
+      // the server for real before clearing the offline notice or toasting.
+      verifyConnection();
     };
     const goOffline = () => {
       setBrowserOnline(false);
@@ -228,7 +346,7 @@ export default function useOfflineDetection({ isEditingDraft, form, photo }) {
       window.removeEventListener('offline', goOffline);
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
-  }, [checkPending, markBackOnline]);
+  }, [checkPending, verifyConnection]);
 
   // While offline, keep the form persisted locally (debounced) so the draft is
   // restored even if the owner closes the tab.

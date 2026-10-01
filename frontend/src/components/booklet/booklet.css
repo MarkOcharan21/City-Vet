@@ -440,34 +440,6 @@
   to   { opacity: 1; transform: none; }
 }
 
-/* ---------- lost alert ---------- */
-.booklet-lost {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  color: #fff;
-  border-radius: var(--cvo-radius-md);
-  padding: 18px 22px;
-  margin-bottom: 16px;
-  box-shadow: 0 6px 20px rgba(220, 38, 38, 0.22);
-}
-.booklet-lost__title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: 0.04em;
-}
-.booklet-lost__text {
-  margin: 6px 0 2px;
-  font-size: 14px;
-  opacity: 0.95;
-}
-.booklet-lost__seen {
-  margin: 0;
-  font-size: 14px;
-  opacity: 0.92;
-}
-
 /* ---------- cover ---------- */
 .booklet-cover {
   background: var(--cvo-paper);
@@ -803,9 +775,19 @@
   display: grid;
   gap: 14px 18px;
 }
-.booklet-grid--2 { grid-template-columns: repeat(2, 1fr); }
-.booklet-grid--4 { grid-template-columns: repeat(4, 1fr); }
+/* minmax(0, 1fr) instead of 1fr: a bare 1fr track still has an `auto`
+   minimum, so one long unbroken value (a pet name, a breed, an address)
+   would force its own column wider and squeeze the others — knocking the
+   whole booklet out of alignment. A zero minimum keeps every column even
+   and lets the text wrap inside its own card instead. */
+.booklet-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.booklet-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .profile-item {
+  display: flex;
+  flex-direction: column;
+  /* Belt-and-braces with minmax(0, 1fr): lets the card shrink below its
+     content width so an overlong value cannot widen the track. */
+  min-width: 0;
   background: #f8fafc;
   border: 1px solid var(--cvo-line);
   border-radius: var(--cvo-radius-sm);
@@ -822,8 +804,14 @@
   margin-bottom: 3px;
 }
 .profile-item__value {
+  display: block;
+  min-width: 0;
   font-size: 14px;
+  line-height: 1.35;
   color: var(--cvo-ink);
+  /* Break long single words (or a run-together name) inside the card rather
+     than letting them spill past the border. */
+  overflow-wrap: anywhere;
 }
 .profile-item__value--strong { font-weight: 800; }
 .profile-item__value--muted { color: var(--cvo-muted); font-style: italic; }
@@ -1039,6 +1027,18 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+/* Clarifies that the owner is standing in for a missing emergency contact,
+   so a responder is not left hunting for a separate person. */
+.emergency-card__hint {
+  flex-basis: 100%;
+  font-style: normal;
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--cvo-muted);
 }
 .emergency-note {
   display: flex;
@@ -1523,14 +1523,6 @@
   border-color: var(--cvo-red);
   color: var(--cvo-red);
 }
-.booklet-edit__btn--danger-ghost {
-  background: var(--cvo-paper);
-  border-color: var(--cvo-gold);
-  color: #9a6b1f;
-}
-.booklet-edit__btn--danger-ghost:hover {
-  background: #fdf6e7;
-}
 .booklet-edit__photo-row {
   display: flex;
   align-items: center;
@@ -1551,20 +1543,6 @@
   color: var(--cvo-muted);
   background: var(--cvo-bg);
   border-style: dashed;
-}
-.booklet-edit__lost-active {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 12px 14px;
-  border: 1px solid #f3d9a5;
-  background: #fdf6e7;
-  border-radius: 10px;
-  color: #7c5a13;
-  font-size: 0.88rem;
-  font-weight: 600;
 }
 @media (max-width: 640px) {
   .booklet-edit__grid {

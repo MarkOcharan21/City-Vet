@@ -69,7 +69,6 @@ function petVaccineStatus(pet) {
   const dueSoon = Number(pet.due_soon_vaccinations || 0);
   const total = Number(pet.vaccination_count || 0);
 
-  if (pet.is_lost) return { label: "Missing", tone: "danger" };
   if (overdue > 0) return { label: "Overdue", tone: "danger" };
   if (dueSoon > 0) return { label: "Due Soon", tone: "warn" };
   if (total === 0) return { label: "No Records", tone: "muted" };
