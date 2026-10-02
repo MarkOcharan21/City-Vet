@@ -500,7 +500,16 @@ async function verifyTransaction(req, res) {
     await connection.rollback();
     connection.release();
     console.error("Verify outreach transaction error:", error);
-    res.status(500).json({ success: false, message: "Could not verify transaction.", error: error.message });
+    // Return actual MySQL error for debugging
+    res.status(500).json({
+      success: false,
+      message: "Could not verify transaction.",
+      error: error.message,
+      code: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage
+    });
   }
 }
 
