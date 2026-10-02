@@ -500,7 +500,7 @@ export default function PaymentHistory() {
                   </td>
                   <td className="ph-cell-source"><SourceChip source={record.source} /></td>
                   <td className="ph-cell-ref">
-                     {record.ref || '—'}
+                     <span className="ph-ref-tag">{record.ref || '—'}</span>
                   </td>
                   <td className="ph-cell-amount">{fmtMoney(record.amount)}</td>
                   <td className="ph-cell-status"><StatusChip status={record.status} /></td>

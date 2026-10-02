@@ -3532,6 +3532,11 @@ body:has(.clinic-access-page)::before {
   width: 24%;
 }
 .ph-table-card .data-table .ph-cell-ref {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-table-card .data-table .ph-ref-tag {
   display: inline-block;
   max-width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -3546,6 +3551,7 @@ body:has(.clinic-access-page)::before {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  vertical-align: middle;
 }
 .ph-table-card .data-table .ph-th-amount,
 .ph-table-card .data-table .ph-cell-amount {
