@@ -74,9 +74,10 @@ async function fetchClinicRecords(ownerId, filters = {}) {
 
 // Fetch outreach payments matched to an owner by their full name
 // (the public QR flow stores owner_name as text only).
-async function fetchOutreachRecords(ownerName, filters = {}) {
-  const conditions = ["LOWER(TRIM(ot.owner_name)) = LOWER(TRIM(?))"];
-  const params = [ownerName];
+// Also matches by linked pet_owner_id for linked pets.
+async function fetchOutreachRecords(ownerName, ownerId, filters = {}) {
+  const conditions = ["(LOWER(TRIM(ot.owner_name)) = LOWER(TRIM(?)) OR ot.pet_owner_id = ?)"];
+  const params = [ownerName, ownerId];
 
   conditions.push(`ot.status IN (${OUTREACH_SHOWN_STATUSES.map(() => "?").join(", ")})`);
   params.push(...OUTREACH_SHOWN_STATUSES);
@@ -158,7 +159,7 @@ async function getOwnerPaymentHistory(req, res) {
     // Everything the owner has ever paid, for the summary cards.
     const [allClinic, allOutreach] = await Promise.all([
       fetchClinicRecords(owner.id),
-      fetchOutreachRecords(owner.full_name),
+      fetchOutreachRecords(owner.full_name, owner.id),
     ]);
 
     // Filtered copy for the table.
@@ -167,7 +168,7 @@ async function getOwnerPaymentHistory(req, res) {
     const outreachNeeded = !source || source === "outreach";
     const [clinicRows, outreachRows] = await Promise.all([
       clinicNeeded ? fetchClinicRecords(owner.id, filters) : Promise.resolve([]),
-      outreachNeeded ? fetchOutreachRecords(owner.full_name, filters) : Promise.resolve([]),
+      outreachNeeded ? fetchOutreachRecords(owner.full_name, owner.id, filters) : Promise.resolve([]),
     ]);
 
     const clinicRecord = (r) => ({
