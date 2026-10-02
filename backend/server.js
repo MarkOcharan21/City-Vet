@@ -68,6 +68,8 @@ const {
     startNotificationScheduler,
 } = require("./src/services/notificationScheduler");
 
+const { ensurePaymentTypeOutreach } = require("./src/db/ensurePaymentType");
+
 const {
     startAnnouncementScheduler,
 } = require("./src/services/announcementScheduler");
@@ -1675,6 +1677,10 @@ async function freePortIfBusy() {
 (async () => {
   try {
     await startSchedulers();
+
+    // Ensure payment_monitoring.payment_type supports 'Outreach' so that
+    // outreach verification can create the owner payment record on boot.
+    await ensurePaymentTypeOutreach();
 
     // Free an already-running backend before binding, so `npm run dev`
     // always starts cleanly with no manual netstat/taskkill needed.

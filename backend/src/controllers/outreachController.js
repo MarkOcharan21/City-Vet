@@ -465,12 +465,16 @@ async function verifyTransaction(req, res) {
     );
     const itemsJson = JSON.stringify(items.map(it => ({ service_name: it.service_name, amount: Number(it.amount) })));
 
+    const isPg = db.dialect === "postgres";
+    const todayExpr = isPg ? "CURRENT_DATE" : "CURDATE()";
+    const nowTimeExpr = isPg ? "CURRENT_TIME" : "CURTIME()";
+
     await connection.query(
       `INSERT INTO payment_monitoring (
         pet_owner_id, pet_id, payment_type, payment_reference, payment_status,
         total_amount, or_amount, or_date, or_time, payment_items,
         recorded_by, remarks, created_at
-      ) VALUES (?, ?, 'Outreach', ?, 'Paid', ?, ?, CURDATE(), CURTIME(), ?, ?, ?, NOW())`,
+      ) VALUES (?, ?, 'Outreach', ?, 'Paid', ?, ?, ${todayExpr}, ${nowTimeExpr}, ?, ?, ?, NOW())`,
       [
         tx.pet_owner_id || null,
         tx.pet_id || null,
