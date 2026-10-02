@@ -225,6 +225,12 @@ export default function OutreachMonitoring() {
 
   const totals = summary ? summary.totals : null;
 
+  const analyticsRows = useMemo(() => {
+    const all = summary?.byBarangay || [];
+    if (!barangayFilter) return all;
+    return all.filter((b) => b.barangay === barangayFilter);
+  }, [summary, barangayFilter]);
+
   const shownPrograms = useMemo(() => {
     const term = programSearch.trim().toLowerCase();
     return programs.filter((p) => {
@@ -745,15 +751,44 @@ export default function OutreachMonitoring() {
           <div>
             <h2>Barangay Analytics</h2>
             <p>
-              {selectedId
-                ? "Transactions for the selected program, grouped by barangay."
-                : "Transactions across all outreach programs, grouped by barangay."}
+              {barangayFilter
+                ? `Showing ${barangayFilter}${selectedId ? " for the selected program" : ""}.`
+                : selectedId
+                  ? "Transactions for the selected program, grouped by barangay."
+                  : "Transactions across all outreach programs, grouped by barangay."}
             </p>
           </div>
-          <div className="table-meta">
-            {summary?.byBarangay?.length || 0} barangay{summary?.byBarangay?.length === 1 ? "" : "s"}
+          <div className="table-meta" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", minWidth: 0 }}>
+            {(summary?.byBarangay?.length || 0) > 0 && (
+              <select
+                value={barangayFilter}
+                onChange={(e) => setBarangayFilter(e.target.value)}
+                aria-label="Filter barangay analytics"
+                className="toolbar-select--barangay"
+                style={{ maxWidth: "100%" }}
+              >
+                <option value="">All Barangays</option>
+                {(summary?.byBarangay || []).map((b) => (
+                  <option key={b.barangay} value={b.barangay}>{b.barangay}</option>
+                ))}
+              </select>
+            )}
+            {barangayFilter ? (
+              <span>
+                {analyticsRows.length} of {summary?.byBarangay?.length || 0} barangay{summary?.byBarangay?.length === 1 ? "" : "s"}
+              </span>
+            ) : (
+              <span>
+                {summary?.byBarangay?.length || 0} barangay{summary?.byBarangay?.length === 1 ? "" : "s"}
+              </span>
+            )}
           </div>
         </div>
+        {barangayFilter && !selectedId && (
+          <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6B7280" }}>
+            Select a program below to open its transactions for <strong>{barangayFilter}</strong>.
+          </p>
+        )}
         <div className="table-wrapper">
           <table className="data-table">
             <thead>
@@ -766,14 +801,14 @@ export default function OutreachMonitoring() {
               </tr>
             </thead>
             <tbody>
-              {!summary?.byBarangay || summary.byBarangay.length === 0 ? (
+              {analyticsRows.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="empty-state-cell">
-                    No transactions recorded yet.
+                    {barangayFilter ? `No transactions for ${barangayFilter} yet.` : "No transactions recorded yet."}
                   </td>
                 </tr>
               ) : (
-                summary.byBarangay.map((b) => (
+                analyticsRows.map((b) => (
                   <tr key={b.barangay}>
                     <td data-label="Barangay" style={{ fontWeight: 600 }}>{b.barangay}</td>
                     <td data-label="Transactions">{b.total}</td>
@@ -784,14 +819,14 @@ export default function OutreachMonitoring() {
                 ))
               )}
             </tbody>
-            {summary?.byBarangay?.length > 0 && (
+            {analyticsRows.length > 0 && (
               <tfoot>
                 <tr style={{ background: "#f8fafc", fontWeight: 700 }}>
                   <td data-label="Barangay">Total</td>
-                  <td data-label="Transactions">{summary.byBarangay.reduce((s, b) => s + b.total, 0)}</td>
-                  <td data-label="Paid">{summary.byBarangay.reduce((s, b) => s + b.verified, 0)}</td>
-                  <td data-label="Paid Amount" style={{ fontWeight: 700 }}>{pesoSymbol.format(summary.byBarangay.reduce((s, b) => s + (b.verifiedAmount || 0), 0))}</td>
-                  <td data-label="Total Amount" style={{ fontWeight: 800 }}>{pesoSymbol.format(summary.byBarangay.reduce((s, b) => s + (b.amount || 0), 0))}</td>
+                  <td data-label="Transactions">{analyticsRows.reduce((s, b) => s + b.total, 0)}</td>
+                  <td data-label="Paid">{analyticsRows.reduce((s, b) => s + b.verified, 0)}</td>
+                  <td data-label="Paid Amount" style={{ fontWeight: 700 }}>{pesoSymbol.format(analyticsRows.reduce((s, b) => s + (b.verifiedAmount || 0), 0))}</td>
+                  <td data-label="Total Amount" style={{ fontWeight: 800 }}>{pesoSymbol.format(analyticsRows.reduce((s, b) => s + (b.amount || 0), 0))}</td>
                 </tr>
               </tfoot>
             )}
