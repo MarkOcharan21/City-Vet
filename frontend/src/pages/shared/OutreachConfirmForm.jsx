@@ -224,7 +224,7 @@ function PetCodeLookup({ onSelect, onClear }) {
           className="form-control"
           value={code}
           onChange={handleChange}
-          placeholder="e.g. 000381 or PET-2026-000381"
+          placeholder="e.g. 000381, PET-2026-000381, or pet name"
           style={{ paddingRight: 38 }}
           autoComplete="off"
         />
@@ -234,7 +234,7 @@ function PetCodeLookup({ onSelect, onClear }) {
       </div>
 
       <p style={{ margin: "5px 0 0", fontSize: 12, color: "#9CA3AF" }}>
-        Type at least 4 digits — we'll find the matching pet.
+        Type at least 4 characters — we'll search by pet code or pet name.
       </p>
 
       {/* Results dropdown */}
@@ -612,7 +612,9 @@ export default function OutreachConfirmForm() {
                   Pet Code
                 </label>
                 <p style={{ margin: "0 0 8px", fontSize: 13, color: "#6B7280" }}>
-                  Enter the pet code from your pet's QR record (e.g. <code style={{ background: "#e5e7eb", padding: "1px 5px", borderRadius: 4 }}>PET-2026-000381</code>).
+                  Enter your pet code or pet name to find your registration fast (e.g.{" "}
+                  <code style={{ background: "#e5e7eb", padding: "1px 5px", borderRadius: 4 }}>PET-2026-000381</code> or{" "}
+                  <code style={{ background: "#e5e7eb", padding: "1px 5px", borderRadius: 4 }}>Max</code>).
                 </p>
                 <PetCodeLookup onSelect={handlePetSelect} onClear={handlePetClear} />
               </div>

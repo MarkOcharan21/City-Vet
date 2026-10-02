@@ -707,7 +707,7 @@ async function deleteTransaction(req, res) {
 async function lookupPetByCode(req, res) {
   const raw = String(req.query.code || "").trim();
   if (!raw || raw.length < 4) {
-    return res.status(400).json({ success: false, message: "Enter at least 4 digits of the pet code." });
+    return res.status(400).json({ success: false, message: "Enter at least 4 characters of the pet code or name." });
   }
 
   try {
@@ -728,7 +728,7 @@ async function lookupPetByCode(req, res) {
          LIMIT 1`,
         [raw.toUpperCase()]
       );
-    } else {
+    } else if (/^\d+$/.test(raw)) {
       // Numeric-only: pad to 6 digits and match the suffix
       const padded = raw.replace(/\D/g, "").padStart(6, "0");
       [rows] = await db.query(
@@ -742,10 +742,25 @@ async function lookupPetByCode(req, res) {
          LIMIT 5`,
         [`%-${padded}`]
       );
+    } else {
+      // Name search: match pet name or owner name so staff/pet owners
+      // can find the pet quickly without the exact code.
+      [rows] = await db.query(
+        `SELECT p.id, p.pet_code, p.name AS pet_name,
+                po.full_name AS owner_name, po.id AS pet_owner_id,
+                s.species_name, p.sex
+         FROM pets p
+         JOIN pet_owners po ON p.pet_owner_id = po.id
+         LEFT JOIN species s ON p.species_id = s.id
+         WHERE p.status = 'Verified' AND (p.name LIKE ? OR po.full_name LIKE ?)
+         ORDER BY p.name ASC
+         LIMIT 8`,
+        [`%${raw}%`, `%${raw}%`]
+      );
     }
 
     if (!rows || rows.length === 0) {
-      return res.json({ success: false, message: "No verified pet found with that code." });
+      return res.json({ success: false, message: "No verified pet found matching that code or name." });
     }
 
     res.json({

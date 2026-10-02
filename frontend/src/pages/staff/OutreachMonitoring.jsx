@@ -105,6 +105,7 @@ export default function OutreachMonitoring() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [copyFromId, setCopyFromId] = useState("");
   const [savingProgram, setSavingProgram] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -221,6 +222,7 @@ export default function OutreachMonitoring() {
   function openCreateProgram() {
     setForm({ ...EMPTY_FORM, services: [] });
     setProgram(null);
+    setCopyFromId("");
     setCreateOpen(true);
   }
 
@@ -234,7 +236,31 @@ export default function OutreachMonitoring() {
       notes: program.notes || "",
       services: (program.services || []).map((s) => ({ service_name: s.service_name, amount: s.amount })),
     });
+    setCopyFromId("");
     setCreateOpen(true);
+  }
+
+  async function copyFromProgram(id) {
+    setCopyFromId(id);
+    if (!id) {
+      setForm({ ...EMPTY_FORM, services: [] });
+      return;
+    }
+    try {
+      const res = await api.get(`/outreach/${id}`);
+      const p = res.data.program;
+      setForm({
+        program_name: p.program_name,
+        event_date: p.event_date ? String(p.event_date).slice(0, 10) : "",
+        end_date: p.end_date ? String(p.end_date).slice(0, 10) : "",
+        barangay: p.barangay || "",
+        venue: p.venue || "",
+        notes: p.notes || "",
+        services: (p.services || []).map((s) => ({ service_name: s.service_name, amount: s.amount })),
+      });
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Could not load the selected event.");
+    }
   }
 
   function addServiceRow() {
@@ -1058,6 +1084,21 @@ export default function OutreachMonitoring() {
             <h2 style={{ marginTop: 0 }}>{program ? "Edit Program" : "Create Outreach Program"}</h2>
             <form onSubmit={program ? saveProgram : handleCreateProgram}>
               <div className="field-group">
+                <label>Copy from an existing event (optional)</label>
+                <select
+                  className="form-control"
+                  value={copyFromId}
+                  onChange={(e) => copyFromProgram(e.target.value)}
+                >
+                  <option value="">— Start a blank program —</option>
+                  {programs.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.program_name} · {p.barangay || "Citywide"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field-group">
                 <label>Program Name *</label>
                 <input
                   className="form-control"
@@ -1084,18 +1125,18 @@ export default function OutreachMonitoring() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div className="field-group">
                   <label>Barangay</label>
-                  <input
+                  <select
                     className="form-control"
-                    list="program-barangay-list"
-                    value={form.barangay || program?.barangay || ""}
+                    value={form.barangay || ""}
                     onChange={(e) => setForm({ ...form, barangay: e.target.value })}
-                    placeholder="(blank = citywide)"
-                  />
-                  <datalist id="program-barangay-list">
+                  >
+                    <option value="">Citywide (all barangays)</option>
                     {ALL_CABUYAO_BARANGAYS.map((b) => (
-                      <option key={b} value={b} />
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
                     ))}
-                  </datalist>
+                  </select>
                 </div>
                 <div className="field-group">
                   <label>Venue</label>
