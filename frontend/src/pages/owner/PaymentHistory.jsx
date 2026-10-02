@@ -484,7 +484,7 @@ export default function PaymentHistory() {
             <thead>
               <tr>
                 <th className="ph-th-date">Date</th>
-                <th>Source</th>
+                <th className="ph-th-source">Source</th>
                 <th className="ph-th-ref">Reference</th>
                 <th className="ph-th-amount">Amount</th>
                 <th className="ph-th-status">Status</th>

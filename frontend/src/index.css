@@ -3483,16 +3483,26 @@ body:has(.clinic-access-page)::before {
   border: none;
   box-shadow: none;
   background: transparent;
-  min-width: 820px;
+  width: 100%;
+  min-width: 720px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 .ph-table-card .data-table thead th {
-  padding: 0.8rem 1.1rem;
-  background: transparent;
+  padding: 0.85rem 1.1rem;
+  background: rgba(200, 17, 46, 0.035);
   border-bottom: 2px solid var(--color-border);
   font-size: 0.72rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--color-text-muted);
+}
+.ph-table-card .data-table thead th:first-child {
+  border-top-left-radius: 16px;
+}
+.ph-table-card .data-table thead th:last-child {
+  border-top-right-radius: 16px;
 }
 .ph-table-card .data-table tbody td {
   padding: 0.9rem 1.1rem;
@@ -3509,29 +3519,54 @@ body:has(.clinic-access-page)::before {
 }
 .ph-table-card .data-table .ph-th-date,
 .ph-table-card .data-table .ph-cell-date {
+  width: 15%;
+  white-space: nowrap;
+}
+.ph-table-card .data-table .ph-th-source,
+.ph-table-card .data-table .ph-cell-source {
+  width: 15%;
   white-space: nowrap;
 }
 .ph-table-card .data-table .ph-th-ref,
 .ph-table-card .data-table .ph-cell-ref {
-  white-space: nowrap;
+  width: 24%;
 }
 .ph-table-card .data-table .ph-cell-ref {
-  font-weight: 700;
+  display: inline-block;
+  max-width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--color-ink);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.22rem 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ph-table-card .data-table .ph-th-amount,
 .ph-table-card .data-table .ph-cell-amount {
+  width: 15%;
   text-align: right;
 }
 .ph-table-card .data-table .ph-cell-amount {
   white-space: nowrap;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+}
+.ph-table-card .data-table .ph-th-status,
+.ph-table-card .data-table .ph-cell-status {
+  width: 17%;
+  text-align: center;
 }
 .ph-table-card .data-table .ph-th-actions,
 .ph-table-card .data-table .ph-cell-actions {
+  width: 14%;
   text-align: right;
-  width: 1%;
   white-space: nowrap;
 }
 .ph-table-card .data-table .ph-cell-actions .btn-sm {
