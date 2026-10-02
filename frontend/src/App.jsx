@@ -134,6 +134,7 @@ export default function App() {
               </ProtectedRoute>
             }
           >
+            <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<OwnerDashboard />} />
 
             <Route path="register-pet" element={<PetRegistration />} />
@@ -182,6 +183,7 @@ export default function App() {
               </ProtectedRoute>
             }
           >
+             <Route index element={<Navigate to="dashboard" replace />} />
              <Route
                path="dashboard"
                element={<StaffDashboard />}
@@ -219,10 +221,11 @@ export default function App() {
              path="/veterinarian"
              element={
                <ProtectedRoute allowedRoles={["Veterinarian"]}>
-                 <VeterinarianLayout />
-               </ProtectedRoute>
+<VeterinarianLayout />
+                </ProtectedRoute>
              }
            >
+             <Route index element={<Navigate to="dashboard" replace />} />
              <Route
                path="dashboard"
                element={<VeterinarianDashboard />}
@@ -264,6 +267,7 @@ export default function App() {
               </ProtectedRoute>
             }
           >
+            <Route index element={<Navigate to="overview" replace />} />
             <Route
               path="overview"
               element={<SystemOverview />}

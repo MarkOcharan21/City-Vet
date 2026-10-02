@@ -1,13 +1,16 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { loginPathForPathname, dashboardPathForRole, roleMatchesPath } from '../utils/authStorage';
+import LoadingSpinner from './ui/LoadingSpinner';
 
 export default function ProtectedRoute({ children, allowedRoles }) {
   const { user, initializing } = useAuth();
   const location = useLocation();
 
-  // Still reading localStorage — render nothing to avoid flash-redirect
-  if (initializing) return null;
+  // Still reading localStorage — show a spinner instead of a blank screen
+  if (initializing) {
+    return <LoadingSpinner text="Checking session..." />;
+  }
 
   const pathname = location.pathname;
 
