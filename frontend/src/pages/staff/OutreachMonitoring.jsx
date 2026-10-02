@@ -1262,7 +1262,7 @@ export default function OutreachMonitoring() {
                 <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary" disabled={savingProgram}>
+                <button type="submit" className="btn-primary" style={{ marginTop: 0, padding: "0.85rem 1.1rem", borderRadius: 10 }} disabled={savingProgram}>
                   {savingProgram ? "Saving..." : program ? "Save Changes" : "Create Program"}
                 </button>
               </div>
