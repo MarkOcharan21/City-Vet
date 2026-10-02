@@ -17,6 +17,10 @@ import {
   Eye,
   Pencil,
   Trash2,
+  Copy,
+  ClipboardList,
+  StickyNote,
+  X,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -35,6 +39,26 @@ const STATUS_COLORS = {
   Verified: "#16a34a",
   Rejected: "#dc2626",
 };
+
+const OUTREACH_GREEN = "#0b3d2e";
+const OUTREACH_LIGHT = "#e6f4ee";
+
+function SectionTitle({ icon, title, hint, right }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <span style={{ width: 30, height: 30, borderRadius: 8, background: OUTREACH_LIGHT, color: OUTREACH_GREEN, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          {icon}
+        </span>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", lineHeight: 1.2 }}>{title}</div>
+          {hint && <div style={{ fontSize: 12, color: "#9CA3AF", fontWeight: 500 }}>{hint}</div>}
+        </div>
+      </div>
+      {right}
+    </div>
+  );
+}
 
 function formatDate(value) {
   if (!value) return "—";
@@ -1080,16 +1104,41 @@ export default function OutreachMonitoring() {
       {/* ---------- CREATE / EDIT PROGRAM MODAL ---------- */}
       {createOpen && (
         <Overlay onClose={() => setCreateOpen(false)}>
-          <div style={{ maxWidth: 620, width: "100%", maxHeight: "90vh", overflow: "auto", background: "#fff", borderRadius: 14, padding: 22 }}>
-            <h2 style={{ marginTop: 0 }}>{program ? "Edit Program" : "Create Outreach Program"}</h2>
-            <form onSubmit={program ? saveProgram : handleCreateProgram}>
-              <div className="field-group">
-                <label>Copy from an existing event (optional)</label>
-                <select
-                  className="form-control"
-                  value={copyFromId}
-                  onChange={(e) => copyFromProgram(e.target.value)}
-                >
+          <div style={{ width: "min(680px, calc(100vw - 32px))", maxHeight: "90vh", background: "#fff", borderRadius: 16, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            {/* Modal header */}
+            <div style={{ background: OUTREACH_GREEN, color: "#fff", padding: "18px 24px", display: "flex", alignItems: "center", gap: 13, flexShrink: 0 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <CalendarDays size={20} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 17 }}>{program ? "Edit Outreach Program" : "Create Outreach Program"}</div>
+                <div style={{ fontSize: 12.5, opacity: 0.85 }}>
+                  {program ? "Update the event details and services." : "Set up the event schedule, barangay and service prices."}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(false)}
+                title="Close"
+                aria-label="Close"
+                style={{ marginLeft: "auto", background: "none", border: "none", color: "#fff", opacity: 0.85, cursor: "pointer", padding: 6, display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={program ? saveProgram : handleCreateProgram} style={{ padding: "22px 24px 20px", overflowY: "auto", minHeight: 0 }}>
+              {/* Copy from an existing event */}
+              <div style={{ background: "#f8fafb", border: "1px solid #e5e7eb", borderRadius: 12, padding: "14px 16px", marginBottom: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Copy size={15} color="#6B7280" />
+                  <span style={{ fontWeight: 700, fontSize: 13.5, color: "#374151" }}>Copy from an existing event</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#6B7280", background: "#eef0f2", borderRadius: 999, padding: "2px 8px" }}>OPTIONAL</span>
+                </div>
+                <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "#9CA3AF" }}>
+                  Select an event to pre-fill everything below, then adjust before saving.
+                </p>
+                <select className="form-control" value={copyFromId} onChange={(e) => copyFromProgram(e.target.value)}>
                   <option value="">— Start a blank program —</option>
                   {programs.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -1098,11 +1147,15 @@ export default function OutreachMonitoring() {
                   ))}
                 </select>
               </div>
+
+              {/* Event details */}
+              <SectionTitle icon={<MapPin size={15} />} title="Event Details" hint="Where and when the outreach will happen" />
               <div className="field-group">
                 <label>Program Name *</label>
                 <input
                   className="form-control"
                   required
+                  placeholder="e.g. Anti-Rabies Vaccination Drive"
                   value={form.program_name || program?.program_name || ""}
                   onChange={(e) => setForm({ ...form, program_name: e.target.value })}
                 />
@@ -1140,47 +1193,72 @@ export default function OutreachMonitoring() {
                 </div>
                 <div className="field-group">
                   <label>Venue</label>
-                  <input className="form-control" value={form.venue || program?.venue || ""} onChange={(e) => setForm({ ...form, venue: e.target.value })} />
+                  <input className="form-control" placeholder="e.g. Barangay Covered Court" value={form.venue || program?.venue || ""} onChange={(e) => setForm({ ...form, venue: e.target.value })} />
                 </div>
               </div>
 
-              <div className="field-group">
-                <label>Services & Prices</label>
-                {form.services.map((s, index) => (
-                  <div key={index} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                    <input
-                      className="form-control"
-                      style={{ flex: 1 }}
-                      placeholder="Service (e.g. Anti-Rabies)"
-                      value={s.service_name}
-                      onChange={(e) => updateService(index, "service_name", e.target.value)}
-                    />
-                    <input
-                      className="form-control"
-                      style={{ width: 110 }}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={s.amount}
-                      onChange={(e) => updateService(index, "amount", e.target.value)}
-                    />
-                    <button type="button" className="btn-delete-text" onClick={() => removeService(index)}>
-                      ×
+              {/* Services & prices */}
+              <div style={{ marginTop: 10 }}>
+                <SectionTitle
+                  icon={<ClipboardList size={15} />}
+                  title="Services & Prices"
+                  hint="Checklist shown on the owner QR form"
+                  right={
+                    <button type="button" className="btn-secondary btn-sm" onClick={addServiceRow}>
+                      <Plus size={14} /> Add service
                     </button>
+                  }
+                />
+                <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafb", borderBottom: "1px solid #e5e7eb" }}>
+                    <span style={{ flex: 1, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#6B7280" }}>Service</span>
+                    <span style={{ width: 110, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#6B7280", textAlign: "right" }}>Amount (₱)</span>
+                    <span style={{ width: 36 }} />
                   </div>
-                ))}
-                <button type="button" className="btn-secondary btn-sm" onClick={addServiceRow}>
-                  + Add service
-                </button>
+                  {form.services.length === 0 && (
+                    <p style={{ margin: 0, padding: "16px 14px", fontSize: 13, color: "#9CA3AF", textAlign: "center", background: "#fff" }}>
+                      No services yet — click &quot;Add service&quot; to begin.
+                    </p>
+                  )}
+                  {form.services.map((s, index) => (
+                    <div key={index} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "#fff", borderTop: index > 0 ? "1px solid #f3f4f6" : "none" }}>
+                      <input
+                        className="form-control"
+                        style={{ flex: 1 }}
+                        placeholder="Service (e.g. Anti-Rabies)"
+                        value={s.service_name}
+                        onChange={(e) => updateService(index, "service_name", e.target.value)}
+                      />
+                      <input
+                        className="form-control"
+                        style={{ width: 110 }}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={s.amount}
+                        onChange={(e) => updateService(index, "amount", e.target.value)}
+                      />
+                      <button type="button" className="btn-delete-text" onClick={() => removeService(index)} title="Remove service">
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="field-group">
-                <label>Notes</label>
-                <textarea className="form-control" rows={2} value={form.notes || program?.notes || ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              {/* Notes */}
+              <div className="field-group" style={{ marginTop: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                  <StickyNote size={14} color="#6B7280" />
+                  <label style={{ margin: 0 }}>Notes</label>
+                </div>
+                <textarea className="form-control" rows={2} placeholder="Internal notes for this event (optional)" value={form.notes || program?.notes || ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </div>
 
               {formError && <div className="form-error">{formError}</div>}
-              <div className="form-actions">
+
+              {/* Footer */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, paddingTop: 18, borderTop: "1px solid #f3f4f6", marginTop: 22 }}>
                 <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)}>
                   Cancel
                 </button>
