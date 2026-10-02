@@ -61,7 +61,7 @@ function StatusPill({ status }) {
         whiteSpace: "nowrap",
       }}
     >
-      {status}
+      {status === "Verified" ? "Paid" : status}
     </span>
   );
 }
