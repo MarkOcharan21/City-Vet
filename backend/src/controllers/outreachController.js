@@ -277,7 +277,8 @@ async function buildProgramSummary(outreachId) {
        ot.barangay,
        COUNT(*) AS total,
        COALESCE(${sumBool("ot.status = 'Verified'")},0) AS verified,
-       COALESCE(SUM(ot.total_amount),0) AS amount
+       COALESCE(SUM(ot.total_amount),0) AS amount,
+       COALESCE(SUM(CASE WHEN ot.status='Verified' THEN ot.total_amount ELSE 0 END),0) AS verifiedAmount
      FROM outreach_transactions ot ${where}
      GROUP BY ot.barangay
      ORDER BY amount DESC`,
@@ -285,23 +286,25 @@ async function buildProgramSummary(outreachId) {
   );
 
   const r = rows[0] || {};
+  const fallback = (camel, lower) => Number(camel ?? lower ?? 0);
   return {
     totals: {
-      total: Number(r.total || 0),
-      pending: Number(r.pending || 0),
-      submitted: Number(r.submitted || 0),
-      verified: Number(r.verified || 0),
-      rejected: Number(r.rejected || 0),
-      totalAmount: Number(r.totalAmount || 0),
-      verifiedAmount: Number(r.verifiedAmount || 0),
-      petOwners: Number(r.linkedOwners || 0) + Number(r.namedOwners || 0),
-      pets: Number(r.linkedPets || 0),
+      total: fallback(r.total, r.total),
+      pending: fallback(r.pending, r.pending),
+      submitted: fallback(r.submitted, r.submitted),
+      verified: fallback(r.verified, r.verified),
+      rejected: fallback(r.rejected, r.rejected),
+      totalAmount: fallback(r.totalAmount, r.totalamount),
+      verifiedAmount: fallback(r.verifiedAmount, r.verifiedamount),
+      petOwners: fallback(r.linkedOwners, r.linkedowners) + fallback(r.namedOwners, r.namedowners),
+      pets: fallback(r.linkedPets, r.linkedpets),
     },
     byBarangay: byBarangay.map((b) => ({
       barangay: b.barangay || "N/A",
       total: Number(b.total || 0),
       verified: Number(b.verified || 0),
       amount: Number(b.amount || 0),
+      verifiedAmount: Number(b.verifiedAmount ?? b.verifiedamount ?? 0),
     })),
   };
 }

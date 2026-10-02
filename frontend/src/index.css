@@ -12636,10 +12636,12 @@ body {
     display: none;
   }
   .data-table thead,
-  .data-table tbody {
+  .data-table tbody,
+  .data-table tfoot {
     display: block;
   }
-  .data-table tbody tr {
+  .data-table tbody tr,
+  .data-table tfoot tr {
     display: block;
     background: var(--color-card);
     border: 1px solid var(--color-border);
@@ -12648,10 +12650,12 @@ body {
     margin-bottom: 0.8rem;
     box-shadow: 0 8px 22px rgba(36,20,22,0.05);
   }
-  .data-table tbody tr:hover {
+  .data-table tbody tr:hover,
+  .data-table tfoot tr:hover {
     background: var(--color-card);
   }
-  .data-table tbody td {
+  .data-table tbody td,
+  .data-table tfoot td {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -12660,7 +12664,8 @@ body {
     border-bottom: none;
     font-size: 0.88rem;
   }
-  .data-table tbody td::before {
+  .data-table tbody td::before,
+  .data-table tfoot td::before {
     content: attr(data-label);
     color: var(--color-text-muted);
     font-size: 0.7rem;

@@ -605,10 +605,10 @@ export default function OutreachMonitoring() {
     ws.getColumn(2).width = 18;
 
     const bw = workbook.addWorksheet("By Barangay");
-    bw.addRow(["Barangay", "Transactions", "Paid", "Amount"]);
-    data.byBarangay.forEach((b) => bw.addRow([b.barangay, b.total, b.verified, b.amount]));
+    bw.addRow(["Barangay", "Transactions", "Paid", "Paid Amount", "Amount"]);
+    data.byBarangay.forEach((b) => bw.addRow([b.barangay, b.total, b.verified, b.verifiedAmount || 0, b.amount]));
     bw.getRow(1).font = { bold: true };
-    bw.columns = [{ width: 22 }, { width: 12 }, { width: 12 }, { width: 14 }];
+    bw.columns = [{ width: 22 }, { width: 12 }, { width: 12 }, { width: 14 }, { width: 14 }];
 
     const txWs = workbook.addWorksheet("Transactions");
     txWs.addRow(["Owner", "Pet", "Date", "Time", "Barangay", "Services", "Payment", "Status", "Submitted"]);
@@ -667,8 +667,8 @@ export default function OutreachMonitoring() {
     if (data.byBarangay.length) {
       autoTable(doc, {
         startY: doc.lastAutoTable.finalY + 8,
-        head: [["Barangay", "Transactions", "Paid", "Amount"]],
-        body: data.byBarangay.map((b) => [b.barangay, b.total, b.verified, pesoSymbol.format(b.amount)]),
+        head: [["Barangay", "Transactions", "Paid", "Paid Amount", "Amount"]],
+        body: data.byBarangay.map((b) => [b.barangay, b.total, b.verified, pesoSymbol.format(b.verifiedAmount || 0), pesoSymbol.format(b.amount)]),
       });
     }
 
@@ -737,6 +737,66 @@ export default function OutreachMonitoring() {
         <SummaryCard label="Paid" value={totals ? `${totals.verified} · ${pesoSymbol.format(totals.verifiedAmount)}` : "—"} sub="Verified / paid at counter" tone="success" />
         <SummaryCard label="Pending Payment" value={totals ? totals.submitted : "—"} sub="Awaiting counter payment" tone="warning" />
         <SummaryCard label="Rejected" value={totals ? totals.rejected : "—"} sub="Cancelled entries" tone="danger" />
+      </div>
+
+      {/* barangay analytics */}
+      <div className="panel-card" style={{ marginTop: 18 }}>
+        <div className="table-header-row">
+          <div>
+            <h2>Barangay Analytics</h2>
+            <p>
+              {selectedId
+                ? "Transactions for the selected program, grouped by barangay."
+                : "Transactions across all outreach programs, grouped by barangay."}
+            </p>
+          </div>
+          <div className="table-meta">
+            {summary?.byBarangay?.length || 0} barangay{summary?.byBarangay?.length === 1 ? "" : "s"}
+          </div>
+        </div>
+        <div className="table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Barangay</th>
+                <th>Transactions</th>
+                <th>Paid</th>
+                <th>Paid Amount</th>
+                <th>Total Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!summary?.byBarangay || summary.byBarangay.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="empty-state-cell">
+                    No transactions recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                summary.byBarangay.map((b) => (
+                  <tr key={b.barangay}>
+                    <td data-label="Barangay" style={{ fontWeight: 600 }}>{b.barangay}</td>
+                    <td data-label="Transactions">{b.total}</td>
+                    <td data-label="Paid">{b.verified}</td>
+                    <td data-label="Paid Amount" style={{ fontWeight: 600, color: "#16a34a" }}>{pesoSymbol.format(b.verifiedAmount || 0)}</td>
+                    <td data-label="Total Amount" style={{ fontWeight: 700 }}>{pesoSymbol.format(b.amount || 0)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            {summary?.byBarangay?.length > 0 && (
+              <tfoot>
+                <tr style={{ background: "#f8fafc", fontWeight: 700 }}>
+                  <td data-label="Barangay">Total</td>
+                  <td data-label="Transactions">{summary.byBarangay.reduce((s, b) => s + b.total, 0)}</td>
+                  <td data-label="Paid">{summary.byBarangay.reduce((s, b) => s + b.verified, 0)}</td>
+                  <td data-label="Paid Amount" style={{ fontWeight: 700 }}>{pesoSymbol.format(summary.byBarangay.reduce((s, b) => s + (b.verifiedAmount || 0), 0))}</td>
+                  <td data-label="Total Amount" style={{ fontWeight: 800 }}>{pesoSymbol.format(summary.byBarangay.reduce((s, b) => s + (b.amount || 0), 0))}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
       </div>
 
       {/* programs list */}
