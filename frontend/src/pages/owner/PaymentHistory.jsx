@@ -486,7 +486,6 @@ export default function PaymentHistory() {
                 <th className="ph-th-date">Date</th>
                 <th>Source</th>
                 <th className="ph-th-ref">Reference</th>
-                <th>Details</th>
                 <th className="ph-th-amount">Amount</th>
                 <th className="ph-th-status">Status</th>
                 <th className="ph-th-actions" aria-label="Actions" />
@@ -502,23 +501,6 @@ export default function PaymentHistory() {
                   <td className="ph-cell-source"><SourceChip source={record.source} /></td>
                   <td className="ph-cell-ref">
                      {record.ref || '—'}
-                  </td>
-                  <td className="ph-cell-details">
-                    {record.source === 'clinic' ? (
-                      record.description ? (
-                        <>
-                          <span className="ph-details-main">{record.description}</span>
-                          <span className="ph-details-sub">{(parsePaymentItems(record.payment_items) || []).length} item(s)</span>
-                        </>
-                      ) : (
-                        <span className="ph-details-main">{(parsePaymentItems(record.payment_items) || []).length} item(s)</span>
-                      )
-                    ) : (
-                      <>
-                        <span className="ph-details-main">{(record.items || []).length} service(s)</span>
-                        {record.pet_name && <span className="ph-details-sub">{record.pet_name}</span>}
-                      </>
-                    )}
                   </td>
                   <td className="ph-cell-amount">{fmtMoney(record.amount)}</td>
                   <td className="ph-cell-status"><StatusChip status={record.status} /></td>
