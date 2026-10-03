@@ -139,6 +139,8 @@ export default function OwnerLogin() {
             placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoCapitalize="none"
+            autoComplete="email"
             required
           />
 

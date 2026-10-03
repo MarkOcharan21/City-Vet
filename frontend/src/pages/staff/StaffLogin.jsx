@@ -145,6 +145,8 @@ type="text"
 placeholder={config.placeholder}
 value={identifier}
 onChange={(e)=>setIdentifier(e.target.value)}
+autoCapitalize="none"
+autocomplete="off"
 required
 />
 

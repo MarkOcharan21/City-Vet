@@ -8,6 +8,8 @@ import PetVaccinationCard from '../../components/staff/PetVaccinationCard';
 import { validateVaccinationRecord } from '../../utils/validation';
 import PrintReportButton from '../../components/staff/PrintReportButton';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import useMinLoading from '../../hooks/useMinLoading';
 import { Pencil, Trash2 } from 'lucide-react';
 
 const STATUS_PRIORITY = {
@@ -16,6 +18,8 @@ const STATUS_PRIORITY = {
   Updated: 3,
   'Vaccinated Today': 4,
 };
+
+const PAGE_SIZE = 25;
 
 // REGISTRATION FEE (id 0) is a payment item, not a vaccine — never offer it
 // in the "Add Vaccination Record" vaccine picker.
@@ -91,6 +95,9 @@ export default function VaccinationMonitoring() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [yearFilter, setYearFilter] = useState('');
+  const [loading, setLoading] = useState(true);
+  const showLoading = useMinLoading(loading);
+  const [recordPage, setRecordPage] = useState(1);
 
   const totalVaccinated = records.filter((r) => r.status === 'Updated').length;
   const dueSoon = records.filter((r) => r.status === 'Due Soon').length;
@@ -224,8 +231,19 @@ export default function VaccinationMonitoring() {
       });
   }, [records, searchTerm, statusFilter, periodFilter, dateFrom, dateTo, yearFilter]);
 
+  const totalRecordPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
+  const safeRecordPage = Math.min(recordPage, totalRecordPages);
+  const visibleRecords = filteredRecords.slice(
+    (safeRecordPage - 1) * PAGE_SIZE,
+    safeRecordPage * PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setRecordPage(1);
+  }, [searchTerm, statusFilter, periodFilter, dateFrom, dateTo, yearFilter]);
+
   function loadRecords() {
-    api.get('/vaccinations').then((res) => setRecords(res.data.records));
+    api.get('/vaccinations').then((res) => setRecords(res.data.records)).finally(() => setLoading(false));
   }
 
   async function fetchPetVaccinationDetails(petId) {
@@ -664,7 +682,11 @@ export default function VaccinationMonitoring() {
             <h2>Vaccination Schedule</h2>
             <p>Most urgent pets are shown first for quick follow-up.</p>
           </div>
-          <div className="table-meta">{filteredRecords.length} records</div>
+          <div className="table-meta">
+            {showLoading
+              ? 'Loading...'
+              : `${filteredRecords.length} record${filteredRecords.length !== 1 ? 's' : ''}`}
+          </div>
         </div>
 
         <div className="toolbar-row">
@@ -750,12 +772,18 @@ export default function VaccinationMonitoring() {
               </tr>
             </thead>
             <tbody key={`${statusFilter}|${periodFilter}|${searchTerm}|${dateFrom}|${dateTo}|${yearFilter}`}>
-              {filteredRecords.length === 0 ? (
+              {showLoading ? (
+                <tr>
+                  <td colSpan="7" className="empty-state-cell">
+                    <LoadingSpinner text="Loading vaccination records..." fullPage={false} />
+                  </td>
+                </tr>
+              ) : filteredRecords.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="empty-state-cell">No vaccination records match your search.</td>
                 </tr>
               ) : (
-                filteredRecords.map((record, idx) => (
+                visibleRecords.map((record, idx) => (
                   <tr key={`${record.id}-${record.pet_id}-${record.date_administered}-${idx}`}>
                     <td data-label="Pet" className="pet-name-cell">{record.pet_name}</td>
                     <td data-label="Owner">{record.owner_name}</td>
@@ -793,6 +821,30 @@ export default function VaccinationMonitoring() {
             </tbody>
           </table>
         </div>
+
+        {!showLoading && totalRecordPages > 1 && (
+          <div className="pr-pagination">
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => setRecordPage((current) => Math.max(1, current - 1))}
+              disabled={safeRecordPage === 1}
+            >
+              Previous
+            </button>
+            <span className="pr-pagination-info">
+              Page {safeRecordPage} of {totalRecordPages} · {filteredRecords.length} records
+            </span>
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => setRecordPage((current) => Math.min(totalRecordPages, current + 1))}
+              disabled={safeRecordPage === totalRecordPages}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       <ConfirmDialog

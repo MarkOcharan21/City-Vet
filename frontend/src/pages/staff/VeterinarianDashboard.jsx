@@ -5,15 +5,20 @@ import AnnouncementWidget from "../../components/announcements/AnnouncementWidge
 import SummaryCard from "../../components/SummaryCard";
 import api from "../../services/api";
 import { useAutoRefresh } from "../../hooks/useAutoRefresh";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import useMinLoading from "../../hooks/useMinLoading";
 
 export default function VeterinarianDashboard() {
   const [charts, setCharts] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const showLoading = useMinLoading(loading);
 
   const fetchData = useCallback(() => {
     api
       .get("/analytics/charts")
       .then((res) => setCharts(res.data))
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -45,6 +50,10 @@ export default function VeterinarianDashboard() {
       <AnnouncementWidget />
 
       <div className="summary-row summary-row--center">
+        {showLoading ? (
+          <LoadingSpinner text="Loading veterinarian dashboard..." fullPage={false} />
+        ) : (
+          <>
         <SummaryCard
           label="Verified Dogs"
           value={charts ? dogsTotal : "—"}
@@ -72,6 +81,8 @@ export default function VeterinarianDashboard() {
             { label: "Female", value: charts ? females : "—" },
           ]}
         />
+          </>
+        )}
       </div>
 
       <h2>Quick Access</h2>

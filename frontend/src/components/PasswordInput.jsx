@@ -22,6 +22,8 @@ export default function PasswordInput({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
+        autoCapitalize="none"
+        autoComplete="off"
         required
         style={{
           width: "100%",

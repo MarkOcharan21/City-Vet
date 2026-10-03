@@ -252,7 +252,7 @@ export default function AnalyticsReports() {
 
   return (
     <div className="page">
-      <div className="page-header-row admin-page-header admin-page-header--actions">
+      <div className="page-header-row admin-page-header">
         <div>
           <h1>Analytics & Reports</h1>
           <p className="page-intro">
@@ -260,16 +260,19 @@ export default function AnalyticsReports() {
             activity across registrations, vaccinations, and QR records.
           </p>
         </div>
+      </div>
+
+      <p className="analytics-period-label">
+        Showing data for: <strong>{filterLabel}</strong>
+      </p>
+
+      <div className="analytics-print-row">
         <button type="button" onClick={() => setPrintOpen(true)} className="btn-primary">
           <Printer size={16} /> Print Report
         </button>
       </div>
 
       <AdminReportModal open={printOpen} onClose={() => setPrintOpen(false)} />
-
-      <p className="analytics-period-label">
-        Showing data for: <strong>{filterLabel}</strong>
-      </p>
 
       <div className="analytics-filter-row" role="group" aria-label="Analytics time period">
         {FILTER_OPTIONS.map((option) => (

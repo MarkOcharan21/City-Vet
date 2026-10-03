@@ -887,8 +887,6 @@ body:has(.clinic-access-page)::before {
   height: 100%;
   display: block;
   object-fit: cover;
-  mix-blend-mode: multiply;
-  filter: grayscale(1) sepia(1) saturate(2.6) hue-rotate(345deg) brightness(1.15) contrast(1.05);
 }
 
 .clinic-access-brand-copy {
@@ -6412,6 +6410,58 @@ body:has(.clinic-access-page)::before {
   .homepage-slide-background { height: 810px; }
   .hero-banner { min-height: 630px; }
 }
+
+/* ===========================
+   Homepage · Services & About (clean, organized layout)
+   The About cards and Services grid stay two-column on phones,
+   which crams text and looks broken. Stack them below desktops.
+=========================== */
+@media (max-width: 900px) {
+  .about-hero-card,
+  .about-split-card {
+    grid-template-columns: 1fr;
+  }
+  .about-split-page + .about-split-page {
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+@media (max-width: 640px) {
+  .section {
+    padding: 3.25rem 1.25rem 2rem;
+  }
+  .section h2 {
+    font-size: 1.55rem;
+    line-height: 1.2;
+  }
+  .section-lead {
+    margin-bottom: 1.75rem;
+    line-height: 1.55;
+  }
+  .service-grid {
+    gap: 1rem;
+  }
+  .service-card {
+    padding: 1.35rem 1.15rem;
+  }
+  .about-hero-panel,
+  .about-hero-copy,
+  .about-split-page {
+    padding: 1.5rem 1.25rem;
+  }
+  .about-hero-list,
+  .about-hero-stats {
+    grid-template-columns: 1fr;
+  }
+  .about-steps li {
+    gap: 0.85rem;
+  }
+  .about-map-frame {
+    height: 260px;
+  }
+}
+
 /* ===========================
    Back Button
 =========================== */
@@ -6422,6 +6472,8 @@ body:has(.clinic-access-page)::before {
     top:25px;
 
     left:40px;
+
+    z-index:10;
 
     display:flex;
     align-items:center;
@@ -13993,8 +14045,10 @@ body {
   margin-top: 0;
 }
 
-.pm-table {
-  min-width: 920px;
+@media (min-width: 641px) {
+  .pm-table {
+    min-width: 920px;
+  }
 }
 
 .pm-patient-cell,
@@ -14647,6 +14701,8 @@ body {
   justify-content: center;
   gap: 0.75rem;
   margin-top: 1.1rem;
+  padding: 0.75rem 0.25rem 0.25rem;
+  border-top: 1px solid var(--color-border);
 }
 
 .pr-pagination-info {

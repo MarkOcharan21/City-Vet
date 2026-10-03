@@ -165,7 +165,7 @@ export default function BarangayDashboard() {
               )}
               {!loadingSummary && summary.map((b) => (
                 <tr key={b.barangay}>
-                  <td className="barangay-name-col">
+                  <td className="barangay-name-col" data-label="Barangay">
                     <div className="barangay-name-cell">
                       <span className="barangay-name-icon">
                         <MapPin size={16} />
@@ -173,23 +173,23 @@ export default function BarangayDashboard() {
                       <span className="cell-strong">{b.barangay}</span>
                     </div>
                   </td>
-                  <td className="barangay-num-col">
+                  <td className="barangay-num-col" data-label="Dogs">
                     <span className="barangay-pet-count barangay-dog-count">
                       <Dog size={14} />
                       {b.dogs || 0}
                     </span>
                   </td>
-                  <td className="barangay-num-col cell-muted">{b.dog_male || 0}</td>
-                  <td className="barangay-num-col cell-muted">{b.dog_female || 0}</td>
-                  <td className="barangay-num-col">
+                  <td className="barangay-num-col cell-muted" data-label="Dogs · Male">{b.dog_male || 0}</td>
+                  <td className="barangay-num-col cell-muted" data-label="Dogs · Female">{b.dog_female || 0}</td>
+                  <td className="barangay-num-col" data-label="Cats">
                     <span className="barangay-pet-count barangay-cat-count">
                       <Cat size={14} />
                       {b.cats || 0}
                     </span>
                   </td>
-                  <td className="barangay-num-col cell-muted">{b.cat_male || 0}</td>
-                  <td className="barangay-num-col cell-muted">{b.cat_female || 0}</td>
-                  <td className="barangay-actions-col">
+                  <td className="barangay-num-col cell-muted" data-label="Cats · Male">{b.cat_male || 0}</td>
+                  <td className="barangay-num-col cell-muted" data-label="Cats · Female">{b.cat_female || 0}</td>
+                  <td className="barangay-actions-col" data-label="View">
                     <button
                       type="button"
                       className="btn-view-pets-icon"

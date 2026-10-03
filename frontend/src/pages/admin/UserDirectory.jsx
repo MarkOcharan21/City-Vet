@@ -360,7 +360,7 @@ export default function UserDirectory() {
                     <td>{u.role_name}</td>
                     <td><StatusBadge status={statusLabel(u.status)} /></td>
                     <td>{formatDate(u.last_login)}</td>
-                      <td className="user-directory-actions" style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', justifyContent: 'center' }}>
+                      <td className="user-directory-actions" style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', justifyContent: 'flex-end' }}>
                         <button className="btn-icon-action" onClick={() => setDetailUser(u)} title="View" style={{ width: '32px', height: '32px', padding: 0 }}>
                           <Eye size={14} />
                         </button>

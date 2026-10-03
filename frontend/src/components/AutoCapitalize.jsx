@@ -52,6 +52,9 @@ export default function AutoCapitalize() {
       if (SKIP_TYPES.has(type)) return;
       if (target.readOnly || target.disabled) return;
       if (!target.value) return;
+      // Opt-out: any input carrying autocapitalize="none" (login/credential
+      // fields and the like) must keep the text exactly as typed.
+      if (target.getAttribute("autocapitalize") === "none") return;
 
       const start = target.selectionStart;
       const end = target.selectionEnd;
