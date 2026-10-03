@@ -10,6 +10,7 @@ const {
 } = require('../utils/validation');
 const { logAudit } = require('../middleware/auditMiddleware');
 const { vetNameExpr } = require('../utils/vetNameFormat');
+const { getOwnerUnpaidBlocking } = require('../utils/paymentBlocking');
 const queueLock = require('../services/clinicQueueLock');
 const { insertPrescription, notifyPrescriptionOwner } = require('../services/prescriptionService');
 const { paymentTypeForCategory } = require('./catalogController');
@@ -56,7 +57,16 @@ async function getMyClinicalRecords(req, res) {
        ORDER BY cr.consultation_date DESC`,
       [req.user.id]
     );
-    res.json({ success: true, records: rows });
+
+    const petIds = [...new Set(rows.map((r) => r.pet_id).filter((id) => id != null))];
+    const unpaid = await getOwnerUnpaidBlocking(petIds);
+    const blockedConsultations = new Set(unpaid.blocked.consultations);
+
+    for (const row of rows) {
+      row.is_blocked = blockedConsultations.has(Number(row.id));
+    }
+
+    res.json({ success: true, records: rows, unpaid });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Could not load consultation records.', error: error.message });
   }
@@ -455,6 +465,9 @@ async function addClinicalRecord(req, res) {
   if (!created) return;
   if (pet?.user_id) {
     createNotification(pet.user_id, 'Consultation Record Added', `${pet.name} has a new consultation record.`, 'System', false, 'clinical-medicine').catch((error) => console.warn('Consultation notification failed:', error.message));
+    if (totalCents > 0 && paymentReference) {
+      createNotification(pet.user_id, `Unpaid Charge — ${pet.name}`, `You have an unpaid consultation charge of ₱${formatCents(totalCents)} for ${pet.name}. Settle at the City Treasurer's office for the latest record to appear.`, 'Payment', false, 'payments').catch((error) => console.warn('Unpaid payment notification failed:', error.message));
+    }
     if (followUpDate) {
       sendDueReminder({ userId: pet.user_id, petName: pet.name, dueDate: followUpDate, category: 'Follow-Up Visit', type: 'System', link: 'clinical-medicine' }).catch((error) => console.warn('Consultation follow-up reminder failed:', error.message));
     }

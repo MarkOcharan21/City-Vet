@@ -11592,6 +11592,23 @@ body:has(.clinic-access-page)::before {
 .od-alert-clear strong { font-size: .95rem; font-weight: 700; }
 .od-alert-clear span  { font-size: .84rem; opacity: .85; }
 
+.od-unpaid-list {
+  margin: .55rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+}
+.od-unpaid-list li {
+  font-size: .86rem;
+  color: var(--color-ink);
+}
+.od-unpaid-list li span {
+  font-weight: 700;
+  color: #DC2626;
+}
+
 /* ── Activity timeline ───────────────────────────────────────── */
 .od-activity {
   list-style: none;

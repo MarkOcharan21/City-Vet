@@ -149,6 +149,22 @@ export default function OwnerDashboard() {
     return alerts;
   }, [pets, vaccines]);
 
+  const unpaid = useMemo(() => {
+    const list = (slices.payments || []).filter(
+      (r) => r.source === "clinic" && r.status !== "Paid" && r.status !== "Cancelled"
+    );
+    if (list.length === 0) return null;
+
+    const total = list.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+    const byPet = {};
+    list.forEach((r) => {
+      const key = r.pet_name || "This pet";
+      if (!byPet[key]) byPet[key] = { pet: key, balance: 0 };
+      byPet[key].balance += Number(r.amount) || 0;
+    });
+    return { total, pets: Object.values(byPet) };
+  }, [slices.payments]);
+
   const activity = useMemo(() => {
     const acts = [];
 
@@ -251,6 +267,33 @@ export default function OwnerDashboard() {
 
   return (
     <div className="page owner-dashboard">
+      {unpaid && (
+        <section aria-labelledby="od-unpaid-title">
+          <div className="od-alert od-alert--danger">
+            <span className="od-alert-icon" aria-hidden="true">
+              <TriangleAlert size={22} />
+            </span>
+            <div className="od-alert-body">
+              <strong>YOU HAVE AN UNPAID BALANCE OF {fmtMoney(unpaid.total)}</strong>
+              <p>
+                Your pet&apos;s latest record is locked until payment is settled at
+                the City Treasurer&apos;s office.
+              </p>
+              <ul className="od-unpaid-list">
+                {unpaid.pets.map((p) => (
+                  <li key={p.pet}>
+                    {p.pet} — <span>{fmtMoney(p.balance)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <Link to="/owner/payment-history" className="od-alert-link">
+              View Payment History <ChevronRight size={16} />
+            </Link>
+          </div>
+        </section>
+      )}
+
       <section aria-labelledby="od-mypets-title">
         <h2 id="od-mypets-title" className="od-section-title">
           <span className="od-section-icon" aria-hidden="true">

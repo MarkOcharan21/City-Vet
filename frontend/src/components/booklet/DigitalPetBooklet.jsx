@@ -64,6 +64,18 @@ function nextDueMeta(nextDue) {
   return { tone: "ok", label: "Up-to-date" };
 }
 
+function fmtMoney(value) {
+  const n = Number(value);
+  if (Number.isNaN(n)) return "";
+  return (
+    "\u20B1" +
+    n.toLocaleString("en-PH", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  );
+}
+
 function statusMeta(status) {
   const map = {
     Updated: { tone: "ok", label: "Updated" },
@@ -84,7 +96,9 @@ const EDITABLE_ROLES = ["Owner", "Staff", "Admin", "Veterinarian"];
 
 export default function DigitalPetBooklet({ data, mode = "public", pets, activeToken, onSwitchPet, onClose, onRefresh }) {
   const { user } = useAuth();
-  const b = enrichBooklet(data, mode);
+  const privilegedRoles = ["Staff", "Admin", "Veterinarian"];
+  const canSeeAll = privilegedRoles.includes(user?.role);
+  const b = enrichBooklet(data, mode, canSeeAll);
   const pet = b.pet;
 
   const [activeTab, setActiveTab] = useState("pet-profile");
@@ -227,6 +241,19 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
       </div>
 
       <PetSelector pets={pets} activeToken={activeToken} onSelect={onSwitchPet} />
+
+      {b.authorized && b.unpaid?.hasUnpaid && (
+        <div className="booklet-unpaid-banner" role="alert">
+          <TriangleAlert size={20} strokeWidth={2.4} />
+          <div>
+            <strong>UNPAID BALANCE — {fmtMoney(b.unpaid.balance)}</strong>
+            <span>
+              Your pet&apos;s latest record is locked until you settle your payment
+              at the City Treasurer&apos;s office.
+            </span>
+          </div>
+        </div>
+      )}
 
       {editing && canEdit && (
         <BookletEditPanel pet={pet} role={user?.role} onSaved={onRefresh} />

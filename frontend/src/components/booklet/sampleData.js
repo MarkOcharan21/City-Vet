@@ -30,15 +30,32 @@ function pickPet(pet) {
   };
 }
 
-export function enrichBooklet(data, mode) {
+export function enrichBooklet(data, mode, canSeeAll = false) {
   const pet = pickPet(data?.pet);
   const authorized = mode === "owner";
+  const unpaid = data?.unpaid || {
+    hasUnpaid: false,
+    balance: 0,
+    items: [],
+    blocked: { consultations: [], vaccinations: [], prescriptions: [] },
+  };
+  const blocked = unpaid.blocked || { consultations: [], vaccinations: [], prescriptions: [] };
+  const lockHidden = !canSeeAll && unpaid.hasUnpaid;
 
   // Use ONLY real backend data. Sample/demo records must never be shown in
   // an official booklet — sections with no data render as empty states.
-  const vaccinations = (Array.isArray(data?.vaccinations) ? data.vaccinations : []).map(withStaffName);
-  const consultations = (Array.isArray(data?.consultations) ? data.consultations : []).map(withVetName);
-  const prescriptions = Array.isArray(data?.prescriptions) ? data.prescriptions : [];
+  const vaccinations = (Array.isArray(data?.vaccinations) ? data.vaccinations : [])
+    .map(withStaffName)
+    .filter((v) => !lockHidden || !blocked.vaccinations.includes(Number(v.id)));
+  const consultations = (Array.isArray(data?.consultations) ? data.consultations : [])
+    .map(withVetName)
+    .filter((c) => !lockHidden || !blocked.consultations.includes(Number(c.id)));
+  const prescriptions = (Array.isArray(data?.prescriptions) ? data.prescriptions : []).filter(
+    (p) =>
+      !lockHidden ||
+      (!blocked.prescriptions.includes(Number(p.id)) &&
+        !blocked.consultations.includes(Number(p.consultation_id)))
+  );
   const payments = authorized
     ? (Array.isArray(data?.payments) ? data.payments : [])
     : [];
@@ -57,6 +74,7 @@ export function enrichBooklet(data, mode) {
 
   return {
     authorized,
+    unpaid,
     pet,
     vaccinations,
     consultations,

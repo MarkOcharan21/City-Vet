@@ -289,6 +289,37 @@
   border-color: var(--cvo-teal);
 }
 
+.booklet-unpaid-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #FEF2F2;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  color: #B91C1C;
+}
+.booklet-unpaid-banner > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.booklet-unpaid-banner div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.booklet-unpaid-banner strong {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.booklet-unpaid-banner span {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #7F1D1D;
+}
+
 /* ---------- tab bar ---------- */
 .booklet-tabs {
   margin: 0 0 22px;

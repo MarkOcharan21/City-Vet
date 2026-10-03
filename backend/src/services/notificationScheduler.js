@@ -11,6 +11,7 @@ function startNotificationScheduler() {
       await generateVaccinationDueReminders();
       await generateFollowUpDueReminders();
       await generatePaymentNotifications();
+      await generateUnpaidChargeNotifications();
 
       console.log("Notification scheduler finished.");
     } catch (error) {
@@ -84,6 +85,35 @@ async function generatePaymentNotifications() {
       payment.user_id,
       "Pending Payment",
       `Payment for ${payment.pet_name} is still pending.`,
+      "Payment",
+      false,
+      "payments"
+    );
+  }
+}
+
+async function generateUnpaidChargeNotifications() {
+  const [records] = await db.query(`
+    SELECT
+      pm.total_amount,
+      pm.payment_type,
+      pm.payment_reference,
+      p.name AS pet_name,
+      po.user_id
+    FROM payment_monitoring pm
+    JOIN pets p ON pm.pet_id = p.id
+    JOIN pet_owners po ON pm.pet_owner_id = po.id
+    WHERE pm.payment_status = 'Unpaid' AND pm.total_amount > 0
+  `);
+
+  for (const record of records) {
+    const amount = Number(record.total_amount) || 0;
+    if (amount <= 0) continue;
+
+    await createNotification(
+      record.user_id,
+      `Unpaid Charge — ${record.pet_name}`,
+      `You have an unpaid ${record.payment_type || "clinic"} charge of ₱${amount.toFixed(2)} for ${record.pet_name}. Settle at the City Treasurer's office for the latest record to appear.`,
       "Payment",
       false,
       "payments"

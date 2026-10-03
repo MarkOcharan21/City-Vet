@@ -1,6 +1,7 @@
 ﻿const db = require('../config/db');
 const { logAudit } = require('../middleware/auditMiddleware');
 const { vetNameExpr } = require('../utils/vetNameFormat');
+const { getPetUnpaidBlocking } = require('../utils/paymentBlocking');
 
 // GET /api/qr/pet/:petId  (Staff/Admin/Vet - fetch QR token for a pet)
 async function getQrByPet(req, res) {
@@ -183,6 +184,8 @@ async function scanQrToken(req, res) {
 
     p.id,
 
+    p.consultation_id,
+
     p.prescribed_date,
 
     m.medicine_name,
@@ -263,6 +266,8 @@ async function scanQrToken(req, res) {
       [pet.id]
     );
 
+    const unpaid = await getPetUnpaidBlocking(pet.id);
+
     res.json({
 
     success:true,
@@ -279,7 +284,9 @@ async function scanQrToken(req, res) {
 
     preventiveCare,
 
-    procedures
+    procedures,
+
+    unpaid
 
     });
 
@@ -416,13 +423,16 @@ async function scanPublicQr(req, res) {
         [pet.id]
         );
 
+        const unpaid = await getPetUnpaidBlocking(pet.id);
+
         res.json({
             success: true,
             pet,
             vaccinations,
           latestVaccination: vaccinations[0] || null,
           preventiveCare,
-          procedures
+          procedures,
+          unpaid
         });
 
     }

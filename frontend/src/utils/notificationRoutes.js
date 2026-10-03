@@ -75,6 +75,11 @@ export function getNotificationPath(role, notification) {
     return `${prefix}/queue`;
   }
 
+  if (link === 'payments') {
+    if (role === 'Owner') return '/owner/payment-history';
+    return `${prefix}/payment-monitoring`;
+  }
+
   if (link) {
     return `${prefix}/${link}`;
   }

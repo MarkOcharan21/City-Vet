@@ -619,6 +619,18 @@ async function recordVaccination(req, res) {
         "vaccinations"
       );
 
+      const unitPriceNumber = Number(unitPrice) || 0;
+      if (unitPriceNumber > 0) {
+        await createNotification(
+          ownerUserId,
+          `Unpaid Charge — ${pet.name}`,
+          `You have an unpaid ${vaccineLabel} vaccination charge of ₱${unitPriceNumber.toFixed(2)} for ${pet.name}. Settle at the City Treasurer's office for the latest record to appear.`,
+          "Payment",
+          false,
+          "payments"
+        );
+      }
+
       // Check Due Date
 
       if (computedNextDue) {

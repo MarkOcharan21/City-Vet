@@ -57,6 +57,7 @@ export default function PublicPetProfile() {
     payments: [],
     preventiveCare: petData.preventiveCare || [],
     procedures: petData.procedures || [],
+    unpaid: petData.unpaid,
   };
 
   return <DigitalPetBooklet data={bookletData} mode="public" />;

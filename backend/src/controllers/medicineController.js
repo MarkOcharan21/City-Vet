@@ -6,6 +6,7 @@ const {
 const { insertPrescription, notifyPrescriptionOwner } = require('../services/prescriptionService');
 const { logAudit } = require('../middleware/auditMiddleware');
 const { vetNameExpr } = require('../utils/vetNameFormat');
+const { getOwnerUnpaidBlocking } = require('../utils/paymentBlocking');
 
 // GET /api/medicines/list  (dropdown data + dosing defaults for the auto-fill)
 async function getMedicineList(req, res) {
@@ -28,7 +29,7 @@ async function getMedicineList(req, res) {
 async function getMyMedicineRecords(req, res) {
   try {
     const [rows] = await db.query(
-      `SELECT pi.*, m.medicine_name, pr.prescribed_date, p.name AS pet_name, ${vetNameExpr('vet_name')}
+      `SELECT pi.*, m.medicine_name, pr.prescribed_date, p.id AS pet_id, p.name AS pet_name, ${vetNameExpr('vet_name')}
        FROM prescription_items pi
        JOIN medicines m ON pi.medicine_id = m.id
        JOIN prescriptions pr ON pi.prescription_id = pr.id
@@ -40,7 +41,16 @@ async function getMyMedicineRecords(req, res) {
        ORDER BY pr.prescribed_date DESC`,
       [req.user.id]
     );
-    res.json({ success: true, records: rows });
+
+    const petIds = [...new Set(rows.map((r) => r.pet_id).filter((id) => id != null))];
+    const unpaid = await getOwnerUnpaidBlocking(petIds);
+    const blockedPrescriptions = new Set(unpaid.blocked.prescriptions);
+
+    for (const row of rows) {
+      row.is_blocked = blockedPrescriptions.has(Number(row.prescription_id));
+    }
+
+    res.json({ success: true, records: rows, unpaid });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Could not load medicine records.', error: error.message });
   }

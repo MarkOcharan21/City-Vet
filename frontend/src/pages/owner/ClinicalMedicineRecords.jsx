@@ -31,6 +31,15 @@ function fmt(dateStr) {
   return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function fmtMoney(value) {
+  const n = Number(value);
+  if (Number.isNaN(n)) return '';
+  return '\u20B1' + n.toLocaleString('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 function isMedicationActive(record) {
   // A medicine record is "active" if prescribed_date is within the last 30 days
   // or if duration suggests it may still be ongoing. Since we only have prescribed_date
@@ -1265,6 +1274,7 @@ function TabBar({ activeTab, onChange, medicineCount, clinicalCount }) {
 export default function ClinicalMedicineRecords() {
   const [clinicalRecords, setClinicalRecords] = useState([]);
   const [medicineRecords, setMedicineRecords] = useState([]);
+  const [unpaid, setUnpaid] = useState(null);
   const [loading, setLoading] = useState(true);
   const showLoading = useMinLoading(loading);
   const [error, setError] = useState('');
@@ -1278,8 +1288,17 @@ export default function ClinicalMedicineRecords() {
       api.get('/medicines/my-records'),
     ])
       .then(([clinicalRes, medRes]) => {
-        setClinicalRecords(clinicalRes.data.records || []);
-        setMedicineRecords(medRes.data.records || []);
+        const clinicUnpaid = clinicalRes.data.unpaid;
+        const medUnpaid = medRes.data.unpaid;
+        const activeUnpaid =
+          medUnpaid && medUnpaid.hasUnpaid
+            ? medUnpaid
+            : clinicUnpaid && clinicUnpaid.hasUnpaid
+              ? clinicUnpaid
+              : null;
+        setUnpaid(activeUnpaid);
+        setClinicalRecords((clinicalRes.data.records || []).filter((r) => !r.is_blocked));
+        setMedicineRecords((medRes.data.records || []).filter((r) => !r.is_blocked));
       })
       .catch((err) => {
         setError(err.response?.data?.message || 'Failed to load records.');
@@ -1336,6 +1355,33 @@ export default function ClinicalMedicineRecords() {
           </div>
         </div>
       </header>
+
+      {unpaid && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.75rem',
+            padding: '1rem 1.25rem',
+            borderRadius: 12,
+            background: '#FEF2F2',
+            border: '1px solid rgba(220,38,38,0.35)',
+            marginBottom: '1.5rem',
+          }}
+          role="alert"
+        >
+          <AlertTriangle size={20} style={{ color: '#DC2626', flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1 }}>
+            <strong style={{ display: 'block', fontSize: '0.92rem', color: '#B91C1C', marginBottom: '0.15rem' }}>
+              UNPAID BALANCE — {fmtMoney(unpaid.balance)}
+            </strong>
+            <span style={{ display: 'block', fontSize: '0.84rem', color: '#7F1D1D', lineHeight: 1.45 }}>
+              Your pet&apos;s latest record is locked until you settle your payment
+              at the City Treasurer&apos;s office.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Tab bar */}
       <TabBar
