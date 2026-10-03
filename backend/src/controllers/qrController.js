@@ -3,6 +3,21 @@ const { logAudit } = require('../middleware/auditMiddleware');
 const { vetNameExpr } = require('../utils/vetNameFormat');
 const { getPetUnpaidBlocking } = require('../utils/paymentBlocking');
 
+// QR stickers encode the full booklet URL (https://<host>/qr/<TOKEN>), and
+// old stickers may point at a previous BACKEND_URL. Accept either the bare
+// token or a full URL and compare only the trailing token.
+function extractQrToken(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  const withoutQuery = text.split(/[?#]/)[0];
+  const tail = withoutQuery.slice(withoutQuery.lastIndexOf('/') + 1);
+  try {
+    return decodeURIComponent(tail).trim();
+  } catch (_) {
+    return tail.trim();
+  }
+}
+
 // GET /api/qr/pet/:petId  (Staff/Admin/Vet - fetch QR token for a pet)
 async function getQrByPet(req, res) {
   const { petId } = req.params;
@@ -122,7 +137,7 @@ async function getMyQrCodes(req, res) {
 // This is the "trigger" described in the manuscript: scanning just retrieves
 // the pet's full record â€” registration, vaccination, clinical, payment.
 async function scanQrToken(req, res) {
-  const { token } = req.params;
+  const token = extractQrToken(req.params.token);
   try {
     const [petRows] = await db.query(
       `SELECT p.*, qc.issue_date, qc.status AS qr_status, qc.image_path, po.user_id AS owner_user_id, po.full_name AS owner_name, po.contact_number, po.address, po.barangay, po.emergency_contact_name, po.emergency_contact_number, s.species_name, COALESCE( b.breed_name, p.breed_custom ) AS breed_name
@@ -310,7 +325,7 @@ async function scanQrToken(req, res) {
 
 async function scanPublicQr(req, res) {
 
-    const { token } = req.params;
+    const token = extractQrToken(req.params.token);
 
     try {
 
@@ -459,7 +474,7 @@ async function scanPublicQr(req, res) {
 // Resolves a QR token to the PET + its OWNER, in the same shape as the
 // payment-monitoring owner search, so the staff can match + verify.
 async function scanOwnerQr(req, res) {
-  const { token } = req.params;
+  const token = extractQrToken(req.params.token);
   try {
     const [rows] = await db.query(
       `SELECT

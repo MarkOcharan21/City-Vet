@@ -446,6 +446,10 @@ export default function ClinicalRecords() {
 
       await loadPets();
     } catch (error) {
+      const serverErrors = error.response?.data?.errors;
+      if (serverErrors && typeof serverErrors === "object") {
+        setFieldErrors(serverErrors);
+      }
       toast.error(error.response?.data?.message || "Could not save consultation record.");
     } finally {
       setSaving(false);

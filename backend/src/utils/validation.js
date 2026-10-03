@@ -113,8 +113,21 @@ function isValidDate(value) {
   return !Number.isNaN(new Date(value).getTime());
 }
 
+function manilaTodayString() {
+  // Clinic business dates are Philippine dates, but Render runs on UTC where
+  // "today" lags a day behind Manila (UTC+8) from 12am-8am PHT. Compare
+  // calendar days in Manila time so today's consultations are never rejected
+  // as "future". The Philippines has no DST, so +8 is always correct.
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 function isDateNotFuture(value) {
   if (!isValidDate(value)) return false;
+  const day = String(value).slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    return day <= manilaTodayString();
+  }
+  // Non-ISO values (e.g. datetime strings): fall back to instant comparison.
   const date = new Date(value);
   const today = new Date();
   today.setHours(23, 59, 59, 999);

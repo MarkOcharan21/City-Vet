@@ -5,6 +5,20 @@ import useQrCameraScanner, { cameraErrorMessage } from "../../hooks/useQrCameraS
 import api from "../../services/api";
 import toast from "react-hot-toast";
 
+// QR stickers encode the full booklet URL (https://<host>/qr/<TOKEN>);
+// the API only wants the trailing token.
+function extractQrToken(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  const withoutQuery = text.split(/[?#]/)[0];
+  const tail = withoutQuery.slice(withoutQuery.lastIndexOf("/") + 1);
+  try {
+    return decodeURIComponent(tail).trim();
+  } catch (_) {
+    return tail.trim();
+  }
+}
+
 function MobileScan() {
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get("session") || searchParams.get("s");
@@ -25,7 +39,9 @@ function MobileScan() {
       setError(null);
 
       try {
-        const response = await api.get(`/qr/scanOwnerQr/${decodedText.trim()}`);
+        const token = extractQrToken(decodedText);
+        if (!token) throw new Error("Could not read a QR code. Please try again.");
+        const response = await api.get(`/qr/owner/${encodeURIComponent(token)}`);
         const { owner } = response.data;
         if (!owner) throw new Error("No pet found for this QR code.");
 
