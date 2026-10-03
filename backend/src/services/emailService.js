@@ -44,7 +44,8 @@ function isEmailConfigured() {
       ' host=' + (process.env.EMAIL_HOST ? 'set' : 'MISSING') +
       ' user=' + (process.env.EMAIL_USER ? 'set' : 'MISSING') +
       ' pass_len=' + pass.length +
-      ' from=' + (process.env.EMAIL_FROM ? 'set' : 'MISSING(default)')
+      ' from=' + (process.env.EMAIL_FROM ? 'set' : 'MISSING(default)') +
+      ' brevo=' + (process.env.BREVO_API_KEY ? 'set' : 'MISSING')
   );
 })();
 
@@ -58,7 +59,63 @@ if (isEmailConfigured()) {
   );
 }
 
+// HTTP-based sending via Brevo (https://api.brevo.com). Render cannot reach
+// Gmail over SMTP (TCP to port 587 times out), but outbound HTTPS works, so
+// when BREVO_API_KEY is set it becomes the sender. The sender address must
+// be verified in the Brevo dashboard (use the EMAIL_USER address).
+async function sendMailViaBrevo({ to, subject, text, html }) {
+  const apiKey = (process.env.BREVO_API_KEY || '').trim();
+  if (!apiKey) throw new Error('BREVO_API_KEY is not set.');
+  const senderEmail = (process.env.EMAIL_USER || '').trim();
+  if (!senderEmail) throw new Error('EMAIL_USER is not set (needed as the Brevo sender).');
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': apiKey,
+      },
+      body: JSON.stringify({
+        sender: { name: 'City Vet Cabuyao', email: senderEmail },
+        to: [{ email: to }],
+        subject,
+        textContent: text || undefined,
+        htmlContent: html || undefined,
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      let detail = '';
+      try {
+        detail = await res.text();
+      } catch (_) {
+        detail = '';
+      }
+      throw new Error(`Brevo send failed [${res.status}]: ${String(detail).slice(0, 300)}`);
+    }
+    return true;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function sendMail({ to, subject, text, html }) {
+  // Prefer the HTTP API when a key exists — SMTP to Gmail is unreachable
+  // from Render (ETIMEDOUT), while HTTPS works.
+  if ((process.env.BREVO_API_KEY || '').trim()) {
+    try {
+      await sendMailViaBrevo({ to, subject, text, html });
+      return true;
+    } catch (error) {
+      console.warn(`Brevo send failed for ${to} (${subject}): ` + (error && error.message));
+      throw error;
+    }
+  }
+
   if (!isEmailConfigured()) {
     console.warn(`Email config is missing or still a placeholder. Skipping email to ${to}: ${subject}`);
     return false;
