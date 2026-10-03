@@ -333,14 +333,7 @@ export default function OwnerRegister() {
                 </div>
               ) : (
                 <button type="submit" disabled={submitting}>
-                  {submitting ? (
-                    <>
-                      <Loader size={18} className="spinner button-spinner" />
-                      Sending Code...
-                    </>
-                  ) : (
-                    "Continue"
-                  )}
+                  Continue
                 </button>
               )}
             </form>
@@ -396,14 +389,7 @@ export default function OwnerRegister() {
                 </div>
               ) : (
                 <button type="submit" disabled={verifying || verified || otpTimeLeft <= 0}>
-                  {verifying ? (
-                    <>
-                      <Loader size={18} className="spinner button-spinner" />
-                      Verifying...
-                    </>
-                  ) : (
-                    "Verify & Activate Account"
-                  )}
+                  Verify & Activate Account
                 </button>
               )}
 
