@@ -7,6 +7,8 @@ import PetSearchSelect from '../../components/PetSearchSelect';
 import PetVaccinationCard from '../../components/staff/PetVaccinationCard';
 import { validateVaccinationRecord } from '../../utils/validation';
 import PrintReportButton from '../../components/staff/PrintReportButton';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import { Pencil, Trash2 } from 'lucide-react';
 
 const STATUS_PRIORITY = {
   Overdue: 1,
@@ -53,12 +55,26 @@ const formatDate = (value) => {
   return date.toLocaleDateString();
 };
 
+// Flip a raw database value (Date object or "YYYY-MM-DD" string) into the
+// plain "YYYY-MM-DD" string an <input type="date"> expects.
+const toYMD = (value) => {
+  if (!value) return '';
+  const str = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  return toLocalISODate(new Date(str));
+};
+
+const pesoSymbol = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
+
 export default function VaccinationMonitoring() {
   const [records, setRecords] = useState([]);
   const [selectedPet, setSelectedPet] = useState(null);
   const [petDetails, setPetDetails] = useState(null);
   const [vaccines, setVaccines] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState({
     pet_id: '',
     vaccine_id: '',
@@ -117,9 +133,11 @@ export default function VaccinationMonitoring() {
   const previousDoseCount = useMemo(() => {
     if (!form.vaccine_id || !petDetails?.history) return 0;
     return petDetails.history.filter(
-      (r) => Number(r.vaccine_id) === Number(form.vaccine_id)
+      (r) =>
+        Number(r.vaccine_id) === Number(form.vaccine_id) &&
+        (!editingRecord || Number(r.id) !== Number(editingRecord.id))
     ).length;
-  }, [petDetails, form.vaccine_id]);
+  }, [petDetails, form.vaccine_id, editingRecord]);
 
   const suggestedDoseNo = previousDoseCount + 1;
 
@@ -244,6 +262,7 @@ export default function VaccinationMonitoring() {
   }
 
   function openAddModal() {
+    setEditingRecord(null);
     setForm((prev) => ({
       pet_id: selectedPet ? selectedPet.id : '',
       vaccine_id: '',
@@ -256,6 +275,44 @@ export default function VaccinationMonitoring() {
     setIsModalOpen(true);
   }
 
+  function openEditModal(record) {
+    setEditingRecord(record);
+    setSelectedPet({
+      id: record.pet_id,
+      name: record.pet_name,
+      pet_code: record.pet_code,
+      species_id: record.species_id,
+      species_name: record.species_name,
+    });
+    setForm({
+      pet_id: record.pet_id,
+      vaccine_id: String(record.vaccine_id),
+      dose_no: record.dose_no ? String(record.dose_no) : '',
+      date_administered: toYMD(record.date_administered),
+      next_due_date: toYMD(record.next_due_date),
+      comments: record.comments || '',
+    });
+    setFieldErrors({});
+    setIsModalOpen(true);
+    fetchPetVaccinationDetails(record.pet_id);
+  }
+
+  function closeModal() {
+    setIsModalOpen(false);
+    if (editingRecord) {
+      setEditingRecord(null);
+      setSelectedPet(null);
+      setPetDetails(null);
+      setForm((prev) => ({
+        ...prev,
+        pet_id: '',
+        vaccine_id: '',
+        dose_no: '',
+        next_due_date: '',
+      }));
+    }
+  }
+
   function handleChange(e) {
     const { name, value } = e.target;
 
@@ -263,7 +320,9 @@ export default function VaccinationMonitoring() {
       const vaccine = vaccines.find((v) => v.id === parseInt(value, 10));
       const base = form.date_administered || toLocalISODate();
       const count = petDetails?.history?.filter(
-        (r) => Number(r.vaccine_id) === Number(value)
+        (r) =>
+          Number(r.vaccine_id) === Number(value) &&
+          (!editingRecord || Number(r.id) !== Number(editingRecord.id))
       ).length ?? 0;
       const doseNum = count + 1;
       const row = vaccine
@@ -327,9 +386,13 @@ export default function VaccinationMonitoring() {
 
     setSubmitting(true);
     try {
-      await api.post('/vaccinations', form);
-      toast.success('Vaccination record saved.');
+      const request = editingRecord
+        ? api.put(`/vaccinations/${editingRecord.id}`, form)
+        : api.post('/vaccinations', form);
+      await request;
+      toast.success(editingRecord ? 'Vaccination record updated.' : 'Vaccination record saved.');
       setIsModalOpen(false);
+      setEditingRecord(null);
       setForm((prev) => ({
         pet_id: prev.pet_id,
         vaccine_id: '',
@@ -346,6 +409,27 @@ export default function VaccinationMonitoring() {
       toast.error(err.response?.data?.message || 'Could not save vaccination record.');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/vaccinations/${deleteTarget.id}`);
+      toast.success('Vaccination record deleted.');
+      setDeleteTarget(null);
+      loadRecords();
+      if (deleteTarget.pet_id) {
+        const activePetId = petDetails?.pet?.id ?? selectedPet?.id;
+        if (Number(activePetId) === Number(deleteTarget.pet_id)) {
+          fetchPetVaccinationDetails(deleteTarget.pet_id);
+        }
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not delete vaccination record.');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -410,23 +494,27 @@ export default function VaccinationMonitoring() {
           latest={petDetails.latest}
           history={petDetails.history}
           onAddRecord={openAddModal}
+          onEditRecord={openEditModal}
+          onDeleteRecord={(record) => setDeleteTarget(record)}
         />
       )}
 
       {isModalOpen && (
-        <div className="logout-modal-overlay" onClick={() => setIsModalOpen(false)}>
+        <div className="logout-modal-overlay" onClick={closeModal}>
           <div
             className="barangay-pets-modal"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="vaccination-add-title"
+            aria-labelledby="vaccination-record-title"
           >
             <div className="barangay-pets-modal-header">
               <div className="barangay-pets-modal-title">
                 <div className="barangay-pets-modal-icon">💉</div>
                 <div>
-                  <h3 id="vaccination-add-title">Add Vaccination Record</h3>
+                  <h3 id="vaccination-record-title">
+                    {editingRecord ? 'Edit Vaccination Record' : 'Add Vaccination Record'}
+                  </h3>
                   <p>
                     {selectedPet?.name || 'Selected pet'}
                     {selectedPet?.pet_code ? ` (${selectedPet.pet_code})` : ''}
@@ -436,7 +524,7 @@ export default function VaccinationMonitoring() {
               <button
                 type="button"
                 className="barangay-modal-close"
-                onClick={() => setIsModalOpen(false)}
+                onClick={closeModal}
                 aria-label="Close"
               >
                 ×
@@ -453,6 +541,7 @@ export default function VaccinationMonitoring() {
                     onChange={handlePetSelect}
                     placeholder="Search pet by name, code, or owner..."
                     required
+                    disabled={!!editingRecord}
                   />
                   <FieldError message={fieldErrors.pet_id} />
                 </div>
@@ -467,7 +556,10 @@ export default function VaccinationMonitoring() {
                           : 'Select Vaccine'}
                       </option>
                       {availableVaccines.map((v) => (
-                        <option key={v.id} value={v.id}>{v.vaccine_name}</option>
+                        <option key={v.id} value={v.id}>
+                          {v.vaccine_name}
+                          {v.price != null ? ` · ${pesoSymbol.format(v.price)}` : ''}
+                        </option>
                       ))}
                     </select>
                     <FieldError message={fieldErrors.vaccine_id} />
@@ -487,6 +579,14 @@ export default function VaccinationMonitoring() {
                     <FieldError message={fieldErrors.date_administered} />
                   </div>
                 </div>
+
+                {selectedVaccine && (
+                  <p className="vaccination-calc-helper">
+                    {selectedVaccine.price != null
+                      ? `This vaccine is billed to the owner at ${pesoSymbol.format(selectedVaccine.price)} — a payment entry appears in staff payment monitoring and the owner's payment history.`
+                      : 'No catalog price is set for this vaccine, so no payment charge will be created.'}
+                  </p>
+                )}
 
                 {selectedVaccine && selectedVaccine.schedules.length > 0 && (
                   <div className="field-group">
@@ -540,14 +640,16 @@ export default function VaccinationMonitoring() {
 
               <div className="barangay-pets-footer">
                 <span className="barangay-pets-count-hint">
-                  Saves as a new record — previous vaccinations stay in history.
+                  {editingRecord
+                    ? 'Updates this record and its linked payment entry.'
+                    : 'Saves as a new record — previous vaccinations stay in history.'}
                 </span>
                 <div className="barangay-pets-footer-actions">
-                  <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>
+                  <button type="button" className="btn-secondary" onClick={closeModal}>
                     Cancel
                   </button>
                   <button type="submit" className="btn-primary" disabled={submitting}>
-                    {submitting ? 'Saving...' : 'Save Vaccination'}
+                    {submitting ? 'Saving...' : editingRecord ? 'Save Changes' : 'Save Vaccination'}
                   </button>
                 </div>
               </div>
@@ -644,12 +746,13 @@ export default function VaccinationMonitoring() {
                 <th>Status</th>
                 <th>Last Vaccination</th>
                 <th>Next Due</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody key={`${statusFilter}|${periodFilter}|${searchTerm}|${dateFrom}|${dateTo}|${yearFilter}`}>
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="empty-state-cell">No vaccination records match your search.</td>
+                  <td colSpan="7" className="empty-state-cell">No vaccination records match your search.</td>
                 </tr>
               ) : (
                 filteredRecords.map((record, idx) => (
@@ -660,6 +763,30 @@ export default function VaccinationMonitoring() {
                     <td data-label="Status"><StatusBadge status={record.status} /></td>
                     <td data-label="Last Vaccination">{formatDate(record.date_administered)}</td>
                     <td data-label="Next Due">{formatDate(record.next_due_date)}</td>
+                    <td data-label="Action">
+                      <div className="vacc-action-cell">
+                        <button
+                          type="button"
+                          className="vacc-edit-btn"
+                          onClick={() => openEditModal(record)}
+                          aria-label={`Edit vaccination for ${record.pet_name}`}
+                          title="Edit vaccination record"
+                        >
+                          <Pencil size={14} aria-hidden="true" />
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-delete-text vacc-delete-btn"
+                          onClick={() => setDeleteTarget(record)}
+                          aria-label={`Delete vaccination for ${record.pet_name}`}
+                          title="Delete vaccination record"
+                        >
+                          <Trash2 size={13} aria-hidden="true" />
+                          Delete
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -667,6 +794,21 @@ export default function VaccinationMonitoring() {
           </table>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Vaccination Record"
+        message={
+          deleteTarget
+            ? `Are you sure you want to delete ${deleteTarget.vaccine_name} for ${deleteTarget.pet_name}? The linked payment entry will also be removed. This action cannot be undone.`
+            : ''
+        }
+        confirmText={deleting ? 'Deleting...' : 'Delete'}
+        variant="danger"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

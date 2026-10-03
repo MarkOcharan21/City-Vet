@@ -1,5 +1,6 @@
 import React from 'react';
 import StatusBadge from '../StatusBadge';
+import { Pencil, Trash2 } from 'lucide-react';
 
 const formatDate = (value) => {
   if (!value) return '—';
@@ -8,7 +9,14 @@ const formatDate = (value) => {
   return date.toLocaleDateString();
 };
 
-export default function PetVaccinationCard({ pet, latest, history, onAddRecord }) {
+export default function PetVaccinationCard({
+  pet,
+  latest,
+  history,
+  onAddRecord,
+  onEditRecord,
+  onDeleteRecord,
+}) {
   if (!pet) return null;
 
   const species = pet.species_name || pet.species || '';
@@ -85,23 +93,46 @@ export default function PetVaccinationCard({ pet, latest, history, onAddRecord }
         {history && history.length > 0 ? (
           <div className="vaccination-history-list">
             {history.map((record, index) => (
-              <div
-                key={`${record.id}-${record.vaccine_id}-${record.date_administered}-${index}`}
-                className="vaccination-history-item"
-              >
-                <div className="vaccination-history-date">{formatDate(record.date_administered)}</div>
-                <div className="vaccination-history-body">
-                  <div className="vaccination-history-title-row">
-                    <strong>{record.vaccine_name}</strong>
-                    {record.dose_label && (
-                      <span className="vaccination-dose-badge">{record.dose_label}</span>
-                    )}
+<div key={`${record.id}-${record.vaccine_id}-${record.date_administered}-${index}`}
+                    className="vaccination-history-item"
+                  >
+                    <div className="vaccination-history-date">{formatDate(record.date_administered)}</div>
+                    <div className="vaccination-history-body">
+                      <div className="vaccination-history-title-row">
+                        <strong>{record.vaccine_name}</strong>
+                        {record.dose_label && (
+                          <span className="vaccination-dose-badge">{record.dose_label}</span>
+                        )}
+                      </div>
+                      <span>Next Due: {formatDate(record.next_due_date)}</span>
+                      {record.comments && <em>{record.comments}</em>}
+                    </div>
+                    <div className="vaccination-history-actions">
+                      {onEditRecord && (
+                        <button
+                          type="button"
+                          className="vacc-hist-btn"
+                          onClick={() => onEditRecord(record)}
+                          aria-label={`Edit ${record.vaccine_name} record`}
+                          title="Edit vaccination record"
+                        >
+                          <Pencil size={13} aria-hidden="true" />
+                        </button>
+                      )}
+                      {onDeleteRecord && (
+                        <button
+                          type="button"
+                          className="vacc-hist-btn vacc-hist-btn--danger"
+                          onClick={() => onDeleteRecord(record)}
+                          aria-label={`Delete ${record.vaccine_name} record`}
+                          title="Delete vaccination record"
+                        >
+                          <Trash2 size={13} aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
+                    <StatusBadge status={record.status} />
                   </div>
-                  <span>Next Due: {formatDate(record.next_due_date)}</span>
-                  {record.comments && <em>{record.comments}</em>}
-                </div>
-                <StatusBadge status={record.status} />
-              </div>
             ))}
           </div>
         ) : (
