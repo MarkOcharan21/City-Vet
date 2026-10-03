@@ -48,6 +48,16 @@ function isEmailConfigured() {
   );
 })();
 
+// Non-blocking SMTP check at boot: logs whether Gmail accepts the
+// credentials, so auth problems show up in the Render logs at deploy time
+// instead of only when someone registers.
+if (isEmailConfigured()) {
+  transporter.verify().then(
+    () => console.log('[email] smtp verify ok'),
+    (err) => console.warn('[email] smtp verify FAILED: ' + (err && err.message))
+  );
+}
+
 async function sendMail({ to, subject, text, html }) {
   if (!isEmailConfigured()) {
     console.warn(`Email config is missing or still a placeholder. Skipping email to ${to}: ${subject}`);
