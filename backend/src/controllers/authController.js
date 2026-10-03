@@ -120,6 +120,7 @@ async function registerOwner(req, res) {
   const validation = validateOwnerRegistration({ email, password, full_name, contact_number, barangay });
 
   if (!validation.valid) {
+    console.log('[registerOwner] Validation failed:', validation.errors);
     return validationError(res, validation.message, validation.errors);
   }
 
@@ -161,6 +162,7 @@ async function registerOwner(req, res) {
     if (existing.length > 0) {
       // Unfinished (pending) registration — refresh its details and re-issue the code.
       userId = existing[0].id;
+      console.log('[registerOwner] Updating existing pending user:', userId);
       await db.query(
         `UPDATE users
          SET password = ?, full_name = ?, status = 'pending',
@@ -170,12 +172,14 @@ async function registerOwner(req, res) {
       );
       action = 'UPDATE';
     } else {
+      console.log('[registerOwner] Creating new user:', { normalizedEmail, fullName });
       const [userResult] = await db.query(
         `INSERT INTO users (role, email, password, full_name, status, verify_code, verify_code_expiry, verify_sent_at)
          VALUES ('Owner', ?, ?, ?, 'pending', ?, ?, NOW())`,
         [normalizedEmail, hashedPassword, fullName, otp, otpExpiry]
       );
       userId = userResult.insertId;
+      console.log('[registerOwner] Inserted userId:', userId);
       action = 'CREATE';
     }
 
