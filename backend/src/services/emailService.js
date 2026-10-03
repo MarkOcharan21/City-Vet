@@ -34,6 +34,20 @@ function isEmailConfigured() {
   return Boolean(process.env.EMAIL_HOST && process.env.EMAIL_USER) && !looksPlaceholder;
 }
 
+// Boot-time diagnostic (values never printed): shows in the Render logs
+// whether each email variable is present, so a missing/placeholder
+// credential is obvious without exposing secrets.
+(function logEmailConfigStatus() {
+  const pass = (process.env.EMAIL_PASS || '').replace(/\s/g, '');
+  console.log(
+    '[email] configured=' + isEmailConfigured() +
+      ' host=' + (process.env.EMAIL_HOST ? 'set' : 'MISSING') +
+      ' user=' + (process.env.EMAIL_USER ? 'set' : 'MISSING') +
+      ' pass_len=' + pass.length +
+      ' from=' + (process.env.EMAIL_FROM ? 'set' : 'MISSING(default)')
+  );
+})();
+
 async function sendMail({ to, subject, text, html }) {
   if (!isEmailConfigured()) {
     console.warn(`Email config is missing or still a placeholder. Skipping email to ${to}: ${subject}`);
