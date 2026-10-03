@@ -115,7 +115,7 @@ export default function SystemOverview() {
 
       <div className="summary-row summary-row--center">
         <SummaryCard
-          label="Registered Dogs"
+          label="Verified Dogs"
           value={charts ? dogsTotal : '—'}
           color="#1e7a46"
           sub={[
@@ -124,7 +124,7 @@ export default function SystemOverview() {
           ]}
         />
         <SummaryCard
-          label="Registered Cats"
+          label="Verified Cats"
           value={charts ? catsTotal : '—'}
           color="#c8102e"
           sub={[
@@ -134,7 +134,7 @@ export default function SystemOverview() {
         />
         <SummaryCard
           label="Pet Sex Distribution"
-          value={charts ? males + females : '—'}
+          value={charts ? Number(males) + Number(females) : '—'}
           color="#c6a15b"
           sub={[
             { label: 'Male', value: charts ? males : '—' },

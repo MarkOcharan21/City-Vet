@@ -93,6 +93,7 @@ async function getDashboardAnalytics(req, res) {
             SELECT COUNT(*) AS total
             FROM pets
             WHERE ${petDateSimple}
+            AND status = 'Verified'
         `);
 
         const [[vaccinatedPets]] = await db.query(`
@@ -105,6 +106,7 @@ async function getDashboardAnalytics(req, res) {
             SELECT COUNT(*) AS total
             FROM pets
             WHERE is_lost = 1
+            AND status = 'Verified'
             AND ${lostDate}
         `);
 
@@ -121,6 +123,7 @@ async function getDashboardAnalytics(req, res) {
             FROM pets p
             JOIN species s ON p.species_id = s.id
             WHERE ${petDate}
+            AND p.status = 'Verified'
             GROUP BY s.species_name
             ORDER BY total DESC
         `);
@@ -133,6 +136,7 @@ async function getDashboardAnalytics(req, res) {
             JOIN species s ON p.species_id = s.id
             WHERE s.species_name = 'Dog'
             AND ${petDate}
+            AND p.status = 'Verified'
             GROUP BY p.sex
             ORDER BY p.sex
         `);
@@ -145,6 +149,7 @@ async function getDashboardAnalytics(req, res) {
             JOIN species s ON p.species_id = s.id
             WHERE s.species_name = 'Cat'
             AND ${petDate}
+            AND p.status = 'Verified'
             GROUP BY p.sex
             ORDER BY p.sex
         `);
@@ -156,6 +161,7 @@ async function getDashboardAnalytics(req, res) {
             SELECT sex, COUNT(*) AS total
             FROM pets
             WHERE ${petDateSimple}
+            AND status = 'Verified'
             GROUP BY sex
             ORDER BY sex
         `);
@@ -200,6 +206,7 @@ async function getDashboardAnalytics(req, res) {
             WHERE po.barangay IS NOT NULL
             AND po.barangay != ''
             AND ${petDate}
+            AND p.status = 'Verified'
             GROUP BY po.barangay
             ORDER BY total DESC
             LIMIT 10
@@ -251,6 +258,7 @@ async function getDashboardAnalytics(req, res) {
                 ) latest_id ON latest_id.pet_id = vr1.pet_id AND latest_id.max_id = vr1.id
             ) latest ON p.id = latest.pet_id
             WHERE ${petDate}
+            AND p.status = 'Verified'
             GROUP BY
                 CASE
                     WHEN latest.next_due_date IS NULL THEN 'No Record'
@@ -428,6 +436,7 @@ async function getCharts(req, res) {
         const [petsBySex] = await db.query(`
             SELECT sex, COUNT(*) AS total
             FROM pets
+            WHERE status = 'Verified'
             GROUP BY sex
             ORDER BY sex
         `);
@@ -437,6 +446,7 @@ async function getCharts(req, res) {
             FROM pets p
             JOIN species s ON p.species_id = s.id
             WHERE s.species_name = 'Dog'
+            AND p.status = 'Verified'
             GROUP BY p.sex
             ORDER BY p.sex
         `);
@@ -446,6 +456,7 @@ async function getCharts(req, res) {
             FROM pets p
             JOIN species s ON p.species_id = s.id
             WHERE s.species_name = 'Cat'
+            AND p.status = 'Verified'
             GROUP BY p.sex
             ORDER BY p.sex
         `);

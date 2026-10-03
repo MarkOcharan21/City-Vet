@@ -326,7 +326,7 @@ export default function AnalyticsReports() {
       {!loading && !error && dashboard && (
         <>
           <div className="summary-row">
-            <SummaryCard label="Registered Pets" value={dashboard?.summary?.totalPets ?? '—'} />
+            <SummaryCard label="Verified Pets" value={dashboard?.summary?.totalPets ?? '—'} />
             <SummaryCard
               label="Vaccinated Pets"
               value={dashboard?.summary?.vaccinatedPets ?? '—'}
