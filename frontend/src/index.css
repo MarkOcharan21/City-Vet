@@ -1730,6 +1730,30 @@ body:has(.clinic-access-page)::before {
   flex-shrink: 0;
 }
 
+.otp-fallback-box {
+  margin: 0 0 1.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  border: 1px dashed var(--color-primary);
+  background: var(--color-primary-tint);
+  text-align: center;
+}
+
+.otp-fallback-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-primary-dark);
+}
+
+.otp-fallback-code {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 0.35em;
+  color: var(--color-ink);
+}
+
 .auth-otp-form {
   margin-top: 0.25rem;
 }

@@ -126,11 +126,12 @@ async function registerOwner(req, res) {
 
   const normalizedEmail = trim(email).toLowerCase();
 
-  if (!isEmailConfigured()) {
-    return res.status(503).json({
-      success: false,
-      message: 'Email service is not configured. Please contact the administrator.',
-    });
+  // If the mailer is unreachable (e.g. Render blocks Gmail SMTP), fall back
+  // to showing the code on screen so registration still works. Real inbox
+  // delivery resumes automatically once Brevo/SMTP is working.
+  let emailDeliverable = isEmailConfigured();
+  if (!emailDeliverable) {
+    console.warn('[registerOwner] Email not configured — using on-screen OTP fallback');
   }
 
   try {
@@ -183,21 +184,32 @@ async function registerOwner(req, res) {
       action = 'CREATE';
     }
 
-    try {
-      await sendRegistrationOtpEmail(normalizedEmail, otp, OTP_TTL_MINUTES);
-    } catch (emailErr) {
-      console.warn('Registration OTP email failed:', emailErr.message);
-      return res.status(503).json({
-        success: false,
-        message: 'Verification email could not be sent. Please try again later or contact support.',
-      });
+    if (emailDeliverable) {
+      try {
+        await sendRegistrationOtpEmail(normalizedEmail, otp, OTP_TTL_MINUTES);
+      } catch (emailErr) {
+        console.warn('Registration OTP email failed:', emailErr.message);
+        console.warn('[registerOwner] Using on-screen OTP fallback');
+        emailDeliverable = false;
+      }
     }
 
-    res.status(201).json({
-      success: true,
-      email: normalizedEmail,
-      message: `A 6-digit verification code was sent to ${normalizedEmail}. Enter it to activate your account. The code expires in ${OTP_TTL_MINUTES} minutes.`,
-    });
+    if (!emailDeliverable) {
+      res.status(201).json({
+        success: true,
+        email: normalizedEmail,
+        delivered: false,
+        verification_code: otp,
+        message: 'Email delivery is unavailable right now. Use the code shown on screen to verify your account.',
+      });
+    } else {
+      res.status(201).json({
+        success: true,
+        email: normalizedEmail,
+        delivered: true,
+        message: `A 6-digit verification code was sent to ${normalizedEmail}. Enter it to activate your account. The code expires in ${OTP_TTL_MINUTES} minutes.`,
+      });
+    }
 
     await logAudit(req, {
       user_id: userId,
@@ -329,11 +341,11 @@ async function resendRegistrationOtp(req, res) {
 
   const normalizedEmail = email.toLowerCase();
 
-  if (!isEmailConfigured()) {
-    return res.status(503).json({
-      success: false,
-      message: 'Email service is not configured. Please contact the administrator.',
-    });
+  // Same on-screen fallback as registerOwner: if the mailer is unreachable,
+  // return the fresh code in the response so the user can still verify.
+  let emailDeliverable = isEmailConfigured();
+  if (!emailDeliverable) {
+    console.warn('[resendRegistrationOtp] Email not configured — using on-screen OTP fallback');
   }
 
   try {
@@ -385,20 +397,30 @@ async function resendRegistrationOtp(req, res) {
       [otp, otpExpiry, user.id]
     );
 
-    try {
-      await sendRegistrationOtpEmail(normalizedEmail, otp, OTP_TTL_MINUTES);
-    } catch (emailErr) {
-      console.warn('Resend OTP email failed:', emailErr.message);
-      return res.status(503).json({
-        success: false,
-        message: 'Verification email could not be sent. Please try again later or contact support.',
-      });
+    if (emailDeliverable) {
+      try {
+        await sendRegistrationOtpEmail(normalizedEmail, otp, OTP_TTL_MINUTES);
+      } catch (emailErr) {
+        console.warn('Resend OTP email failed:', emailErr.message);
+        console.warn('[resendRegistrationOtp] Using on-screen OTP fallback');
+        emailDeliverable = false;
+      }
     }
 
-    res.json({
-      success: true,
-      message: `A new verification code was sent to ${normalizedEmail}. It expires in ${OTP_TTL_MINUTES} minutes.`,
-    });
+    if (!emailDeliverable) {
+      res.json({
+        success: true,
+        delivered: false,
+        verification_code: otp,
+        message: 'Email delivery is unavailable right now. Use the code shown on screen.',
+      });
+    } else {
+      res.json({
+        success: true,
+        delivered: true,
+        message: `A new verification code was sent to ${normalizedEmail}. It expires in ${OTP_TTL_MINUTES} minutes.`,
+      });
+    }
 
     await logAudit(req, {
       user_id: user.id,

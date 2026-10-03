@@ -49,6 +49,7 @@ export default function OwnerRegister() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [otpTimeLeft, setOtpTimeLeft] = useState(OTP_TTL_SECONDS);
   const [verified, setVerified] = useState(false);
+  const [fallbackCode, setFallbackCode] = useState(null);
 
   const navigate = useNavigate();
 
@@ -88,11 +89,15 @@ export default function OwnerRegister() {
     }
 
     setSubmitting(true);
+    setFallbackCode(null);
 
     try {
       const res = await api.post("/auth/register-owner", form);
 
       setOtpMessage(res.data.message || "A verification code was sent to your email.");
+      if (res.data.verification_code) {
+        setFallbackCode(res.data.verification_code);
+      }
       setOtp("");
       setOtpError("");
       setOtpTimeLeft(OTP_TTL_SECONDS);
@@ -150,6 +155,7 @@ export default function OwnerRegister() {
     setResending(true);
     setOtpError("");
     setOtpMessage("");
+    setFallbackCode(null);
 
     try {
       const res = await api.post("/auth/resend-registration-otp", { email: form.email });
@@ -158,6 +164,9 @@ export default function OwnerRegister() {
       setOtpTimeLeft(OTP_TTL_SECONDS);
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
       setOtpMessage(res.data.message || "A new verification code was sent to your email.");
+      if (res.data.verification_code) {
+        setFallbackCode(res.data.verification_code);
+      }
     } catch (err) {
       const status = err.response?.status;
       if (status === 429) {
@@ -178,6 +187,7 @@ export default function OwnerRegister() {
     setOtpError("");
     setOtpMessage("");
     setVerified(false);
+    setFallbackCode(null);
   }
 
   function handleSuccessConfirm() {
@@ -352,6 +362,15 @@ export default function OwnerRegister() {
               <Mail size={15} />
               <span>{form.email.toLowerCase()}</span>
             </div>
+
+            {fallbackCode && (
+              <div className="otp-fallback-box" role="status">
+                <p className="otp-fallback-title">
+                  Email delivery is unavailable right now — use this code instead:
+                </p>
+                <p className="otp-fallback-code">{fallbackCode}</p>
+              </div>
+            )}
 
             <form onSubmit={handleVerify} className="auth-register-form auth-otp-form">
               <div className="auth-field auth-field--otp">
