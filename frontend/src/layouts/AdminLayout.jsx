@@ -98,7 +98,7 @@ export default function AdminLayout() {
         <nav>
           <NavLink to="/admin/overview" onClick={() => setMobileOpen(false)}>
             <LayoutGrid size={16} />
-            <span className="sidebar-label">Admin Dashboard</span>
+            <span className="sidebar-label">Dashboard</span>
           </NavLink>
 
           <NavLink to="/admin/barangay-dashboard" onClick={() => setMobileOpen(false)}>
