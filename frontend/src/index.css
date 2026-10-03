@@ -116,6 +116,17 @@ button { font-family: var(--font-body); cursor: pointer; }
   }
 }
 
+.auth-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: inherit;
+}
+
 /* ---------- Top utility bar (gov portal convention) ---------- */
 .gov-bar {
   background: var(--color-ink);
@@ -1617,6 +1628,7 @@ body:has(.clinic-access-page)::before {
 }
 
 .auth-register-form {
+  position: relative;
   gap: 1.35rem;
 }
 

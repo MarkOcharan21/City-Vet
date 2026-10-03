@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, Mail, Loader } from "lucide-react";
+import { ArrowLeft, MapPin, Mail } from "lucide-react";
 import api from "../../services/api";
 import PasswordInput from "../../components/PasswordInput";
 import PasswordStrength from "../../components/PasswordStrength";
@@ -11,6 +11,8 @@ import {
 } from "../../data/cabuyaoBarangays";
 import FieldError from "../../components/ui/FieldError";
 import SuccessModal from "../../components/ui/SuccessModal";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import useMinLoading from "../../hooks/useMinLoading";
 import { validateOwnerRegistration, isValidOtp } from "../../utils/validation";
 
 const OTP_TTL_SECONDS = 300;
@@ -35,12 +37,14 @@ export default function OwnerRegister() {
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const showSubmitting = useMinLoading(submitting);
 
   const [step, setStep] = useState(1);
   const [otp, setOtp] = useState("");
   const [otpError, setOtpError] = useState("");
   const [otpMessage, setOtpMessage] = useState("");
   const [verifying, setVerifying] = useState(false);
+  const showVerifying = useMinLoading(verifying);
   const [resending, setResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [otpTimeLeft, setOtpTimeLeft] = useState(OTP_TTL_SECONDS);
@@ -323,16 +327,22 @@ export default function OwnerRegister() {
 
               {error && <p className="form-error">{error}</p>}
 
-              <button type="submit" disabled={submitting}>
-                {submitting ? (
-                  <>
-                    <Loader size={18} className="spinner button-spinner" />
-                    Sending Code...
-                  </>
-                ) : (
-                  "Continue"
-                )}
-              </button>
+              {showSubmitting ? (
+                <div className="auth-loading-overlay">
+                  <LoadingSpinner text="Creating your account..." fullPage={false} />
+                </div>
+              ) : (
+                <button type="submit" disabled={submitting}>
+                  {submitting ? (
+                    <>
+                      <Loader size={18} className="spinner button-spinner" />
+                      Sending Code...
+                    </>
+                  ) : (
+                    "Continue"
+                  )}
+                </button>
+              )}
             </form>
           </>
         ) : (
@@ -380,16 +390,22 @@ export default function OwnerRegister() {
 
               {otpMessage && <p className="form-success">{otpMessage}</p>}
 
-              <button type="submit" disabled={verifying || verified || otpTimeLeft <= 0}>
-                {verifying ? (
-                  <>
-                    <Loader size={18} className="spinner button-spinner" />
-                    Verifying...
-                  </>
-                ) : (
-                  "Verify & Activate Account"
-                )}
-              </button>
+              {showVerifying ? (
+                <div className="auth-loading-overlay">
+                  <LoadingSpinner text="Verifying your code..." fullPage={false} />
+                </div>
+              ) : (
+                <button type="submit" disabled={verifying || verified || otpTimeLeft <= 0}>
+                  {verifying ? (
+                    <>
+                      <Loader size={18} className="spinner button-spinner" />
+                      Verifying...
+                    </>
+                  ) : (
+                    "Verify & Activate Account"
+                  )}
+                </button>
+              )}
 
               <div className="auth-otp-resend-row">
                 <button
