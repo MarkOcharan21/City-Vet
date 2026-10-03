@@ -183,9 +183,9 @@ async function registerOwner(req, res) {
       await sendRegistrationOtpEmail(normalizedEmail, otp, OTP_TTL_MINUTES);
     } catch (emailErr) {
       console.warn('Registration OTP email failed:', emailErr.message);
-      return res.status(502).json({
+      return res.status(503).json({
         success: false,
-        message: 'We could not send the verification email. Please try again.',
+        message: 'Verification email could not be sent. Please try again later or contact support.',
       });
     }
 
@@ -385,9 +385,9 @@ async function resendRegistrationOtp(req, res) {
       await sendRegistrationOtpEmail(normalizedEmail, otp, OTP_TTL_MINUTES);
     } catch (emailErr) {
       console.warn('Resend OTP email failed:', emailErr.message);
-      return res.status(502).json({
+      return res.status(503).json({
         success: false,
-        message: 'We could not send the verification email. Please try again.',
+        message: 'Verification email could not be sent. Please try again later or contact support.',
       });
     }
 
