@@ -12268,6 +12268,7 @@ body:has(.clinic-access-page)::before {
   align-items: center;
   gap: 0.35rem;
   padding: 0.4rem 0.8rem;
+  margin-left: 0.5rem;
   font-family: var(--font-body);
   font-size: 0.8rem;
   font-weight: 600;
