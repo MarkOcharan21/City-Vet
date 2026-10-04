@@ -10,6 +10,7 @@ import {
   Megaphone,
   FileText,
   Package,
+  ShieldCheck,
   Moon,
   Sun,
   PanelLeftClose,
@@ -139,6 +140,11 @@ export default function AdminLayout() {
           <NavLink to="/admin/catalog" onClick={() => setMobileOpen(false)}>
             <Package size={16} />
             <span className="sidebar-label">Product Catalog</span>
+          </NavLink>
+
+          <NavLink to="/admin/security" onClick={() => setMobileOpen(false)}>
+            <ShieldCheck size={16} />
+            <span className="sidebar-label">Account Security</span>
           </NavLink>
         </nav>
 

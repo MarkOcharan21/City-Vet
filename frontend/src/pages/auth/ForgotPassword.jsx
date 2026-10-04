@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import api from "../../services/api";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import PasswordInput from "../../components/PasswordInput";
 
 const POLL_INTERVAL_MS = 8000;
 
@@ -13,6 +14,12 @@ export default function ForgotPassword({ portal = "owner" }) {
   const [loading, setLoading] = useState(false);
   const [waitingForApproval, setWaitingForApproval] = useState(false);
   const [declinedMessage, setDeclinedMessage] = useState("");
+  // Admin-only offline recovery (works even when email is down).
+  const [useRecoveryKey, setUseRecoveryKey] = useState(false);
+  const [recoveryKey, setRecoveryKey] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [keyDone, setKeyDone] = useState(false);
 
   const navigate = useNavigate();
   const pollRef = useRef(null);
@@ -70,6 +77,41 @@ export default function ForgotPassword({ portal = "owner" }) {
     };
   }, []);
 
+  async function handleRecoveryKeySubmit(event) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await api.post("/auth/recover-with-key", {
+        email,
+        recovery_key: recoveryKey,
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      });
+      setMessage(res.data.message || "Password reset successfully. You may now log in.");
+      setKeyDone(true);
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not reset password.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function toggleRecoveryKey() {
+    setError("");
+    setMessage("");
+    setDeclinedMessage("");
+    setKeyDone(false);
+    setUseRecoveryKey((prev) => !prev);
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
@@ -124,7 +166,65 @@ export default function ForgotPassword({ portal = "owner" }) {
 
         <h3>Reset Your Password</h3>
 
-        <form onSubmit={handleSubmit}>
+        {portal === "admin" && useRecoveryKey ? (
+          <form onSubmit={handleRecoveryKeySubmit}>
+            <label>Email</label>
+            <input
+              type="email"
+              name="email"
+              placeholder="Enter your admin email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={loading || keyDone}
+            />
+
+            <label>Recovery Key</label>
+            <input
+              type="text"
+              name="recovery_key"
+              placeholder="XXXX-XXXX-XXXX-XXXX"
+              value={recoveryKey}
+              onChange={(e) => setRecoveryKey(e.target.value)}
+              required
+              disabled={loading || keyDone}
+              autoComplete="off"
+              style={{ fontFamily: "monospace", letterSpacing: "0.08em" }}
+            />
+
+            <label>New Password</label>
+            <PasswordInput
+              name="new_password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Create a new password"
+            />
+
+            <label>Confirm New Password</label>
+            <PasswordInput
+              name="confirm_password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Repeat the new password"
+            />
+
+            {error && <p className="form-error">{error}</p>}
+            {message && <p className="form-success">{message}</p>}
+
+            {!keyDone && (
+              <button type="submit" disabled={loading}>
+                {loading ? "Resetting..." : "Reset Password"}
+              </button>
+            )}
+
+            {keyDone && (
+              <p className="form-success" style={{ textAlign: "center" }}>
+                <Link to={loginPath}>Sign In with your new password</Link>
+              </p>
+            )}
+          </form>
+        ) : (
+          <form onSubmit={handleSubmit}>
           <label>Email</label>
           <input
             type="email"
@@ -189,6 +289,59 @@ export default function ForgotPassword({ portal = "owner" }) {
             )}
           </button>
         </form>
+        )}
+
+        {portal === "admin" && !keyDone && (
+          <p
+            style={{
+              textAlign: "center",
+              marginTop: "14px",
+              marginBottom: 0,
+              color: "#6B7280",
+              fontSize: "14px",
+            }}
+          >
+            {useRecoveryKey ? (
+              <>
+                Have an email code instead?{" "}
+                <button
+                  type="button"
+                  onClick={toggleRecoveryKey}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    color: "var(--color-primary)",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontSize: "14px",
+                  }}
+                >
+                  Use email code.
+                </button>
+              </>
+            ) : (
+              <>
+                No email access?{" "}
+                <button
+                  type="button"
+                  onClick={toggleRecoveryKey}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    color: "var(--color-primary)",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontSize: "14px",
+                  }}
+                >
+                  Use recovery key instead.
+                </button>
+              </>
+            )}
+          </p>
+        )}
 
         {isClinicRequestFlow && (
           <p

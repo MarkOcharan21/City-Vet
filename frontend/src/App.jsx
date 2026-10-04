@@ -55,6 +55,7 @@ import AnalyticsReports from "./pages/admin/AnalyticsReports";
 import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
 import ActivityAuditTrail from "./pages/admin/ActivityAuditTrail";
 import ProductCatalog from "./pages/admin/ProductCatalog";
+import AdminSecurity from "./pages/admin/AdminSecurity";
 import NotificationCenter from "./pages/shared/NotificationCenter";
 
 // LAYOUTS
@@ -311,6 +312,11 @@ export default function App() {
             <Route
               path="catalog"
               element={<ProductCatalog />}
+            />
+
+            <Route
+              path="security"
+              element={<AdminSecurity />}
             />
           </Route>
 

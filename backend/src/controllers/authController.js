@@ -869,6 +869,226 @@ async function logout(req, res) {
   }
 }
 
+// POST /api/auth/change-password
+// Logged-in users (any role) change their own password. Requires the
+// current password — this is the everyday path so resets are rarely needed.
+async function changePassword(req, res) {
+  const { current_password, new_password, confirm_password } = req.body || {};
+
+  if (!trim(current_password)) {
+    return validationError(res, 'Enter your current password.', { current_password: 'Enter your current password.' });
+  }
+
+  const validation = validateAccountSetup({ password: new_password, confirmPassword: confirm_password });
+  if (!validation.valid) {
+    return validationError(res, validation.message, validation.errors);
+  }
+
+  try {
+    const [rows] = await db.query(
+      'SELECT id, email, password, role, full_name, status FROM users WHERE id = ?',
+      [req.user.id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(401).json({ success: false, message: 'Session is no longer valid. Please log in again.' });
+    }
+
+    const user = rows[0];
+
+    if (user.status !== 'active') {
+      return res.status(403).json({ success: false, message: 'Your account is inactive. Contact the administrator.' });
+    }
+
+    if (!user.password) {
+      return res.status(400).json({ success: false, message: 'No password is set on this account yet. Use the setup or reset flow instead.' });
+    }
+
+    const currentOk = await bcrypt.compare(current_password, user.password);
+    if (!currentOk) {
+      return res.status(401).json({ success: false, message: 'Current password is incorrect.' });
+    }
+
+    const sameAsCurrent = await bcrypt.compare(new_password, user.password);
+    if (sameAsCurrent) {
+      return validationError(res, 'New password must be different from the current password.', { new_password: 'New password must be different from the current password.' });
+    }
+
+    const hashed = await bcrypt.hash(new_password, 10);
+    await db.query('UPDATE users SET password = ? WHERE id = ?', [hashed, user.id]);
+
+    res.json({ success: true, message: 'Password changed successfully.' });
+
+    // Let the user know their password was changed (also alerts them if it was NOT them).
+    sendNotificationEmail(
+      user.email,
+      'Password Changed',
+      'Your City Vet password was changed successfully. If you did not make this change, please contact the System Administrator immediately.'
+    ).catch((emailErr) =>
+      console.warn('Password changed notification email failed:', emailErr.message)
+    );
+
+    await logAudit(req, {
+      user_id: user.id,
+      staff_name: user.full_name || null,
+      action: 'UPDATE',
+      entity_type: 'auth',
+      entity_id: user.id,
+      description: `${roleLabel(user.role)} "${user.full_name || user.email}" changed their password`
+    });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ success: false, message: 'Could not change password.', error: error.message });
+  }
+}
+
+// Offline admin recovery keys (work even when email is down).
+// Alphabet skips look-alikes (0/O, 1/I/L); 16 chars ~= 80 bits of entropy.
+const RECOVERY_KEY_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function generateRecoveryKeyPlain() {
+  const bytes = crypto.randomBytes(16);
+  let out = '';
+  for (let i = 0; i < 16; i++) out += RECOVERY_KEY_ALPHABET[bytes[i] % 32];
+  return `${out.slice(0, 4)}-${out.slice(4, 8)}-${out.slice(8, 12)}-${out.slice(12, 16)}`;
+}
+
+function normalizeRecoveryKey(value) {
+  return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+// POST /api/auth/recovery-key  (Admin only)
+// Issues a single-use offline recovery key. The plaintext is returned ONCE —
+// only its bcrypt hash is stored. Generating a new key invalidates any
+// previous unused key.
+async function generateRecoveryKey(req, res) {
+  try {
+    const plain = generateRecoveryKeyPlain();
+    const hash = await bcrypt.hash(plain.replace(/-/g, ''), 10);
+
+    await db.query(
+      'UPDATE admin_recovery_keys SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL',
+      [req.user.id]
+    );
+    await db.query(
+      'INSERT INTO admin_recovery_keys (user_id, key_hash) VALUES (?, ?)',
+      [req.user.id, hash]
+    );
+
+    const [rows] = await db.query(
+      'SELECT created_at FROM admin_recovery_keys WHERE user_id = ? AND used_at IS NULL ORDER BY id DESC LIMIT 1',
+      [req.user.id]
+    );
+
+    res.status(201).json({
+      success: true,
+      recovery_key: plain,
+      created_at: rows[0]?.created_at || null,
+      message: 'Recovery key generated. Save it somewhere safe — it is shown only once and stops working after one use.',
+    });
+
+    await logAudit(req, {
+      user_id: req.user.id,
+      staff_name: null,
+      action: 'CREATE',
+      entity_type: 'admin_recovery_key',
+      entity_id: req.user.id,
+      description: 'Admin generated a new offline recovery key (previous unused keys invalidated)'
+    });
+  } catch (error) {
+    console.error('Generate recovery key error:', error);
+    res.status(500).json({ success: false, message: 'Could not generate recovery key.', error: error.message });
+  }
+}
+
+// GET /api/auth/recovery-key/status  (Admin only)
+// Tells the UI whether an unused key exists (never returns the key itself).
+async function recoveryKeyStatus(req, res) {
+  try {
+    const [rows] = await db.query(
+      'SELECT created_at FROM admin_recovery_keys WHERE user_id = ? AND used_at IS NULL ORDER BY id DESC LIMIT 1',
+      [req.user.id]
+    );
+    res.json({
+      success: true,
+      has_active_key: rows.length > 0,
+      created_at: rows[0]?.created_at || null,
+    });
+  } catch (error) {
+    console.error('Recovery key status error:', error);
+    res.status(500).json({ success: false, message: 'Could not check recovery key status.', error: error.message });
+  }
+}
+
+// POST /api/auth/recover-with-key  (public — no login needed)
+// Email-outage-proof admin recovery: email + single-use recovery key sets a
+// new password directly, no inbox needed. Restricted to Admin accounts.
+// Responses are generic so the endpoint cannot be used to enumerate accounts.
+async function recoverWithKey(req, res) {
+  const { email, recovery_key, new_password, confirm_password } = req.body || {};
+
+  const validation = validateAccountSetup({ password: new_password, confirmPassword: confirm_password });
+  if (!validation.valid) {
+    return validationError(res, validation.message, validation.errors);
+  }
+
+  if (!isValidEmail(email) || !trim(recovery_key)) {
+    return res.status(400).json({ success: false, message: 'Invalid email or recovery key.' });
+  }
+
+  const normalizedEmail = trim(email).toLowerCase();
+
+  try {
+    const [rows] = await db.query(
+      'SELECT id, email, role, full_name, status FROM users WHERE email = ?',
+      [normalizedEmail]
+    );
+    const user = rows[0];
+
+    if (!user || user.role !== 'Admin' || user.status !== 'active') {
+      return res.status(400).json({ success: false, message: 'Invalid email or recovery key.' });
+    }
+
+    const [keys] = await db.query(
+      'SELECT id, key_hash FROM admin_recovery_keys WHERE user_id = ? AND used_at IS NULL ORDER BY id DESC LIMIT 1',
+      [user.id]
+    );
+
+    const candidate = normalizeRecoveryKey(recovery_key);
+    let matched = null;
+    if (keys.length > 0 && candidate.length === 16) {
+      const ok = await bcrypt.compare(candidate, keys[0].key_hash);
+      if (ok) matched = keys[0];
+    }
+
+    if (!matched) {
+      console.warn(`[recoverWithKey] failed attempt for ${normalizedEmail}`);
+      return res.status(400).json({ success: false, message: 'Invalid email or recovery key.' });
+    }
+
+    const hashed = await bcrypt.hash(new_password, 10);
+    await db.query('UPDATE users SET password = ? WHERE id = ?', [hashed, user.id]);
+    await db.query('UPDATE admin_recovery_keys SET used_at = NOW() WHERE id = ?', [matched.id]);
+
+    res.json({
+      success: true,
+      message: 'Password reset successfully. You may now log in. Generate a new recovery key after signing in.',
+    });
+
+    await logAudit(req, {
+      user_id: user.id,
+      staff_name: user.full_name || null,
+      action: 'UPDATE',
+      entity_type: 'auth',
+      entity_id: user.id,
+      description: `Admin "${user.full_name || user.email}" reset their password with an offline recovery key`
+    });
+  } catch (error) {
+    console.error('Recover with key error:', error);
+    res.status(500).json({ success: false, message: 'Could not reset password.', error: error.message });
+  }
+}
+
 module.exports = {
   registerOwner,
   verifyRegistration,
@@ -880,4 +1100,8 @@ module.exports = {
   verifyResetCode,
   resetPassword,
   logout,
+  changePassword,
+  generateRecoveryKey,
+  recoveryKeyStatus,
+  recoverWithKey,
 };

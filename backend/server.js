@@ -69,6 +69,7 @@ const {
 } = require("./src/services/notificationScheduler");
 
 const { ensurePaymentTypeOutreach } = require("./src/db/ensurePaymentType");
+const { ensureAdminRecoveryKeys } = require("./src/db/ensureAdminRecovery");
 
 const {
     startAnnouncementScheduler,
@@ -1681,6 +1682,9 @@ async function freePortIfBusy() {
     // Ensure payment_monitoring.payment_type supports 'Outreach' so that
     // outreach verification can create the owner payment record on boot.
     await ensurePaymentTypeOutreach();
+
+    // Ensure the offline admin recovery-keys table exists.
+    await ensureAdminRecoveryKeys();
 
     // Free an already-running backend before binding, so `npm run dev`
     // always starts cleanly with no manual netstat/taskkill needed.
