@@ -59,7 +59,7 @@ email,
 
 password
 
-});
+}, { timeout: 45000, retryOnNetwork: true });
 
 if(res.data.user.role!=="Admin"){
 
@@ -125,7 +125,7 @@ async function handleCodeSubmit(e) {
     const res = await api.post("/auth/verify-access-code", {
       pre_token: preToken,
       code,
-    });
+    }, { timeout: 45000, retryOnNetwork: true });
     finishLogin(res.data.token, res.data.user);
   } catch (err) {
     if (err.response?.status === 409 && err.response?.data?.set_code_required) {

@@ -50,7 +50,10 @@ api.interceptors.response.use(
     config.retryCount = config.retryCount || 0;
     const requestMethod = String(error.config?.method || 'get').toUpperCase();
     const isRetryableIdempotent = ['GET', 'PUT', 'DELETE'].includes(requestMethod);
-    if (isRetryableIdempotent && !config._retried && shouldRetry(error, config.retryCount)) {
+    // Opt-in for POSTs (e.g. login) that should survive a cold server waking
+    // up — a network-layer failure means the request never got a reply.
+    const isRetryableOptIn = config.retryOnNetwork === true && !error.response;
+    if ((isRetryableIdempotent || isRetryableOptIn) && !config._retried && shouldRetry(error, config.retryCount)) {
       config._retried = true;
       config.retryCount += 1;
       const delay = 700 * config.retryCount;
