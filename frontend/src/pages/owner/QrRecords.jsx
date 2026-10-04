@@ -6,6 +6,7 @@ import useMinLoading from "../../hooks/useMinLoading";
 import StatusBadge from "../../components/StatusBadge";
 import DigitalPetBooklet from "../../components/booklet/DigitalPetBooklet";
 import { resolveMediaUrl } from "../../utils/mediaUrl";
+import { downloadMediaUrl, qrDownloadFilename } from "../../utils/downloadMedia";
 import toast from "react-hot-toast";
 
 const APP_ORIGIN = import.meta.env.VITE_HOST_URL || window.location.origin;
@@ -190,15 +191,14 @@ export default function QrRecords() {
                       📖 View Digital Pet Booklet
                     </button>
 
-                    <a
-                      href={resolveMediaUrl(qr.image_path)}
-                      download
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
                       className="qr-action-link"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => downloadMediaUrl(resolveMediaUrl(qr.image_path), qrDownloadFilename(qr.pet_code, qr.pet_name))}
                     >
                       ⬇ Download QR Image
-                    </a>
+                    </button>
 
                     <a
                       href={`${APP_ORIGIN}/public/${qr.qr_token}`}
@@ -253,15 +253,14 @@ export default function QrRecords() {
                 <h3>{viewQr.pet_name}</h3>
                 {viewQr.pet_code && <div className="qr-view-code">{viewQr.pet_code}</div>}
                 {viewQr.image_path && (
-                  <a
-                    href={resolveMediaUrl(viewQr.image_path)}
-                    download
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
                     className="qr-action-link"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => downloadMediaUrl(resolveMediaUrl(viewQr.image_path), qrDownloadFilename(viewQr.pet_code, viewQr.pet_name))}
                   >
                     ⬇ Download QR Image
-                  </a>
+                  </button>
                 )}
               </div>
             </div>
