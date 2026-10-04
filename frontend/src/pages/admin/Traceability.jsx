@@ -557,9 +557,9 @@ function LogoPulse({ size = 72 }) {
 }
 
 function buildPinIcon(pet, photoUrl, collapsed) {
-  const width = collapsed ? 232 : 288;
-  const height = collapsed ? 70 : 140;
-  const tailHeight = collapsed ? 13 : 16;
+  const width = collapsed ? 236 : 300;
+  const height = collapsed ? 74 : 164;
+  const tailHeight = collapsed ? 20 : 28;
   return L.divIcon({
     className: 'traceability-map-pin pin-big-card',
     html: buildPetPinHtml(pet, { photo: photoUrl, collapsed }),

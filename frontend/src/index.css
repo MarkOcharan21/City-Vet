@@ -7908,7 +7908,7 @@ body:has(.clinic-access-page)::before {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.85rem 1.25rem 0.55rem;
+  padding: 1rem 1.25rem;
 }
 
 .traceability-location-kicker {
@@ -7933,10 +7933,10 @@ body:has(.clinic-access-page)::before {
 }
 
 .traceability-location-map {
-  height: 520px;
+  height: 400px;
   width: 100%;
   background: linear-gradient(145deg, #e9f0ec, #dbe4df);
-  border-radius: 11px;
+  border-radius: 0 0 12px 12px;
   overflow: hidden;
 }
 
@@ -7987,13 +7987,13 @@ body:has(.clinic-access-page)::before {
   display: flex;
   align-items: stretch;
   background: var(--color-card);
-  border: 1px solid var(--color-border);
+  border: 2px solid var(--color-primary);
   border-radius: 14px;
   box-shadow: 0 14px 34px rgba(36, 20, 22, 0.28);
   animation: traceabilityPinBob 1.9s ease-in-out infinite;
 }
-.big-pin-expanded { width: 288px; height: 140px; }
-.big-pin-compact { width: 232px; height: 70px; }
+.big-pin-expanded { width: 300px; height: 164px; }
+.big-pin-compact { width: 236px; height: 74px; }
 
 .big-pin-thumb {
   flex: 0 0 auto;
@@ -8002,11 +8002,11 @@ body:has(.clinic-access-page)::before {
   justify-content: center;
   overflow: hidden;
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark, var(--color-primary)));
-  border-top-left-radius: 13px;
-  border-bottom-left-radius: 13px;
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
 }
-.big-pin-expanded .big-pin-thumb { width: 104px; }
-.big-pin-compact .big-pin-thumb { width: 70px; }
+.big-pin-expanded .big-pin-thumb { width: 116px; }
+.big-pin-compact .big-pin-thumb { width: 74px; }
 
 .big-pin-img {
   display: block;
@@ -8120,7 +8120,7 @@ body:has(.clinic-access-page)::before {
 .big-pin-pulse {
   position: absolute;
   left: 50%;
-  top: calc(100% + 16px);
+  top: calc(100% + 28px);
   width: 42px;
   height: 42px;
   margin: -21px 0 0 -21px;
@@ -8131,7 +8131,7 @@ body:has(.clinic-access-page)::before {
   opacity: 0;
   animation: traceabilityPinHeartbeat 1.8s ease-out infinite;
 }
-.big-pin-compact .big-pin-pulse { top: calc(100% + 13px); }
+.big-pin-compact .big-pin-pulse { top: calc(100% + 20px); }
 .big-pin-pulse-2 { animation-delay: 0.6s; }
 .big-pin-pulse-3 { animation-delay: 1.2s; }
 
@@ -8141,16 +8141,16 @@ body:has(.clinic-access-page)::before {
   top: 100%;
   width: 0;
   height: 0;
-  border-left: 8px solid transparent;
-  border-right: 8px solid transparent;
-  border-top: 16px solid var(--color-primary);
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 28px solid var(--color-primary);
   transform: translateX(-50%);
   filter: drop-shadow(0 3px 5px rgba(36, 20, 22, 0.25));
 }
 .big-pin-compact .big-pin-tail {
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-top: 13px solid var(--color-primary);
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-top: 20px solid var(--color-primary);
 }
 
 @keyframes traceabilityPinHeartbeat {
@@ -8232,11 +8232,6 @@ body:has(.clinic-access-page)::before {
 
 .traceability-map-wrap {
   position: relative;
-  margin: 0 0.85rem 0.9rem;
-  border: 3px solid var(--color-primary);
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0 6px 18px rgba(200, 16, 46, 0.18);
 }
 
 .traceability-location-map .leaflet-control-zoom {
@@ -8353,7 +8348,7 @@ body:has(.clinic-access-page)::before {
   }
 
   .traceability-location-map {
-    height: 420px;
+    height: 300px;
   }
 
   .traceability-owner-card {
@@ -8476,7 +8471,7 @@ body:has(.clinic-access-page)::before {
 }
 
 .traceability-location-map.traceability-heatmap-map {
-  height: 520px;
+  height: 460px;
 }
 
 /* ===== Traceability — Heatmap popup styling ===== */
@@ -8554,7 +8549,7 @@ body:has(.clinic-access-page)::before {
   }
 
   .traceability-location-map.traceability-heatmap-map {
-    height: 420px;
+    height: 340px;
   }
 }
 
