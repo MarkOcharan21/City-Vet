@@ -67,7 +67,8 @@ async function main() {
     if (current && (current.source === 'geocode' || current.source === 'gps')) {
       skipped += 1;
       processed.add(owner.id);
-      if ((i + 1) % 25 === 0) { saveProgress(processed); console.log(`  ...${i + 1}/${pending.length} pending evaluated (skipped ${skipped}, updated ${updated})`); }
+      saveProgress(processed);
+      if ((i + 1) % 25 === 0) console.log(`  ...${i + 1}/${pending.length} pending evaluated (skipped ${skipped}, updated ${updated})`);
       continue;
     }
 
@@ -75,9 +76,9 @@ async function main() {
     processed.add(owner.id);
     if (result) updated += 1;
     else failed += 1;
+    saveProgress(processed);
 
     if ((i + 1) % 25 === 0) {
-      saveProgress(processed);
       console.log(`  ...${i + 1}/${pending.length} pending evaluated (updated ${updated}, skipped ${skipped}, no result ${failed})`);
     }
   }

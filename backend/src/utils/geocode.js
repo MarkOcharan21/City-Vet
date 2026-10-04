@@ -117,10 +117,19 @@ async function geocode(queryText) {
   }
   if (candidates.length === 0) candidates.push(text);
   // Validated fallback if every candidate misses: bare barangay + city.
-  const brgyPart = parts.find((p) => /^barangay\b|^brgy\b/i.test(p));
+  const brgyPart = parts.find((p) => /^barangay\b|^brgy\.?/i.test(p));
   if (brgyPart && !candidates.some((c) => c.startsWith(brgyPart))) {
-    candidates.push(`${brgyPart.replace(/^brgy\s+/i, 'Barangay ')}, Cabuyao City, Laguna, Philippines`);
+    candidates.push(`${brgyPart.replace(/^brgy\.?\s+/i, 'Barangay ')}, Cabuyao City, Laguna, Philippines`);
   }
+  // Nominatim inside Cabuyao does NOT index "Barangay X" for many barangays —
+  // "Barangay Baclaran" returns nothing while "Baclaran" resolves. Add copies
+  // of every candidate with the barangay prefix stripped ("Barangay " / "Brgy. ").
+  const stripped = [];
+  for (const c of candidates) {
+    const v = c.replace(/\bBarangay\s+/gi, '').replace(/\bBrgy\.?\s+/gi, '');
+    if (v !== c && !candidates.includes(v) && !stripped.includes(v)) stripped.push(v);
+  }
+  candidates.push(...stripped);
 
   let result = null;
   for (const candidate of candidates) {
@@ -141,7 +150,7 @@ async function geocode(queryText) {
             'User-Agent': 'CityVetPetRegistration/1.0 (capstone; contact: cityvetoffice04@gmail.com)',
             'Accept-Language': 'en,ph;q=0.9',
           },
-          signal: AbortSignal.timeout(12000),
+          signal: AbortSignal.timeout(8000),
         });
         if (!response.ok) return null;
         const list = await response.json();
