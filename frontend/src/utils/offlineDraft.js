@@ -66,6 +66,43 @@ export async function clearOfflineDraft() {
   });
 }
 
+// ---------- Auto-submit queue ----------
+// A submitted-while-offline registration is kept in the same single-draft slot
+// but flagged `submitOnReconnect` so the app knows to send it automatically the
+// moment connectivity returns. `submitType` distinguishes a brand-new
+// registration ('create' -> POST /pets) from a queued server draft
+// ('draft' -> POST /drafts/:id/submit).
+export async function queueOfflineSubmit({
+  form,
+  photo = null,
+  submitType = 'create',
+  draftId = null,
+  petName = null,
+}) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    const req = store.get('current');
+    req.onsuccess = () => {
+      const existing = req.result || {};
+      store.put({
+        ...existing,
+        id: 'current',
+        form: form ?? existing.form ?? {},
+        photo: photo ?? existing.photo ?? null,
+        petName: petName ?? form?.name ?? existing.form?.name ?? null,
+        submitOnReconnect: true,
+        submitType,
+        draftId: draftId ?? existing.draftId ?? null,
+        updatedAt: Date.now(),
+      });
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 // Cache of the species/breeds dropdown lists so the registration form still
 // works when it is opened with no connection at all.
 export async function saveLookups(species, breeds) {

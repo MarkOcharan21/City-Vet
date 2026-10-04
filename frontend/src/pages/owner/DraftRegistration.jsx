@@ -12,12 +12,19 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import StatusBadge from '../../components/StatusBadge';
 import GlobalLoadingOverlay from '../../components/GlobalLoadingOverlay';
 import EmptyState from '../../components/ui/EmptyState';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import DraftEditorModal from '../../components/owner/DraftEditorModal';
-import { getOfflineDraft, clearOfflineDraft } from '../../utils/offlineDraft';
+import OfflineSubmitModal from '../../components/owner/OfflineSubmitModal';
+import {
+  getOfflineDraft,
+  clearOfflineDraft,
+  saveOfflineNotification,
+  queueOfflineSubmit,
+} from '../../utils/offlineDraft';
 
 function parseDraftInfo(value) {
   if (!value) return {};
@@ -43,6 +50,7 @@ function formatSavedDate(value) {
 }
 
 export default function DraftRegistration() {
+  const { user } = useAuth();
   const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [offlineLoading, setOfflineLoading] = useState(true);
@@ -55,6 +63,7 @@ export default function DraftRegistration() {
   const [filter, setFilter] = useState('all');
   const [online, setOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [offlineDraft, setOfflineDraft] = useState(null);
+  const [offlineQueued, setOfflineQueued] = useState(null);
 
   function refreshOfflineDraft() {
     setOfflineLoading(true);
@@ -87,6 +96,17 @@ export default function DraftRegistration() {
       window.removeEventListener('online', go);
       window.removeEventListener('offline', off);
     };
+  }, []);
+
+  // When a queued offline submission is auto-sent (useOfflineRecovery), refresh
+  // the list so the draft turns Synced / disappears without a manual reload.
+  useEffect(() => {
+    const onAuto = () => {
+      loadDrafts();
+      refreshOfflineDraft();
+    };
+    window.addEventListener('draft-autosubmitted', onAuto);
+    return () => window.removeEventListener('draft-autosubmitted', onAuto);
   }, []);
 
   function discardOfflineDraft() {
@@ -146,9 +166,45 @@ export default function DraftRegistration() {
       toast.success(`Submitted! Pet code: ${res.data.petCode}`);
       loadDrafts();
     } catch (err) {
+      // Connection loss mid-submit: queue it for auto-submission instead of
+      // failing the user silently.
+      if (!err.response) {
+        setDeletingId(null);
+        await queueDraftSubmit(id);
+        loadDrafts();
+        refreshOfflineDraft();
+        return;
+      }
       toast.error(err.response?.data?.message || 'Could not submit draft.');
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  // Submitted-while-offline: flag the server draft so useOfflineRecovery sends
+  // POST /drafts/:id/submit automatically once connectivity returns.
+  async function queueDraftSubmit(id) {
+    const target = drafts.find((d) => d.id === id);
+    const info = parseDraftInfo(target?.temp_reg_info);
+    const petName = info?.name || 'your pet';
+    try {
+      await queueOfflineSubmit({
+        form: info,
+        photo: null,
+        submitType: 'draft',
+        draftId: id,
+        petName,
+      });
+      saveOfflineNotification({
+        userId: user?.id,
+        sourceKey: `draft-submit-${id}`,
+        title: 'Pending Submission',
+        message: `${petName} will be submitted automatically once you're back online.`,
+        type: 'System',
+      }).catch(() => {});
+      setOfflineQueued(petName);
+    } catch {
+      toast.error('Could not save your submission offline.');
     }
   }
 
@@ -442,6 +498,13 @@ export default function DraftRegistration() {
         onClose={() => setEditorDraft(null)}
         onSaved={handleEditorSaved}
         onSubmitted={handleEditorSubmitted}
+        onOfflineQueued={setOfflineQueued}
+      />
+
+      <OfflineSubmitModal
+        open={Boolean(offlineQueued)}
+        petName={offlineQueued}
+        onClose={() => setOfflineQueued(null)}
       />
 
       <ConfirmDialog

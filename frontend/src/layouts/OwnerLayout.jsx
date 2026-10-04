@@ -24,6 +24,7 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import useOfflineRecovery from "../hooks/useOfflineRecovery";
 import NotificationBell from "../components/notifications/NotificationBell";
 import GlobalLoadingOverlay from "../components/GlobalLoadingOverlay";
 import SimulateOfflineToggle from "../components/dev/SimulateOfflineToggle";
@@ -137,6 +138,10 @@ export default function OwnerLayout() {
   const { user, logout } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
   const location = useLocation();
+
+  // Global offline coordinator: shows "You're back online!" on any owner page
+  // and auto-submits registrations queued while offline.
+  useOfflineRecovery();
 
   const [showLogOutModal,  setShowLogOutModal]  = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);

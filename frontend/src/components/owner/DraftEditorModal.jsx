@@ -15,7 +15,6 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import FieldError from '../ui/FieldError';
-import { showPersistentToast } from '../PersistentToast';
 import { validatePetRegistration } from '../../utils/validation';
 import { resolveMediaUrl } from '../../utils/mediaUrl';
 import {
@@ -25,6 +24,7 @@ import {
   getLookups,
   saveLookups,
   saveOfflineNotification,
+  queueOfflineSubmit,
 } from '../../utils/offlineDraft';
 
 const EMPTY_FORM = {
@@ -84,6 +84,7 @@ export default function DraftEditorModal({
   onClose,
   onSaved,
   onSubmitted,
+  onOfflineQueued,
 }) {
   const { user } = useAuth();
   const [species, setSpecies]       = useState([]);
@@ -265,18 +266,27 @@ export default function DraftEditorModal({
     const liveOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
     if (!online || liveOffline) {
       try {
-        await persistLocally();
+        // Queue the submission locally; useOfflineRecovery auto-sends it the
+        // moment connectivity returns (POST /drafts/:id/submit for a server
+        // draft, POST /pets for an offline-source one).
+        await queueOfflineSubmit({
+          form,
+          photo,
+          submitType: draftId ? 'draft' : 'create',
+          draftId,
+          petName: form.name,
+        });
         saveOfflineNotification({
           userId: user?.id,
           sourceKey: 'draft-editor',
-          title: 'Draft Saved',
-          message: `${storedName} was saved offline. Submit it again when you are back online.`,
+          title: 'Pending Submission',
+          message: `${storedName} will be submitted automatically once you're back online.`,
           type: 'System',
         }).catch(() => {});
-        showPersistentToast('You are offline. Draft updated — submit again when you are back online.', { tone: 'offline' });
+        onOfflineQueued?.(storedName);
         onSaved();
       } catch {
-        toast.error('Could not save your draft offline.');
+        toast.error('Could not save your submission offline.');
       }
       return;
     }
@@ -296,15 +306,21 @@ export default function DraftEditorModal({
     } catch (err) {
       if (!err.response) {
         try {
-          await persistLocally();
+          await queueOfflineSubmit({
+            form,
+            photo,
+            submitType: draftId ? 'draft' : 'create',
+            draftId,
+            petName: form.name,
+          });
           saveOfflineNotification({
             userId: user?.id,
             sourceKey: 'draft-editor',
-            title: 'Draft Saved',
-            message: `${storedName} was saved offline after a connection loss. Submit it again when you are back online.`,
+            title: 'Pending Submission',
+            message: `${storedName} was queued after a connection loss and will be submitted automatically once you're back online.`,
             type: 'System',
           }).catch(() => {});
-          showPersistentToast('Connection lost. Your draft was saved — submit again when you are back online.', { tone: 'offline' });
+          onOfflineQueued?.(storedName);
           onSaved();
         } catch {
           setError('Submission failed. Please try again.');

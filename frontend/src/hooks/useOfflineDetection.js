@@ -159,10 +159,11 @@ export default function useOfflineDetection({ isEditingDraft, form, photo }) {
     return Promise.resolve();
   }, [persistPending]);
 
-  // Announce a single "You're back online!" when connectivity is restored —
-  // whether via the browser's own online event or via a recovered heartbeat /
-  // successful API response. A pending draft gets its own follow-up hint so it
-  // is never lost.
+  // React to a recovered connection: clear the offline state and flush any
+  // pending local save so the draft slot matches the form. The recovery
+  // announcement — including the auto-submit of a queued registration — is
+  // handled globally by useOfflineRecovery in OwnerLayout, so no toast is shown
+  // here (which also avoids double-notifying).
   const markBackOnline = useCallback(() => {
     // Force the offline banner off immediately, independent of the toast
     // bookkeeping below. Recovery signals (browser online event / successful
@@ -175,21 +176,11 @@ export default function useOfflineDetection({ isEditingDraft, form, photo }) {
     setDegraded(false);
 
     // Never been offline in this session (or already announced recovery) —
-    // skip so a plain page load or every successful request is not spammed.
+    // there is nothing to flush or re-announce.
     if (!offlineSessionRef.current) return;
-    if (backOnlineToastShownRef.current) return;
     backOnlineToastShownRef.current = true;
     offlineSessionRef.current = false;
-    flushPendingSave()
-      .then(() => checkPending())
-      .then((has) => {
-        showPersistentToast(
-          has
-            ? "You're back online! Your saved draft is ready — continue it from Draft Registration."
-            : "You're back online!",
-          { tone: 'online' }
-        );
-      });
+    flushPendingSave().then(checkPending).catch(() => {});
   }, [checkPending, flushPendingSave]);
 
   // The browser's "online" event only means a network interface came up — on
