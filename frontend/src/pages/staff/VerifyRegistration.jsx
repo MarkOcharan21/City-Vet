@@ -4,8 +4,11 @@ import api from '../../services/api';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import useMinLoading from '../../hooks/useMinLoading';
 import StatusBadge from '../../components/StatusBadge';
+import { resolveMediaUrl } from '../../utils/mediaUrl';
 import toast from 'react-hot-toast';
 import PrintReportButton from '../../components/staff/PrintReportButton';
+
+const PHOTO_FALLBACK = 'https://placehold.co/96x96?text=Paw';
 
 export default function VerifyRegistration() {
   const [pets, setPets]       = useState([]);
@@ -386,10 +389,26 @@ export default function VerifyRegistration() {
             {viewPet ? (
               <div>
                 <div style={{
-                  display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem',
+                  display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem',
                 }}>
-                  <span style={{ fontWeight: 800, fontSize: '1.05rem' }}>{viewPet.name}</span>
-                  <StatusBadge status={viewPet.status} />
+                  <img
+                    src={resolveMediaUrl(viewPet.photo, PHOTO_FALLBACK)}
+                    alt={`${viewPet.name} photo`}
+                    style={{
+                      width: 96, height: 96, borderRadius: 12, objectFit: 'cover',
+                      border: '2px solid var(--color-border)', flexShrink: 0,
+                      background: 'var(--color-surface, #f8fafc)',
+                    }}
+                  />
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 800, fontSize: '1.05rem' }}>{viewPet.name}</span>
+                      <StatusBadge status={viewPet.status} />
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
+                      Pet Code: <strong>{viewPet.pet_code || '—'}</strong>
+                    </div>
+                  </div>
                 </div>
 
                 <div style={{
