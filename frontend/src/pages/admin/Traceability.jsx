@@ -557,13 +557,14 @@ function LogoPulse({ size = 72 }) {
 }
 
 function buildPinIcon(pet, photoUrl, collapsed) {
-  const width = collapsed ? 232 : 280;
-  const height = collapsed ? 70 : 138;
+  const width = collapsed ? 232 : 288;
+  const height = collapsed ? 70 : 140;
+  const tailHeight = collapsed ? 13 : 16;
   return L.divIcon({
     className: 'traceability-map-pin pin-big-card',
     html: buildPetPinHtml(pet, { photo: photoUrl, collapsed }),
     iconSize: [width, height],
-    iconAnchor: [width / 2, height],
+    iconAnchor: [width / 2, height + tailHeight],
   });
 }
 
@@ -591,8 +592,10 @@ function buildPetPinHtml(pet, { photo = null, collapsed = false } = {}) {
   return `<div class="big-pin ${collapsed ? 'big-pin-compact' : 'big-pin-expanded'}">`
     + `<div class="big-pin-thumb">${thumb}</div>`
     + `<div class="big-pin-body">`
+    + `<div class="big-pin-header">`
     + `<span class="big-pin-name"${collapsed ? ` title="${name}"` : ''}>${name}</span>`
     + (sub ? `<span class="big-pin-sub"${collapsed ? ` title="${sub}"` : ''}>${sub}</span>` : '')
+    + `</div>`
     + `<div class="big-pin-rows">${rows}</div>`
     + `</div>`
     + toggle

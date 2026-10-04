@@ -7992,7 +7992,7 @@ body:has(.clinic-access-page)::before {
   box-shadow: 0 14px 34px rgba(36, 20, 22, 0.28);
   animation: traceabilityPinBob 1.9s ease-in-out infinite;
 }
-.big-pin-expanded { width: 280px; height: 138px; }
+.big-pin-expanded { width: 288px; height: 140px; }
 .big-pin-compact { width: 232px; height: 70px; }
 
 .big-pin-thumb {
@@ -8039,6 +8039,11 @@ body:has(.clinic-access-page)::before {
   overflow: hidden;
 }
 
+.big-pin-header {
+  min-width: 0;
+  margin-bottom: 0.2rem;
+  padding-right: 1.2rem;
+}
 .big-pin-name {
   display: block;
   font-weight: 800;
@@ -8052,38 +8057,32 @@ body:has(.clinic-access-page)::before {
 .big-pin-sub {
   display: block;
   margin-top: 0.1rem;
-  margin-bottom: 0.3rem;
   font-size: 0.72rem;
   color: var(--color-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.big-pin-compact .big-pin-sub { margin-bottom: 0; }
 
-.big-pin-rows { margin-top: 0.1rem; }
+.big-pin-rows { margin-top: 0.15rem; }
 .big-pin-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  column-gap: 10px;
   align-items: baseline;
-  gap: 0.5rem;
-  padding: 0.28rem 0;
+  padding: 0.26rem 0;
   border-top: 1px dashed var(--color-border);
-  font-size: 0.78rem;
+  font-size: 0.76rem;
+  line-height: 1.3;
   color: var(--color-ink);
 }
 .big-pin-row strong {
-  flex-shrink: 0;
   font-weight: 600;
   color: var(--color-text-muted);
 }
 .big-pin-row > span:last-child {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-.big-pin-row-address {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.1rem;
 }
 .big-pin-address {
   display: -webkit-box;
@@ -8121,10 +8120,10 @@ body:has(.clinic-access-page)::before {
 .big-pin-pulse {
   position: absolute;
   left: 50%;
-  top: 100%;
+  top: calc(100% + 16px);
   width: 42px;
   height: 42px;
-  margin: -20px 0 0 -21px;
+  margin: -21px 0 0 -21px;
   border-radius: 50%;
   border: 3px solid var(--color-primary);
   box-sizing: border-box;
@@ -8132,25 +8131,26 @@ body:has(.clinic-access-page)::before {
   opacity: 0;
   animation: traceabilityPinHeartbeat 1.8s ease-out infinite;
 }
+.big-pin-compact .big-pin-pulse { top: calc(100% + 13px); }
 .big-pin-pulse-2 { animation-delay: 0.6s; }
 .big-pin-pulse-3 { animation-delay: 1.2s; }
 
 .big-pin-tail {
   position: absolute;
   left: 50%;
-  top: calc(100% - 9px);
+  top: 100%;
   width: 0;
   height: 0;
-  border-left: 9px solid transparent;
-  border-right: 9px solid transparent;
-  border-top: 13px solid var(--color-card);
-  transform: translateX(-50%);
-  filter: drop-shadow(0 3px 5px rgba(36, 20, 22, 0.2));
-}
-.big-pin-compact .big-pin-tail {
   border-left: 8px solid transparent;
   border-right: 8px solid transparent;
-  border-top: 11px solid var(--color-card);
+  border-top: 16px solid var(--color-primary);
+  transform: translateX(-50%);
+  filter: drop-shadow(0 3px 5px rgba(36, 20, 22, 0.25));
+}
+.big-pin-compact .big-pin-tail {
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 13px solid var(--color-primary);
 }
 
 @keyframes traceabilityPinHeartbeat {
