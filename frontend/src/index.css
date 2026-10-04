@@ -7982,84 +7982,175 @@ body:has(.clinic-access-page)::before {
   border: 0;
 }
 
-.traceability-pin-squircle-wrap {
+.big-pin {
   position: relative;
-  width: 64px;
-  height: 82px;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: stretch;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  box-shadow: 0 14px 34px rgba(36, 20, 22, 0.28);
   animation: traceabilityPinBob 1.9s ease-in-out infinite;
 }
+.big-pin-expanded { width: 280px; height: 138px; }
+.big-pin-compact { width: 232px; height: 70px; }
 
-.traceability-pin-ring {
+.big-pin-thumb {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark, var(--color-primary)));
+  border-top-left-radius: 13px;
+  border-bottom-left-radius: 13px;
+}
+.big-pin-expanded .big-pin-thumb { width: 104px; }
+.big-pin-compact .big-pin-thumb { width: 70px; }
+
+.big-pin-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-position: center;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark, var(--color-primary)));
+  transition: opacity 0.18s ease;
+}
+.big-pin-img.big-pin-img-loading { opacity: 0; }
+.big-pin-img.big-pin-fit-contain { object-fit: contain; }
+.big-pin-img.big-pin-fit-cover { object-fit: cover; }
+
+.big-pin-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.big-pin-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.55rem 0.8rem;
+  overflow: hidden;
+}
+
+.big-pin-name {
+  display: block;
+  font-weight: 800;
+  font-size: 0.98rem;
+  line-height: 1.25;
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.big-pin-sub {
+  display: block;
+  margin-top: 0.1rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.big-pin-compact .big-pin-sub { margin-bottom: 0; }
+
+.big-pin-rows { margin-top: 0.1rem; }
+.big-pin-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.28rem 0;
+  border-top: 1px dashed var(--color-border);
+  font-size: 0.78rem;
+  color: var(--color-ink);
+}
+.big-pin-row strong {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.big-pin-row > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.big-pin-row-address {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+}
+.big-pin-address {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.big-pin-toggle {
   position: absolute;
   top: 6px;
-  left: 5px;
-  width: 54px;
-  height: 54px;
-  border-radius: 30% / 34%;
+  right: 6px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-card);
+  color: var(--color-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(36, 20, 22, 0.18);
+}
+.big-pin-toggle svg { transition: transform 0.18s ease; }
+.big-pin-expanded .big-pin-toggle svg { transform: rotate(180deg); }
+@media (min-width: 701px) {
+  .big-pin-toggle { display: none; }
+}
+@media (max-width: 700px) {
+  .big-pin-expanded .big-pin-body { padding-right: 2rem; }
+}
+
+.big-pin-pulse {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 42px;
+  height: 42px;
+  margin: -20px 0 0 -21px;
+  border-radius: 50%;
   border: 3px solid var(--color-primary);
   box-sizing: border-box;
   pointer-events: none;
   opacity: 0;
   animation: traceabilityPinHeartbeat 1.8s ease-out infinite;
 }
-.traceability-pin-ring:nth-child(2) { animation-delay: 0.6s; }
-.traceability-pin-ring:nth-child(3) { animation-delay: 1.2s; }
+.big-pin-pulse-2 { animation-delay: 0.6s; }
+.big-pin-pulse-3 { animation-delay: 1.2s; }
 
-.traceability-pin-squircle {
-  position: relative;
-  z-index: 1;
-  width: 54px;
-  height: 54px;
-  box-sizing: border-box;
-  border-radius: 28%;
-  border: 3px solid #fff;
-  background: var(--color-primary);
-  box-shadow: 0 6px 18px rgba(36, 20, 22, 0.35);
-  overflow: hidden;
-}
-
-.traceability-pin-img {
+.big-pin-tail {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: calc(100% - 4px);
-  height: calc(100% - 4px);
-  object-position: center;
-  display: block;
-  background: var(--color-primary);
-  transition: opacity 0.18s ease;
-}
-.traceability-pin-img.pin-img-loading { opacity: 0; }
-.traceability-pin-img.pin-fit-contain { object-fit: contain; }
-.traceability-pin-img.pin-fit-cover { object-fit: cover; }
-
-.traceability-pin-squircle.pin-squircle-empty {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark, var(--color-primary)));
-}
-
-.traceability-pin-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  line-height: 1;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-}
-
-.traceability-pin-tail {
-  position: relative;
-  z-index: 1;
+  left: 50%;
+  top: calc(100% - 9px);
   width: 0;
   height: 0;
-  border-left: 11px solid transparent;
-  border-right: 11px solid transparent;
-  border-top: 16px solid #fff;
-  filter: drop-shadow(0 4px 6px rgba(36, 20, 22, 0.25));
-  margin-top: -3px;
-  transform: scaleY(0.9);
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-top: 13px solid var(--color-card);
+  transform: translateX(-50%);
+  filter: drop-shadow(0 3px 5px rgba(36, 20, 22, 0.2));
+}
+.big-pin-compact .big-pin-tail {
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 11px solid var(--color-card);
 }
 
 @keyframes traceabilityPinHeartbeat {
@@ -8141,46 +8232,6 @@ body:has(.clinic-access-page)::before {
 
 .traceability-map-wrap {
   position: relative;
-}
-
-.traceability-pet-card.leaflet-tooltip {
-  background: var(--color-card);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(36, 20, 22, 0.2);
-  padding: 0.75rem 0.9rem;
-  min-width: 216px;
-}
-.traceability-pet-card.leaflet-tooltip::before {
-  display: none;
-}
-.traceability-pet-card-name {
-  display: block;
-  font-weight: 800;
-  font-size: 1rem;
-  color: var(--color-ink);
-}
-.traceability-pet-card-sub {
-  display: block;
-  margin-top: 0.15rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-.traceability-pet-card-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.3rem 0;
-  border-top: 1px dashed var(--color-border);
-  font-size: 0.8rem;
-  color: var(--color-ink);
-}
-.traceability-pet-card-row strong {
-  flex-shrink: 0;
-  font-weight: 600;
-  color: var(--color-text-muted);
 }
 
 .traceability-location-map .leaflet-control-zoom {

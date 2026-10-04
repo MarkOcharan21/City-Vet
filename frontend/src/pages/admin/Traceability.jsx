@@ -75,6 +75,15 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
   const watchIdRef = useRef(null);
   const [locationMessage, setLocationMessage] = useState('Select a pet to view the owner location.');
   const [locating, setLocating] = useState(false);
+  const [pinCollapsed, setPinCollapsed] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches,
+  );
+
+  useEffect(() => {
+    const onTogglePin = () => setPinCollapsed((value) => !value);
+    window.addEventListener('cv:trace-pin-toggle', onTogglePin);
+    return () => window.removeEventListener('cv:trace-pin-toggle', onTogglePin);
+  }, []);
 
   useEffect(() => {
     if (!mapElementRef.current || mapRef.current) return undefined;
@@ -114,37 +123,8 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
     let cancelled = false;
     const fallbackPosition = L.latLng(CABUYAO_CENTER);
     const hasPhoto = Boolean(pet?.photo && String(pet.photo).trim() !== '');
-    const petName = escapeHtml(pet?.name || '');
     const photoUrl = hasPhoto ? resolveMediaUrl(pet.photo) : null;
-    const pinIcon = hasPhoto
-      ? L.divIcon({
-        className: 'traceability-map-pin pin-with-photo',
-        html: `<span class="traceability-pin-squircle-wrap">`
-            + `<span class="traceability-pin-ring"></span>`
-            + `<span class="traceability-pin-ring"></span>`
-            + `<span class="traceability-pin-ring"></span>`
-            + `<span class="traceability-pin-squircle">`
-            + `<img class="traceability-pin-img pin-img-loading pin-fit-contain" src="${photoUrl}" alt="${petName}" referrerpolicy="no-referrer" onload="var r=this.naturalWidth/this.naturalHeight||0;if(r>=0.8&&r<=1.25)this.classList.add('pin-fit-cover');this.classList.remove('pin-img-loading');" onerror="this.onerror=null;this.onload=null;this.classList.remove('pin-img-loading');this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjOTQ5NDk0IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTIwLjU5IDEzLjQxbC03LjE3IDcuMTdhMiAyIDAgMCAxLTIuODMgMEwyIDEyVjJoMTBsOC41OSA4LjU5YTIgMiAwIDAgMSAwIDIuODN6Ii8+PHBhdGggZD0iTTcgMTdhMiAyIDAgMSAwIDAtNCAyIDIgMCAwIDAgMCA0eiIvPjwvc3ZnPg=='" />`
-            + `</span>`
-            + `<span class="traceability-pin-tail"></span>`
-            + `</span>`,
-        iconSize: [64, 82],
-        iconAnchor: [32, 80],
-      })
-      : L.divIcon({
-        className: 'traceability-map-pin pin-no-photo',
-        html: `<span class="traceability-pin-squircle-wrap">`
-            + `<span class="traceability-pin-ring"></span>`
-            + `<span class="traceability-pin-ring"></span>`
-            + `<span class="traceability-pin-ring"></span>`
-            + `<span class="traceability-pin-squircle pin-squircle-empty">`
-            + `<span class="traceability-pin-placeholder">🐾</span>`
-            + `</span>`
-            + `<span class="traceability-pin-tail"></span>`
-            + `</span>`,
-        iconSize: [64, 82],
-        iconAnchor: [32, 80],
-      });
+    const pinIcon = buildPinIcon(pet, photoUrl, pinCollapsed);
 
     setLocationMessage('Locating the registered owner address...');
     setLocating(true);
@@ -275,14 +255,6 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
         // Use higher zoom for exact address, lower zoom for approximate barangay location
         const zoomLevel = result ? 15 : (isBarangayFallback ? 13 : 12);
         map.setView(position, zoomLevel, { animate: true });
-        markerRef.current.unbindTooltip();
-        markerRef.current.bindTooltip(buildPetCardHtml(pet), {
-          permanent: true,
-          direction: 'top',
-          offset: hasPhoto ? [0, -74] : [0, -50],
-          className: 'traceability-pet-card',
-          interactive: false,
-        });
 
       } catch (error) {
         if (cancelled) return;
@@ -324,6 +296,14 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
 
     return () => { cancelled = true; };
   }, [pet]);
+
+  useEffect(() => {
+    const marker = markerRef.current;
+    if (!marker || !pet) return undefined;
+    const hasPhoto = Boolean(pet?.photo && String(pet.photo).trim() !== '');
+    const photoUrl = hasPhoto ? resolveMediaUrl(pet.photo) : null;
+    marker.setIcon(buildPinIcon(pet, photoUrl, pinCollapsed));
+  }, [pinCollapsed, pet]);
 
   return (
     <section className="traceability-location" aria-label="Cabuyao City device location map">
@@ -576,7 +556,18 @@ function LogoPulse({ size = 72 }) {
   );
 }
 
-function buildPetCardHtml(pet) {
+function buildPinIcon(pet, photoUrl, collapsed) {
+  const width = collapsed ? 232 : 280;
+  const height = collapsed ? 70 : 138;
+  return L.divIcon({
+    className: 'traceability-map-pin pin-big-card',
+    html: buildPetPinHtml(pet, { photo: photoUrl, collapsed }),
+    iconSize: [width, height],
+    iconAnchor: [width / 2, height],
+  });
+}
+
+function buildPetPinHtml(pet, { photo = null, collapsed = false } = {}) {
   const name = escapeHtml(pet?.name);
   const code = pet?.pet_code ? escapeHtml(pet.pet_code) : '';
   const species = pet?.species_name ? escapeHtml(pet.species_name) : '';
@@ -584,13 +575,32 @@ function buildPetCardHtml(pet) {
   const barangay = pet?.barangay ? escapeHtml(pet.barangay) : '';
   const address = pet?.address ? escapeHtml(pet.address) : '';
   const sub = [code, species].filter(Boolean).join(' · ');
-  return '<div class="traceability-pet-card">'
-    + `<span class="traceability-pet-card-name">${name}</span>`
-    + (sub ? `<span class="traceability-pet-card-sub">${sub}</span>` : '')
-    + (owner ? `<span class="traceability-pet-card-row"><strong>Owner</strong>${owner}</span>` : '')
-    + (barangay ? `<span class="traceability-pet-card-row"><strong>Barangay</strong>${barangay}</span>` : '')
-    + (address ? `<span class="traceability-pet-card-row"><strong>Address</strong>${address}</span>` : '')
-    + '</div>';
+
+  const thumb = photo
+    ? `<img class="big-pin-img big-pin-img-loading big-pin-fit-contain" src="${photo}" alt="${name}" referrerpolicy="no-referrer" onload="var r=this.naturalWidth/this.naturalHeight||0;if(r>=0.8&&r<=1.25)this.classList.add('big-pin-fit-cover');this.classList.remove('big-pin-img-loading');" onerror="this.onerror=null;this.onload=null;this.classList.remove('big-pin-img-loading');this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjOTQ5NDk0IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTIwLjU5IDEzLjQxbC03LjE3IDcuMTdhMiAyIDAgMCAxLTIuODMgMEwyIDEyVjJoMTBsOC41OSA4LjU5YTIgMiAwIDAgMSAwIDIuODN6Ii8+PHBhdGggZD0iTTcgMTdhMiAyIDAgMSAwIDAtNCAyIDIgMCAwIDAgMCA0eiIvPjwvc3ZnPg=='" />`
+    : `<span class="big-pin-placeholder">🐾</span>`;
+
+  const rows = collapsed ? '' : [
+    owner && `<span class="big-pin-row"><strong>Owner</strong><span>${owner}</span></span>`,
+    barangay && `<span class="big-pin-row"><strong>Barangay</strong><span>${barangay}</span></span>`,
+    address && `<span class="big-pin-row big-pin-row-address"><strong>Address</strong><span class="big-pin-address" title="${address}">${address}</span></span>`,
+  ].filter(Boolean).join('');
+
+  const toggle = `<button type="button" class="big-pin-toggle" aria-label="${collapsed ? 'Expand pet details' : 'Collapse pet details'}" aria-expanded="${String(!collapsed)}" onclick="window.dispatchEvent(new Event('cv:trace-pin-toggle'))"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>`;
+
+  return `<div class="big-pin ${collapsed ? 'big-pin-compact' : 'big-pin-expanded'}">`
+    + `<div class="big-pin-thumb">${thumb}</div>`
+    + `<div class="big-pin-body">`
+    + `<span class="big-pin-name"${collapsed ? ` title="${name}"` : ''}>${name}</span>`
+    + (sub ? `<span class="big-pin-sub"${collapsed ? ` title="${sub}"` : ''}>${sub}</span>` : '')
+    + `<div class="big-pin-rows">${rows}</div>`
+    + `</div>`
+    + toggle
+    + `<span class="big-pin-pulse"></span>`
+    + `<span class="big-pin-pulse big-pin-pulse-2"></span>`
+    + `<span class="big-pin-pulse big-pin-pulse-3"></span>`
+    + `<span class="big-pin-tail"></span>`
+    + `</div>`;
 }
 
 function barangayCoord(name) {
