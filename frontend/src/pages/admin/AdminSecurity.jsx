@@ -1,270 +1,148 @@
-import { useEffect, useState } from "react";
-import { ShieldCheck, KeyRound, Copy, Check, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { LockKeyhole } from "lucide-react";
 import api from "../../services/api";
 import PasswordInput from "../../components/PasswordInput";
-import PasswordStrength from "../../components/PasswordStrength";
-import PasswordChecklist from "../../components/PasswordChecklist";
 import FieldError from "../../components/ui/FieldError";
 import SuccessModal from "../../components/ui/SuccessModal";
-import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import ChangePasswordCard from "../../components/security/ChangePasswordCard";
+import RecoveryKeyCard from "../../components/security/RecoveryKeyCard";
 
-function formatDateTime(value) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-PH", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
+// Admin-only: change the personal 6-digit access code (login PIN).
+// Requires the current password so a briefly-unattended session cannot swap it.
+function AccessCodeCard() {
+  const [form, setForm] = useState({ current_password: "", code: "", code_confirm: "" });
+  const [errors, setErrors] = useState({});
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
 
-export default function AdminSecurity() {
-  // ---- Change password ----
-  const [pwForm, setPwForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
-  const [pwErrors, setPwErrors] = useState({});
-  const [pwMessage, setPwMessage] = useState("");
-  const [savingPw, setSavingPw] = useState(false);
-  const [pwSuccess, setPwSuccess] = useState(false);
-
-  // ---- Recovery key ----
-  const [keyStatus, setKeyStatus] = useState({ has_active_key: false, created_at: null });
-  const [loadingStatus, setLoadingStatus] = useState(true);
-  const [confirmGenerate, setConfirmGenerate] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [newKey, setNewKey] = useState(null);
-  const [keyError, setKeyError] = useState("");
-  const [copied, setCopied] = useState(false);
-
-  async function loadKeyStatus() {
-    setLoadingStatus(true);
-    try {
-      const res = await api.get("/auth/recovery-key/status");
-      setKeyStatus({
-        has_active_key: Boolean(res.data.has_active_key),
-        created_at: res.data.created_at || null,
-      });
-    } catch (_) {
-      // Status is informational only — the cards still work without it.
-    } finally {
-      setLoadingStatus(false);
-    }
-  }
-
-  useEffect(() => {
-    loadKeyStatus();
-  }, []);
-
-  function handlePwChange(e) {
+  function handleChange(e) {
     const { name, value } = e.target;
-    setPwForm((prev) => ({ ...prev, [name]: value }));
-    setPwErrors((prev) => ({ ...prev, [name]: "" }));
-    setPwMessage("");
+    // PIN fields stay strictly numeric.
+    const next = name === "current_password" ? value : value.replace(/\D/g, "").slice(0, 6);
+    setForm((prev) => ({ ...prev, [name]: next }));
+    setErrors((prev) => ({ ...prev, [name]: "" }));
+    setMessage("");
   }
 
-  async function handlePwSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    setPwErrors({});
-    setPwMessage("");
+    setErrors({});
+    setMessage("");
 
-    if (!pwForm.current_password) {
-      setPwErrors({ current_password: "Enter your current password." });
+    if (!/^\d{6}$/.test(form.code)) {
+      setErrors({ code: "Access code must be exactly 6 digits." });
       return;
     }
-    if (pwForm.new_password !== pwForm.confirm_password) {
-      setPwErrors({ confirm_password: "Passwords do not match." });
+    if (form.code !== form.code_confirm) {
+      setErrors({ code_confirm: "Access codes do not match." });
       return;
     }
 
-    setSavingPw(true);
+    setSaving(true);
     try {
-      const res = await api.post("/auth/change-password", {
-        current_password: pwForm.current_password,
-        new_password: pwForm.new_password,
-        confirm_password: pwForm.confirm_password,
+      const res = await api.post("/auth/access-code", {
+        current_password: form.current_password,
+        code: form.code,
+        code_confirm: form.code_confirm,
       });
-      setPwMessage(res.data.message || "Password changed successfully.");
-      setPwForm({ current_password: "", new_password: "", confirm_password: "" });
-      setPwSuccess(true);
+      setMessage(res.data.message || "Access code updated.");
+      setForm({ current_password: "", code: "", code_confirm: "" });
+      setSuccess(true);
     } catch (err) {
       const apiErrors = err.response?.data?.errors;
-      if (apiErrors) setPwErrors(apiErrors);
-      setPwMessage(err.response?.data?.message || "Could not change password.");
+      if (apiErrors) setErrors(apiErrors);
+      setMessage(err.response?.data?.message || "Could not change access code.");
     } finally {
-      setSavingPw(false);
-    }
-  }
-
-  async function handleGenerate() {
-    setConfirmGenerate(false);
-    setKeyError("");
-    setCopied(false);
-    setGenerating(true);
-    try {
-      const res = await api.post("/auth/recovery-key");
-      setNewKey({ key: res.data.recovery_key, created_at: res.data.created_at || null });
-      await loadKeyStatus();
-    } catch (err) {
-      setKeyError(err.response?.data?.message || "Could not generate recovery key.");
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  async function handleCopy() {
-    if (!newKey?.key) return;
-    try {
-      await navigator.clipboard.writeText(newKey.key);
-      setCopied(true);
-    } catch (_) {
-      setCopied(false);
+      setSaving(false);
     }
   }
 
   return (
+    <div className="form-card user-directory-card">
+      <div className="form-card-header">
+        <h2>
+          <LockKeyhole size={18} style={{ verticalAlign: "-3px", marginRight: "0.4rem" }} />
+          Login Access Code
+        </h2>
+        <p>Your personal 6-digit code, asked after your password on every admin login. It cannot be removed — only changed.</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="validated-form">
+        <div className="validated-field">
+          <label htmlFor="ac_current_password">Current Password</label>
+          <PasswordInput
+            name="current_password"
+            value={form.current_password}
+            onChange={handleChange}
+            placeholder="Enter your current password"
+          />
+          <FieldError message={errors.current_password} />
+        </div>
+        <div className="validated-field">
+          <label htmlFor="ac_code">New 6-Digit Code</label>
+          <input
+            type="text"
+            name="code"
+            value={form.code}
+            onChange={handleChange}
+            placeholder="e.g. 482913"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={6}
+            style={{ fontFamily: "monospace", letterSpacing: "0.35em", textAlign: "center" }}
+          />
+          <FieldError message={errors.code} />
+        </div>
+        <div className="validated-field">
+          <label htmlFor="ac_code_confirm">Confirm New Code</label>
+          <input
+            type="text"
+            name="code_confirm"
+            value={form.code_confirm}
+            onChange={handleChange}
+            placeholder="Repeat the 6-digit code"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={6}
+            style={{ fontFamily: "monospace", letterSpacing: "0.35em", textAlign: "center" }}
+          />
+          <FieldError message={errors.code_confirm} />
+        </div>
+
+        {message && !success && <p className="form-error">{message}</p>}
+
+        <button type="submit" className="btn-primary" disabled={saving}>
+          {saving ? "Saving..." : "Change Access Code"}
+        </button>
+      </form>
+
+      <SuccessModal
+        open={success}
+        title="Access Code Updated!"
+        message={message || "Use the new code on your next login."}
+        confirmText="Done"
+        onConfirm={() => {
+          setSuccess(false);
+          setMessage("");
+        }}
+      />
+    </div>
+  );
+}
+
+export default function AdminSecurity() {
+  return (
     <div className="page">
       <h1>Account Security</h1>
       <p className="page-intro">
-        Change your password and manage your offline recovery key — the key resets
-        your password even when email is unavailable.
+        Change your password, manage your login access code, and keep an offline
+        recovery key — the key resets your password even when email is unavailable.
       </p>
 
-      <div className="form-card user-directory-card">
-        <div className="form-card-header">
-          <h2>
-            <ShieldCheck size={18} style={{ verticalAlign: "-3px", marginRight: "0.4rem" }} />
-            Change Password
-          </h2>
-          <p>Requires your current password. A confirmation email is sent if the mail service is up.</p>
-        </div>
-
-        <form onSubmit={handlePwSubmit} className="validated-form">
-          <div className="validated-field">
-            <label htmlFor="current_password">Current Password</label>
-            <PasswordInput
-              name="current_password"
-              value={pwForm.current_password}
-              onChange={handlePwChange}
-              placeholder="Enter your current password"
-            />
-            <FieldError message={pwErrors.current_password} />
-          </div>
-          <div className="validated-field">
-            <label htmlFor="new_password">New Password</label>
-            <PasswordInput
-              name="new_password"
-              value={pwForm.new_password}
-              onChange={handlePwChange}
-              placeholder="Create a new password"
-            />
-            <PasswordStrength password={pwForm.new_password} />
-            <PasswordChecklist password={pwForm.new_password} />
-            <FieldError message={pwErrors.new_password} />
-          </div>
-          <div className="validated-field">
-            <label htmlFor="confirm_password">Confirm New Password</label>
-            <PasswordInput
-              name="confirm_password"
-              value={pwForm.confirm_password}
-              onChange={handlePwChange}
-              placeholder="Repeat the new password"
-            />
-            <FieldError message={pwErrors.confirm_password} />
-          </div>
-
-          {pwMessage && !pwSuccess && <p className="form-error">{pwMessage}</p>}
-
-          <button type="submit" className="btn-primary" disabled={savingPw}>
-            {savingPw ? "Saving..." : "Change Password"}
-          </button>
-        </form>
-      </div>
-
-      <div className="form-card user-directory-card">
-        <div className="form-card-header">
-          <h2>
-            <KeyRound size={18} style={{ verticalAlign: "-3px", marginRight: "0.4rem" }} />
-            Offline Recovery Key
-          </h2>
-          <p>
-            A single-use key that resets your password from the Forgot Password page
-            without needing email. Save it somewhere safe — it is shown only once.
-          </p>
-        </div>
-
-        {loadingStatus ? (
-          <p className="table-meta">Checking recovery key status...</p>
-        ) : keyStatus.has_active_key ? (
-          <p className="form-success">
-            <Check size={15} style={{ verticalAlign: "-2px", marginRight: "0.35rem" }} />
-            You have an active recovery key (generated {formatDateTime(keyStatus.created_at)}).
-            Generating a new one invalidates it.
-          </p>
-        ) : (
-          <p className="table-meta">No active recovery key. Generate one below.</p>
-        )}
-
-        {keyError && <p className="form-error">{keyError}</p>}
-
-        {newKey ? (
-          <div className="otp-fallback-box" role="status">
-            <p className="otp-fallback-title">
-              <AlertTriangle size={14} style={{ verticalAlign: "-2px", marginRight: "0.35rem" }} />
-              Save this key now — it will never be shown again:
-            </p>
-            <p className="otp-fallback-code">{newKey.key}</p>
-            <div style={{ display: "flex", gap: "0.6rem", justifyContent: "center", marginTop: "0.8rem" }}>
-              <button type="button" className="btn-secondary btn-sm" onClick={handleCopy}>
-                {copied ? (
-                  <>
-                    <Check size={14} /> Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy size={14} /> Copy Key
-                  </>
-                )}
-              </button>
-              <button type="button" className="btn-primary btn-sm" onClick={() => setNewKey(null)}>
-                Done — I Saved It
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={generating}
-            onClick={() => setConfirmGenerate(true)}
-          >
-            {generating ? "Generating..." : keyStatus.has_active_key ? "Generate New Key" : "Generate Recovery Key"}
-          </button>
-        )}
-      </div>
-
-      <ConfirmDialog
-        open={confirmGenerate}
-        title="Generate a new recovery key?"
-        message="This invalidates any previous unused key. The new key is shown only once — save it somewhere safe (printed copy or password manager)."
-        confirmText="Generate Key"
-        cancelText="Cancel"
-        loading={generating}
-        onConfirm={handleGenerate}
-        onCancel={() => setConfirmGenerate(false)}
-      />
-
-      <SuccessModal
-        open={pwSuccess}
-        title="Password Changed!"
-        message={pwMessage || "Your password was changed successfully."}
-        confirmText="Done"
-        onConfirm={() => {
-          setPwSuccess(false);
-          setPwMessage("");
-        }}
-      />
+      <ChangePasswordCard />
+      <AccessCodeCard />
+      <RecoveryKeyCard />
     </div>
   );
 }

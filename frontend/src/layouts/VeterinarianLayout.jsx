@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Syringe,
   Stethoscope,
+  ShieldCheck,
   Moon,
   Sun,
   PanelLeftClose,
@@ -109,6 +110,10 @@ export default function VeterinarianLayout() {
           <NavLink to="/veterinarian/vaccination-monitoring" onClick={() => setMobileOpen(false)}>
             <Syringe size={16} />
             <span className="sidebar-label">Vaccination Records</span>
+          </NavLink>
+          <NavLink to="/veterinarian/security" onClick={() => setMobileOpen(false)}>
+            <ShieldCheck size={16} />
+            <span className="sidebar-label">Account Security</span>
           </NavLink>
         </nav>
 

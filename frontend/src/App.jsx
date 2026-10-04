@@ -56,6 +56,8 @@ import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
 import ActivityAuditTrail from "./pages/admin/ActivityAuditTrail";
 import ProductCatalog from "./pages/admin/ProductCatalog";
 import AdminSecurity from "./pages/admin/AdminSecurity";
+import AdminWelcome from "./pages/admin/AdminWelcome";
+import SecurityPage from "./pages/shared/SecurityPage";
 import NotificationCenter from "./pages/shared/NotificationCenter";
 
 // LAYOUTS
@@ -124,6 +126,9 @@ export default function App() {
            />
 
           <Route path="/admin/login" element={<AdminLogin />} />
+
+          {/* First-login setup (open route — no session token exists yet) */}
+          <Route path="/admin/welcome" element={<AdminWelcome />} />
 
           {/* ===================== OWNER ===================== */}
 
@@ -214,6 +219,11 @@ export default function App() {
               path="outreach-monitoring"
               element={<OutreachMonitoring />}
             />
+
+            <Route
+              path="security"
+              element={<SecurityPage />}
+            />
            </Route>
 
            {/* ===================== VETERINARIAN ===================== */}
@@ -252,11 +262,16 @@ export default function App() {
                element={<ConsultationLog />}
              />
 
-             <Route
-               path="medicine-records"
-               element={<Navigate to="/veterinarian/clinical-records" replace />}
-             />
-           </Route>
+              <Route
+                path="medicine-records"
+                element={<Navigate to="/veterinarian/clinical-records" replace />}
+              />
+
+              <Route
+                path="security"
+                element={<SecurityPage />}
+              />
+            </Route>
 
            {/* ===================== ADMIN ===================== */}
 

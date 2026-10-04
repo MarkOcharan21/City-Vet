@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Clock } from "lucide-react";
+import { ArrowLeft, Clock, LockKeyhole } from "lucide-react";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import PasswordInput from "../../components/PasswordInput";
+
+const PRE_TOKEN_KEY = "admin_pre_token";
 
 export default function AdminLogin() {
 
@@ -15,6 +17,11 @@ const [error,setError]=useState("");
 
 const [loading,setLoading]=useState(false);
 const [sessionExpired, setSessionExpired] = useState(false);
+
+// Step 2 of admin login: the personal access code (PIN).
+const [stage, setStage] = useState("password");
+const [code, setCode] = useState("");
+const [codeError, setCodeError] = useState("");
 
 const {login}=useAuth();
 
@@ -28,6 +35,13 @@ useEffect(() => {
     return () => clearTimeout(timer);
   }
 }, [searchParams]);
+
+function finishLogin(token, userData) {
+  sessionStorage.removeItem(PRE_TOKEN_KEY);
+  login(token, userData);
+  const returnTo = searchParams.get('returnTo');
+  navigate(returnTo ? decodeURIComponent(returnTo) : "/admin/overview");
+}
 
 async function handleSubmit(e){
 
@@ -57,11 +71,21 @@ return;
 
 }
 
-login(res.data.token, res.data.user);
+// Two-step login: the password step returns a short-lived pre-token, NEVER
+// a session token. Admins with a code proceed to step 2; those without one
+// are sent to the welcome screen to create it first.
+if (res.data.step === "code") {
+  sessionStorage.setItem(PRE_TOKEN_KEY, res.data.pre_token);
+  setLoading(false);
+  if (res.data.has_access_code) {
+    setStage("code");
+  } else {
+    navigate("/admin/welcome");
+  }
+  return;
+}
 
-// Redirect back to where the user was, or default overview
-const returnTo = searchParams.get('returnTo');
-navigate(returnTo ? decodeURIComponent(returnTo) : "/admin/overview");
+finishLogin(res.data.token, res.data.user);
 
 }catch(err){
 
@@ -75,6 +99,55 @@ setLoading(false);
 
 }
 
+}
+
+async function handleCodeSubmit(e) {
+  e.preventDefault();
+  setError("");
+  setCodeError("");
+
+  if (!/^\d{6}$/.test(code)) {
+    setCodeError("Enter your 6-digit access code.");
+    return;
+  }
+
+  const preToken = sessionStorage.getItem(PRE_TOKEN_KEY);
+  if (!preToken) {
+    setStage("password");
+    setError("Session expired. Please log in again.");
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const res = await api.post("/auth/verify-access-code", {
+      pre_token: preToken,
+      code,
+    });
+    finishLogin(res.data.token, res.data.user);
+  } catch (err) {
+    if (err.response?.status === 409 && err.response?.data?.set_code_required) {
+      navigate("/admin/welcome");
+      return;
+    }
+    if (err.response?.status === 429) {
+      setError(err.response?.data?.message || "Too many wrong attempts. Please log in again.");
+      setStage("password");
+      sessionStorage.removeItem(PRE_TOKEN_KEY);
+      return;
+    }
+    setError(err.response?.data?.message || "Could not verify access code.");
+  } finally {
+    setLoading(false);
+  }
+}
+
+function backToPassword() {
+  sessionStorage.removeItem(PRE_TOKEN_KEY);
+  setCode("");
+  setCodeError("");
+  setError("");
+  setStage("password");
 }
 
 return(
@@ -94,7 +167,7 @@ return(
 <button
 type="button"
 className="back-btn"
-onClick={()=>navigate("/")}
+onClick={()=> stage === "code" ? backToPassword() : navigate("/")}
 >
 
 <ArrowLeft size={20}/>
@@ -124,6 +197,7 @@ Back
   </div>
 )}
 
+{stage === "password" ? (
 <form onSubmit={handleSubmit}>
 
 <label>Email</label>
@@ -163,6 +237,43 @@ disabled={loading}
 </button>
 
 </form>
+) : (
+<form onSubmit={handleCodeSubmit}>
+
+<p style={{ fontSize: "14px", color: "#4b5563", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+<LockKeyhole size={16} />
+Enter your personal 6-digit access code to enter the portal.
+</p>
+
+<label>Access Code</label>
+
+<input
+type="text"
+placeholder="••••••"
+value={code}
+onChange={(e)=>{ setCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setCodeError(""); setError(""); }}
+inputMode="numeric"
+autoComplete="off"
+maxLength={6}
+required
+disabled={loading}
+style={{ fontFamily: "monospace", letterSpacing: "0.35em", textAlign: "center" }}
+/>
+
+{codeError && <p className="form-error">{codeError}</p>}
+{error && <p className="form-error">{error}</p>}
+
+<button
+type="submit"
+disabled={loading}
+>
+
+{loading ? "Verifying..." : "Enter Portal"}
+
+</button>
+
+</form>
+)}
 
 <div className="auth-links">
 

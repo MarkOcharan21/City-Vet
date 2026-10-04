@@ -491,6 +491,32 @@ async function login(req, res) {
       return res.status(401).json({ success: false, message: 'Your staff account has no registered name. Please contact the administrator.' });
     }
 
+    // Admins get a two-step login: password first, then their personal
+    // access code (PIN). No session token is issued until the code is
+    // verified, so the code gate cannot be bypassed. Admins without a code
+    // yet are sent to the welcome screen to create one.
+    if (user.role === 'Admin') {
+      const [codeRows] = await db.query('SELECT access_code_hash FROM users WHERE id = ?', [user.id]);
+      const preToken = jwt.sign(
+        { id: user.id, email: user.email, role: user.role, stage: 'preauth' },
+        process.env.JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({
+        success: true,
+        step: 'code',
+        pre_token: preToken,
+        has_access_code: Boolean(codeRows[0]?.access_code_hash),
+        user: {
+          id: user.id,
+          email: user.email,
+          account_id: user.account_id || null,
+          role: user.role,
+          full_name: user.full_name || null,
+        },
+      });
+    }
+
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
@@ -522,6 +548,277 @@ async function login(req, res) {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ success: false, message: 'Login failed.', error: error.message });
+  }
+}
+
+// ---- Admin access code (login PIN) helpers --------------------------------
+
+// In-memory wrong-code counter: preToken id (jti-less, use user id) -> attempts.
+// Resets on success or after 10 minutes. Blocks brute-forcing the 6-digit code.
+const codeVerifyAttempts = new Map();
+const CODE_MAX_ATTEMPTS = 5;
+const CODE_ATTEMPT_WINDOW_MS = 10 * 60 * 1000;
+
+function recordCodeAttempt(userId) {
+  const now = Date.now();
+  const entry = codeVerifyAttempts.get(userId);
+  if (!entry || now - entry.firstAt > CODE_ATTEMPT_WINDOW_MS) {
+    codeVerifyAttempts.set(userId, { count: 1, firstAt: now });
+    return 1;
+  }
+  entry.count += 1;
+  return entry.count;
+}
+
+function clearCodeAttempts(userId) {
+  codeVerifyAttempts.delete(userId);
+}
+
+// The access code is a personal 6-digit PIN the admin creates on first login.
+function validateAccessCode(code) {
+  if (!/^\d{6}$/.test(String(code || '').trim())) {
+    return 'Access code must be exactly 6 digits.';
+  }
+  return null;
+}
+
+function issueAdminToken(user) {
+  return jwt.sign(
+    { id: user.id, email: user.email, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: '8h' }
+  );
+}
+
+function adminPublicUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    account_id: user.account_id || null,
+    role: user.role,
+    full_name: user.full_name || null,
+  };
+}
+
+// Verifies a short-lived preauth token issued by the password step of login.
+// Rejects anything that is not an Admin preauth token (no bypass possible).
+function verifyPreToken(preToken) {
+  let payload;
+  try {
+    payload = jwt.verify(preToken, process.env.JWT_SECRET);
+  } catch {
+    return { ok: false, status: 401, message: 'Session expired. Please log in again.' };
+  }
+  if (!payload || payload.stage !== 'preauth' || payload.role !== 'Admin' || !payload.id) {
+    return { ok: false, status: 401, message: 'Invalid session. Please log in again.' };
+  }
+  return { ok: true, adminId: payload.id };
+}
+
+async function loadActiveAdmin(adminId) {
+  const [rows] = await db.query(
+    'SELECT id, email, account_id, password, role, full_name, status, access_code_hash FROM users WHERE id = ?',
+    [adminId]
+  );
+  const user = rows[0];
+  if (!user || user.role !== 'Admin') return null;
+  if (user.status !== 'active') return { inactive: true, user };
+  return { user };
+}
+
+// POST /api/auth/verify-access-code  (public — needs only a valid preToken)
+// Step 2 of admin login. Issues the real session token only when the code
+// matches; otherwise the admin stays locked out of the portal.
+async function verifyAccessCode(req, res) {
+  const { pre_token, code } = req.body || {};
+
+  const pre = verifyPreToken(pre_token);
+  if (!pre.ok) {
+    return res.status(pre.status).json({ success: false, message: pre.message });
+  }
+
+  try {
+    const loaded = await loadActiveAdmin(pre.adminId);
+    if (!loaded || loaded.inactive) {
+      return res.status(401).json({ success: false, message: 'Session is no longer valid. Please log in again.' });
+    }
+    const user = loaded.user;
+
+    if (!user.access_code_hash) {
+      return res.status(409).json({
+        success: false,
+        set_code_required: true,
+        message: 'No access code has been set yet. You will be asked to create one.',
+      });
+    }
+
+    const codeError = validateAccessCode(code);
+    if (codeError) {
+      return res.status(400).json({ success: false, message: codeError });
+    }
+
+    const ok = await bcrypt.compare(String(code).trim(), user.access_code_hash);
+    if (!ok) {
+      const attempts = recordCodeAttempt(user.id);
+      if (attempts >= CODE_MAX_ATTEMPTS) {
+        clearCodeAttempts(user.id);
+        return res.status(429).json({ success: false, message: 'Too many wrong attempts. Please log in again.' });
+      }
+      return res.status(401).json({ success: false, message: 'Access code is incorrect.' });
+    }
+
+    clearCodeAttempts(user.id);
+    const token = issueAdminToken(user);
+    await db.query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
+
+    res.json({ success: true, token, user: adminPublicUser(user) });
+
+    await logAudit(req, {
+      user_id: user.id,
+      staff_name: user.full_name || null,
+      action: 'LOGIN',
+      entity_type: 'auth',
+      description: `Admin "${user.full_name}" logged in (access code verified)`,
+      new_value: { role: user.role, email: user.email, account_id: user.account_id || null }
+    });
+  } catch (error) {
+    console.error('Verify access code error:', error);
+    res.status(500).json({ success: false, message: 'Could not verify access code.', error: error.message });
+  }
+}
+
+// POST /api/auth/admin-welcome  (public — needs only a valid preToken)
+// First-login setup: creates the admin's personal access code AND generates
+// their offline recovery key in one step, then issues the real session token.
+// Refuses when a code already exists (use the login code step instead).
+async function adminWelcomeSetup(req, res) {
+  const { pre_token, code, code_confirm } = req.body || {};
+
+  const pre = verifyPreToken(pre_token);
+  if (!pre.ok) {
+    return res.status(pre.status).json({ success: false, message: pre.message });
+  }
+
+  const codeError = validateAccessCode(code);
+  if (codeError) {
+    return res.status(400).json({ success: false, message: codeError });
+  }
+  if (String(code).trim() !== String(code_confirm).trim()) {
+    return res.status(400).json({ success: false, message: 'Access codes do not match.' });
+  }
+
+  try {
+    const loaded = await loadActiveAdmin(pre.adminId);
+    if (!loaded || loaded.inactive) {
+      return res.status(401).json({ success: false, message: 'Session is no longer valid. Please log in again.' });
+    }
+    const user = loaded.user;
+
+    if (user.access_code_hash) {
+      return res.status(409).json({ success: false, message: 'An access code is already set. Log in with your code instead.' });
+    }
+
+    const hash = await bcrypt.hash(String(code).trim(), 10);
+    await db.query('UPDATE users SET access_code_hash = ? WHERE id = ?', [hash, user.id]);
+
+    // Issue the offline recovery key right away so the admin leaves the
+    // welcome screen fully equipped. Plaintext is returned ONCE.
+    const plain = generateRecoveryKeyPlain();
+    const keyHash = await bcrypt.hash(plain.replace(/-/g, ''), 10);
+    await db.query(
+      'UPDATE admin_recovery_keys SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL',
+      [user.id]
+    );
+    await db.query(
+      'INSERT INTO admin_recovery_keys (user_id, key_hash) VALUES (?, ?)',
+      [user.id, keyHash]
+    );
+
+    const token = issueAdminToken(user);
+    await db.query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
+    clearCodeAttempts(user.id);
+
+    res.status(201).json({
+      success: true,
+      token,
+      user: adminPublicUser(user),
+      recovery_key: plain,
+      message: 'Welcome! Your access code is set. Save your recovery key before entering the portal.',
+    });
+
+    await logAudit(req, {
+      user_id: user.id,
+      staff_name: user.full_name || null,
+      action: 'CREATE',
+      entity_type: 'admin_access_code',
+      entity_id: user.id,
+      description: `Admin "${user.full_name || user.email}" completed first-login setup (access code + recovery key)`
+    });
+
+    await logAudit(req, {
+      user_id: user.id,
+      staff_name: user.full_name || null,
+      action: 'LOGIN',
+      entity_type: 'auth',
+      description: `Admin "${user.full_name}" logged in (first-login setup completed)`,
+      new_value: { role: user.role, email: user.email, account_id: user.account_id || null }
+    });
+  } catch (error) {
+    console.error('Admin welcome setup error:', error);
+    res.status(500).json({ success: false, message: 'Could not complete setup.', error: error.message });
+  }
+}
+
+// POST /api/auth/access-code  (Admin only)
+// Changes the admin's personal access code from inside the portal.
+// Requires the current password so a briefly-unattended session cannot swap it.
+async function changeAccessCode(req, res) {
+  const { current_password, code, code_confirm } = req.body || {};
+
+  if (!trim(current_password)) {
+    return validationError(res, 'Enter your current password.', { current_password: 'Enter your current password.' });
+  }
+
+  const codeError = validateAccessCode(code);
+  if (codeError) {
+    return validationError(res, codeError, { code: codeError });
+  }
+  if (String(code).trim() !== String(code_confirm).trim()) {
+    return validationError(res, 'Access codes do not match.', { code_confirm: 'Access codes do not match.' });
+  }
+
+  try {
+    const [rows] = await db.query(
+      'SELECT id, email, password, role, full_name, status FROM users WHERE id = ?',
+      [req.user.id]
+    );
+    const user = rows[0];
+
+    if (!user || user.role !== 'Admin' || user.status !== 'active') {
+      return res.status(403).json({ success: false, message: 'This action is for active Admin accounts only.' });
+    }
+
+    const passwordOk = user.password && await bcrypt.compare(current_password, user.password);
+    if (!passwordOk) {
+      return res.status(401).json({ success: false, message: 'Current password is incorrect.' });
+    }
+
+    const hash = await bcrypt.hash(String(code).trim(), 10);
+    await db.query('UPDATE users SET access_code_hash = ? WHERE id = ?', [hash, user.id]);
+
+    res.json({ success: true, message: 'Access code updated. Use it on your next login.' });
+
+    await logAudit(req, {
+      user_id: user.id,
+      staff_name: user.full_name || null,
+      action: 'UPDATE',
+      entity_type: 'admin_access_code',
+      entity_id: user.id,
+      description: `Admin "${user.full_name || user.email}" changed their access code`
+    });
+  } catch (error) {
+    console.error('Change access code error:', error);
+    res.status(500).json({ success: false, message: 'Could not change access code.', error: error.message });
   }
 }
 
@@ -768,12 +1065,15 @@ async function resetPassword(req, res) {
     const user = result.user;
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Clearing the access code too: an admin who reset their password sets a
+    // fresh access code on the welcome screen at their next login.
     await db.query(
       `UPDATE users
        SET password = ?,
            reset_code = NULL,
            reset_code_expiry = NULL,
-           reset_code_attempts = 0
+           reset_code_attempts = 0,
+           access_code_hash = NULL
        WHERE id = ?`,
       [hashedPassword, user.id]
     );
@@ -949,7 +1249,9 @@ const RECOVERY_KEY_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 function generateRecoveryKeyPlain() {
   const bytes = crypto.randomBytes(16);
   let out = '';
-  for (let i = 0; i < 16; i++) out += RECOVERY_KEY_ALPHABET[bytes[i] % 32];
+  // NOTE: modulo the alphabet length (31), never a hardcoded 32 — index 31
+  // would otherwise resolve to `undefined` and poison the key.
+  for (let i = 0; i < 16; i++) out += RECOVERY_KEY_ALPHABET[bytes[i] % RECOVERY_KEY_ALPHABET.length];
   return `${out.slice(0, 4)}-${out.slice(4, 8)}-${out.slice(8, 12)}-${out.slice(12, 16)}`;
 }
 
@@ -957,7 +1259,7 @@ function normalizeRecoveryKey(value) {
   return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-// POST /api/auth/recovery-key  (Admin only)
+// POST /api/auth/recovery-key  (Admin, Staff, Veterinarian, Owner)
 // Issues a single-use offline recovery key. The plaintext is returned ONCE —
 // only its bcrypt hash is stored. Generating a new key invalidates any
 // previous unused key.
@@ -1001,7 +1303,7 @@ async function generateRecoveryKey(req, res) {
   }
 }
 
-// GET /api/auth/recovery-key/status  (Admin only)
+// GET /api/auth/recovery-key/status  (Admin, Staff, Veterinarian, Owner)
 // Tells the UI whether an unused key exists (never returns the key itself).
 async function recoveryKeyStatus(req, res) {
   try {
@@ -1021,9 +1323,10 @@ async function recoveryKeyStatus(req, res) {
 }
 
 // POST /api/auth/recover-with-key  (public — no login needed)
-// Email-outage-proof admin recovery: email + single-use recovery key sets a
-// new password directly, no inbox needed. Restricted to Admin accounts.
-// Responses are generic so the endpoint cannot be used to enumerate accounts.
+// Email-outage-proof recovery: email + single-use recovery key sets a new
+// password directly, no inbox needed. Works for Admin, Staff, Veterinarian,
+// and Owner accounts. Responses are generic so the endpoint cannot be used
+// to enumerate accounts.
 async function recoverWithKey(req, res) {
   const { email, recovery_key, new_password, confirm_password } = req.body || {};
 
@@ -1045,7 +1348,8 @@ async function recoverWithKey(req, res) {
     );
     const user = rows[0];
 
-    if (!user || user.role !== 'Admin' || user.status !== 'active') {
+    // Recovery keys work for Admin, Staff, Veterinarian, and Owner accounts.
+    if (!user || !['Admin', 'Staff', 'Veterinarian', 'Owner'].includes(user.role) || user.status !== 'active') {
       return res.status(400).json({ success: false, message: 'Invalid email or recovery key.' });
     }
 
@@ -1067,12 +1371,16 @@ async function recoverWithKey(req, res) {
     }
 
     const hashed = await bcrypt.hash(new_password, 10);
-    await db.query('UPDATE users SET password = ? WHERE id = ?', [hashed, user.id]);
+    // Clearing the access code too: an admin who recovered this way sets a
+    // fresh access code on the welcome screen at their next login.
+    await db.query('UPDATE users SET password = ?, access_code_hash = NULL WHERE id = ?', [hashed, user.id]);
     await db.query('UPDATE admin_recovery_keys SET used_at = NOW() WHERE id = ?', [matched.id]);
 
     res.json({
       success: true,
-      message: 'Password reset successfully. You may now log in. Generate a new recovery key after signing in.',
+      message: user.role === 'Admin'
+        ? 'Password reset successfully. You will set a new access code on your next login.'
+        : 'Password reset successfully. You may now log in. Generate a new recovery key after signing in.',
     });
 
     await logAudit(req, {
@@ -1081,7 +1389,7 @@ async function recoverWithKey(req, res) {
       action: 'UPDATE',
       entity_type: 'auth',
       entity_id: user.id,
-      description: `Admin "${user.full_name || user.email}" reset their password with an offline recovery key`
+      description: `${roleLabel(user.role)} "${user.full_name || user.email}" reset their password with an offline recovery key`
     });
   } catch (error) {
     console.error('Recover with key error:', error);
@@ -1104,4 +1412,7 @@ module.exports = {
   generateRecoveryKey,
   recoveryKeyStatus,
   recoverWithKey,
+  verifyAccessCode,
+  adminWelcomeSetup,
+  changeAccessCode,
 };

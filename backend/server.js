@@ -70,6 +70,7 @@ const {
 
 const { ensurePaymentTypeOutreach } = require("./src/db/ensurePaymentType");
 const { ensureAdminRecoveryKeys } = require("./src/db/ensureAdminRecovery");
+const { ensureAdminAccessCode } = require("./src/db/ensureAdminAccessCode");
 
 const {
     startAnnouncementScheduler,
@@ -1685,6 +1686,9 @@ async function freePortIfBusy() {
 
     // Ensure the offline admin recovery-keys table exists.
     await ensureAdminRecoveryKeys();
+
+    // Ensure the admin access-code (login PIN) column exists.
+    await ensureAdminAccessCode();
 
     // Free an already-running backend before binding, so `npm run dev`
     // always starts cleanly with no manual netstat/taskkill needed.

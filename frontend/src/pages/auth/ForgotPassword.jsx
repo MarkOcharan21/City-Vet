@@ -14,7 +14,7 @@ export default function ForgotPassword({ portal = "owner" }) {
   const [loading, setLoading] = useState(false);
   const [waitingForApproval, setWaitingForApproval] = useState(false);
   const [declinedMessage, setDeclinedMessage] = useState("");
-  // Admin-only offline recovery (works even when email is down).
+  // Offline recovery key (works even when email is down) — all portals.
   const [useRecoveryKey, setUseRecoveryKey] = useState(false);
   const [recoveryKey, setRecoveryKey] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -109,6 +109,8 @@ export default function ForgotPassword({ portal = "owner" }) {
     setMessage("");
     setDeclinedMessage("");
     setKeyDone(false);
+    // Don't leave the clinic approval poll running behind the key form.
+    stopPolling();
     setUseRecoveryKey((prev) => !prev);
   }
 
@@ -166,13 +168,13 @@ export default function ForgotPassword({ portal = "owner" }) {
 
         <h3>Reset Your Password</h3>
 
-        {portal === "admin" && useRecoveryKey ? (
+        {useRecoveryKey ? (
           <form onSubmit={handleRecoveryKeySubmit}>
             <label>Email</label>
             <input
               type="email"
               name="email"
-              placeholder="Enter your admin email"
+              placeholder={portal === "admin" ? "Enter your admin email" : "Enter your email"}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -291,7 +293,7 @@ export default function ForgotPassword({ portal = "owner" }) {
         </form>
         )}
 
-        {portal === "admin" && !keyDone && (
+        {!keyDone && (
           <p
             style={{
               textAlign: "center",
@@ -343,7 +345,7 @@ export default function ForgotPassword({ portal = "owner" }) {
           </p>
         )}
 
-        {isClinicRequestFlow && (
+        {isClinicRequestFlow && !useRecoveryKey && (
           <p
             style={{
               textAlign: "center",
