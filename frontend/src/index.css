@@ -1524,6 +1524,39 @@ body:has(.clinic-access-page)::before {
   display: none;
 }
 .form-error { color: #b91c1c; font-size: 0.95rem; font-weight: 600; }
+
+/* Masked access-code field: the real <input> holds the digits but renders its
+   text transparent; an overlay paints a bullet per digit (with a brief peek of
+   the last typed digit) so the code is never shown in plain text. */
+.access-code-wrap {
+  position: relative;
+}
+.access-code-input {
+  color: transparent !important;
+  caret-color: var(--color-ink) !important;
+  background: #fff !important;
+}
+.access-code-input::placeholder {
+  color: var(--color-text-muted) !important;
+  letter-spacing: 0.15em;
+}
+.access-code-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: monospace;
+  font-size: 1.15rem;
+  letter-spacing: 0.35em;
+  color: var(--color-ink);
+}
+.access-code-cell {
+  display: inline-block;
+  width: 1ch;
+  text-align: center;
+}
 .form-success { color: #15803d; font-size: 0.95rem; font-weight: 600; }
 
 .field-error {
@@ -7985,13 +8018,12 @@ body:has(.clinic-access-page)::before {
   border: 3px solid #fff;
   background: var(--color-primary);
   box-shadow: 0 6px 18px rgba(36, 20, 22, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   overflow: hidden;
 }
 
 .traceability-pin-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -8040,9 +8072,14 @@ body:has(.clinic-access-page)::before {
   }
 }
 
+@keyframes traceabilitySpin {
+  to { transform: rotate(360deg); }
+}
+
 .traceability-locating-overlay {
   position: absolute;
   inset: 0;
+  z-index: 1000;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -8053,6 +8090,15 @@ body:has(.clinic-access-page)::before {
   color: var(--color-ink);
   font-size: 0.9rem;
   font-weight: 600;
+}
+.traceability-locating-overlay::before {
+  content: '';
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  animation: traceabilitySpin 0.8s linear infinite;
 }
 [data-theme="dark"] .traceability-locating-overlay {
   background: rgba(15, 23, 42, 0.68);
@@ -12192,10 +12238,28 @@ body:has(.clinic-access-page)::before {
   overflow: hidden;
 }
 .data-table-wrap { overflow-x: auto; }
-.aat-table-card .data-table { margin: 0; border: none; }
-.aat-cell-activity { display: flex; flex-direction: column; gap: 0.3rem; min-width: 230px; }
+.aat-table-card .data-table {
+  margin: 0;
+  border: none;
+  table-layout: fixed;
+  width: 100%;
+}
+.aat-table-card .data-table th,
+.aat-table-card .data-table td {
+  padding: 0.7rem 0.6rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.aat-table-card .data-table th:nth-child(1) { width: 26%; }
+.aat-table-card .data-table th:nth-child(2) { width: 15%; }
+.aat-table-card .data-table th:nth-child(3) { width: 11%; }
+.aat-table-card .data-table th:nth-child(4) { width: 7%; }
+.aat-table-card .data-table th:nth-child(5) { width: 16%; }
+.aat-table-card .data-table th:nth-child(6) { width: 13%; }
+.aat-table-card .data-table th:nth-child(7) { width: 12%; }
+.aat-cell-activity { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
 .aat-cell-description { font-size: 0.84rem; color: var(--color-text-muted); line-height: 1.35; }
-.aat-cell-user { display: flex; align-items: center; gap: 0.5rem; min-width: 150px; }
+.aat-cell-user { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
 .aat-cell-user strong { color: var(--color-ink); }
 
 .aat-view-btn {

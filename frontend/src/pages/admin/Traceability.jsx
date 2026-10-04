@@ -338,7 +338,6 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
         <div ref={mapElementRef} className="traceability-location-map" />
 {locating && (
             <div className="traceability-locating-overlay" role="status" aria-live="polite">
-              <LogoPulse />
               <span>Locating pet...</span>
             </div>
           )}
@@ -530,7 +529,6 @@ function BarangayHeatmapMap({ data, loading, onSelectBarangay }) {
         <div ref={mapElementRef} className="traceability-location-map traceability-heatmap-map" />
         {loading && (
           <div className="traceability-locating-overlay" role="status" aria-live="polite">
-            <LogoPulse />
             <span>Loading barangay data...</span>
           </div>
         )}

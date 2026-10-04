@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Clock, LockKeyhole } from "lucide-react";
 import api from "../../services/api";
@@ -29,6 +29,11 @@ const [stage, setStage] = useState(
 );
 const [code, setCode] = useState("");
 const [codeError, setCodeError] = useState("");
+// The last digit is shown briefly after typing, then re-masked, so the code
+// stays secure but the user still gets feedback that a key was registered.
+const [peek, setPeek] = useState("");
+const peekTimer = useRef(null);
+const submitTimer = useRef(null);
 
 const {login}=useAuth();
 
@@ -109,15 +114,9 @@ setLoading(false);
 
 }
 
-async function handleCodeSubmit(e) {
-  e.preventDefault();
+async function verifyCode(codeValue) {
   setError("");
   setCodeError("");
-
-  if (!/^\d{6}$/.test(code)) {
-    setCodeError("Enter your 6-digit access code.");
-    return;
-  }
 
   const preToken = sessionStorage.getItem(PRE_TOKEN_KEY);
   if (!preToken) {
@@ -130,7 +129,7 @@ async function handleCodeSubmit(e) {
   try {
     const res = await api.post("/auth/verify-access-code", {
       pre_token: preToken,
-      code,
+      code: codeValue,
     }, { timeout: 45000, retryOnNetwork: true });
     finishLogin(res.data.token, res.data.user);
   } catch (err) {
@@ -144,9 +143,38 @@ async function handleCodeSubmit(e) {
       sessionStorage.removeItem(PRE_TOKEN_KEY);
       return;
     }
+    // Wrong code: clear the field so the owner can immediately retype.
+    setCode("");
+    setPeek("");
     setError(err.response?.data?.message || "Cannot reach the server. It may be waking up — wait a few seconds, then try again.");
   } finally {
     setLoading(false);
+  }
+}
+
+async function handleCodeSubmit(e) {
+  e.preventDefault();
+  if (!/^\d{6}$/.test(code)) {
+    setCodeError("Enter your 6-digit access code.");
+    return;
+  }
+  await verifyCode(code);
+}
+
+function handleCodeChange(e) {
+  const digits = e.target.value.replace(/\D/g, "").slice(0, 6);
+  setCode(digits);
+  setCodeError("");
+  setError("");
+  if (peekTimer.current) clearTimeout(peekTimer.current);
+  if (submitTimer.current) clearTimeout(submitTimer.current);
+  if (digits.length) {
+    setPeek(digits[digits.length - 1]);
+    peekTimer.current = setTimeout(() => setPeek(""), 700);
+  }
+  // Auto-enter the portal as soon as the full 6-digit code is typed.
+  if (digits.length === 6) {
+    submitTimer.current = setTimeout(() => verifyCode(digits), 500);
   }
 }
 
@@ -258,19 +286,32 @@ Enter your personal 6-digit access code to enter the portal.
 </p>
 
 <label>Access Code</label>
-
-<input
-type="text"
-placeholder="••••••"
-value={code}
-onChange={(e)=>{ setCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setCodeError(""); setError(""); }}
-inputMode="numeric"
-autoComplete="off"
-maxLength={6}
-required
-disabled={loading}
-style={{ fontFamily: "monospace", letterSpacing: "0.35em", textAlign: "center" }}
-/>
+<div className="access-code-wrap">
+  <input
+    type="text"
+    placeholder="••••••"
+    value={code}
+    onChange={handleCodeChange}
+    inputMode="numeric"
+    autoComplete="off"
+    maxLength={6}
+    required
+    disabled={loading}
+    className="access-code-input"
+    aria-label="6-digit access code"
+  />
+  <div className="access-code-mask" aria-hidden="true">
+    {Array.from({ length: 6 }).map((_, i) => {
+      const ch = code[i];
+      const showPeek = Boolean(ch) && i === code.length - 1 && peek === ch;
+      return (
+        <span key={i} className="access-code-cell">
+          {showPeek ? ch : ch ? "•" : ""}
+        </span>
+      );
+    })}
+  </div>
+</div>
 
 {codeError && <p className="form-error">{codeError}</p>}
 {error && <p className="form-error">{error}</p>}
