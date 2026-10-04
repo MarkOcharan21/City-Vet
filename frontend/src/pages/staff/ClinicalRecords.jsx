@@ -744,7 +744,7 @@ export default function ClinicalRecords() {
 
       {step === 2 && selectedPet && (
         <div className="panel-card clinical-panel-card consultation-workspace-card">
-          <div className="panel-header">
+          <div className="panel-header" style={{ gap: "1rem" }}>
             <div>
               <h2>Visit Notes</h2>
               <p>{selectedPet.name} · {selectedPet.pet_code} · {selectedPet.owner_name}</p>
@@ -810,7 +810,7 @@ export default function ClinicalRecords() {
 
       {step === 3 && selectedPet && (
         <div className="panel-card clinical-panel-card consultation-workspace-card">
-          <div className="panel-header">
+          <div className="panel-header" style={{ gap: "1rem" }}>
             <div>
               <h2>Medicines &amp; Prescription</h2>
               <p>{selectedPet.name} · {selectedPet.pet_code} — select medicines and review auto-computed dosing</p>
