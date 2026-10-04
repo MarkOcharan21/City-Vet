@@ -1152,9 +1152,6 @@ export default function ClinicalRecords() {
           <div className="receipt-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "1000px", maxHeight: "85vh" }}>
             <div className="receipt-modal-head">
               <h3>Pet Records</h3>
-              <button type="button" className="receipt-modal-close" onClick={() => setRecordsModalOpen(false)}>
-                <X size={20} />
-              </button>
             </div>
 
             {loadingRecords ? (
@@ -1162,7 +1159,7 @@ export default function ClinicalRecords() {
                 <LoadingSpinner text="Loading records..." fullPage={false} />
               </div>
             ) : (
-              <div className="receipt-modal-body" style={{ maxHeight: "calc(85vh - 180px)", overflowY: "auto" }}>
+              <div className="receipt-modal-body" style={{ maxHeight: "calc(85vh - 140px)", overflowY: "auto" }}>
                 <div className="receipt-meta" style={{ marginBottom: "1.5rem" }}>
                   <div>
                     <span>Patient</span>
