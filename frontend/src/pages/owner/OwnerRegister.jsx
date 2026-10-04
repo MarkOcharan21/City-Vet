@@ -409,6 +409,12 @@ export default function OwnerRegister() {
                         : "Use my current location"}
                   </button>
                   {gpsError && <p className="auth-gps-error">{gpsError}</p>}
+                  {!gpsError && !gps && !locatingGps && (
+                    <p className="auth-field-hint">
+                      Tap this to auto-fill your exact location from your device&apos;s GPS —
+                      this helps clinic staff and barangay officials find you faster.
+                    </p>
+                  )}
                   {gps && !gpsError && (
                     <p className="auth-field-hint">
                       Pin will be placed at your exact GPS location so barangay

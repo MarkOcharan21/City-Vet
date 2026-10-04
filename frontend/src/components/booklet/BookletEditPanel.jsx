@@ -505,6 +505,15 @@ export default function BookletEditPanel({ pet, role, onSaved }) {
                 : gps ? "Location pinned at your GPS point ✓" : "Use my current location"}
             </button>
             {gpsError && <div className="booklet-edit__error">{gpsError}</div>}
+            {!gpsError && !gps && !locatingGps && (
+              <div className="booklet-edit__hint">
+                Sets the owner&apos;s pin to your device&apos;s exact GPS location so the
+                Traceability map can find you.
+              </div>
+            )}
+            {gps && !gpsError && (
+              <div className="booklet-edit__hint">Pin pinned at your exact GPS location.</div>
+            )}
           </Field>
           <Field label="Emergency Contact Name">
             <input

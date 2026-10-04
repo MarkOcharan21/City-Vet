@@ -211,12 +211,18 @@ export function ProfileForm({ compact = false, onSaved }) {
               ? 'Detecting location…'
               : gps ? 'Location pinned at your exact GPS point ✓' : 'Use my current location'}
           </button>
-          {gpsError && <p className="settings-msg settings-msg--err">{gpsError}</p>}
-          {gps && !gpsError && (
-            <p className="settings-field-hint">
-              The Traceability map will drop the pin at your exact GPS point.
-            </p>
-          )}
+{gpsError && <p className="settings-msg settings-msg--err">{gpsError}</p>}
+            {!gpsError && !gps && !locatingGps && (
+              <p className="settings-field-hint">
+                Tap this to auto-fill your exact location — the Traceability map
+                will then drop the pin at your actual address.
+              </p>
+            )}
+            {gps && !gpsError && (
+              <p className="settings-field-hint">
+                The Traceability map will drop the pin at your exact GPS point.
+              </p>
+            )}
         </div>
       )}
 
