@@ -8023,14 +8023,18 @@ body:has(.clinic-access-page)::before {
 
 .traceability-pin-img {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  top: 2px;
+  left: 2px;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
   object-position: center;
   display: block;
   background: var(--color-primary);
+  transition: opacity 0.18s ease;
 }
+.traceability-pin-img.pin-img-loading { opacity: 0; }
+.traceability-pin-img.pin-fit-contain { object-fit: contain; }
+.traceability-pin-img.pin-fit-cover { object-fit: cover; }
 
 .traceability-pin-squircle.pin-squircle-empty {
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark, var(--color-primary)));

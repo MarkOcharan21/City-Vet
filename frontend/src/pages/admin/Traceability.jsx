@@ -124,7 +124,7 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
             + `<span class="traceability-pin-ring"></span>`
             + `<span class="traceability-pin-ring"></span>`
             + `<span class="traceability-pin-squircle">`
-            + `<img class="traceability-pin-img" src="${photoUrl}" alt="${petName}" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjOTQ5NDk0IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTIwLjU5IDEzLjQxbC03LjE3IDcuMTdhMiAyIDAgMCAxLTIuODMgMEwyIDEyVjJoMTBsOC41OSA4LjU5YTIgMiAwIDAgMSAwIDIuODN6Ii8+PHBhdGggZD0iTTcgMTdhMiAyIDAgMSAwIDAtNCAyIDIgMCAwIDAgMCA0eiIvPjwvc3ZnPg=='" />`
+            + `<img class="traceability-pin-img pin-img-loading pin-fit-contain" src="${photoUrl}" alt="${petName}" referrerpolicy="no-referrer" onload="var r=this.naturalWidth/this.naturalHeight||0;if(r>=0.8&&r<=1.25)this.classList.add('pin-fit-cover');this.classList.remove('pin-img-loading');" onerror="this.onerror=null;this.onload=null;this.classList.remove('pin-img-loading');this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjOTQ5NDk0IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTIwLjU5IDEzLjQxbC03LjE3IDcuMTdhMiAyIDAgMCAxLTIuODMgMEwyIDEyVjJoMTBsOC41OSA4LjU5YTIgMiAwIDAgMSAwIDIuODN6Ii8+PHBhdGggZD0iTTcgMTdhMiAyIDAgMSAwIDAtNCAyIDIgMCAwIDAgMCA0eiIvPjwvc3ZnPg=='" />`
             + `</span>`
             + `<span class="traceability-pin-tail"></span>`
             + `</span>`,
