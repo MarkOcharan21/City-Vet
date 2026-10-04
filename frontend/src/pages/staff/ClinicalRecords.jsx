@@ -1178,19 +1178,22 @@ export default function ClinicalRecords() {
                         <FileText size={16} />
                         Recent Consultations
                       </h4>
-                      <div style={{ 
-                        maxHeight: "400px", 
-                        overflowY: "auto", 
+                      <div style={{
+                        maxHeight: "400px",
+                        overflowY: "auto",
                         padding: "0.5rem",
                         backgroundColor: "#f9fafb",
                         borderRadius: "8px",
                         border: "1px solid #e5e7eb"
                       }}>
-                        {petRecords.clinical.slice(0, 5).map((record) => (
-                          <div key={record.id} style={{ 
-                            padding: "1rem", 
-                            backgroundColor: "#ffffff", 
-                            borderRadius: "6px", 
+                        {petRecords.clinical
+                          .sort((a, b) => new Date(b.consultation_date) - new Date(a.consultation_date))
+                          .slice(0, 5)
+                          .map((record) => (
+                          <div key={record.id} style={{
+                            padding: "1rem",
+                            backgroundColor: "#ffffff",
+                            borderRadius: "6px",
                             marginBottom: "0.75rem",
                             border: "1px solid #e5e7eb",
                             boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)"
@@ -1218,19 +1221,22 @@ export default function ClinicalRecords() {
                         <Pill size={16} />
                         Vaccination History
                       </h4>
-                      <div style={{ 
-                        maxHeight: "400px", 
-                        overflowY: "auto", 
+                      <div style={{
+                        maxHeight: "400px",
+                        overflowY: "auto",
                         padding: "0.5rem",
                         backgroundColor: "#f9fafb",
                         borderRadius: "8px",
                         border: "1px solid #e5e7eb"
                       }}>
-                        {petRecords.vaccinations.slice(0, 5).map((vaccine) => (
-                          <div key={vaccine.id} style={{ 
-                            padding: "1rem", 
-                            backgroundColor: "#ffffff", 
-                            borderRadius: "6px", 
+                        {petRecords.vaccinations
+                          .sort((a, b) => new Date(b.vaccination_date) - new Date(a.vaccination_date))
+                          .slice(0, 5)
+                          .map((vaccine) => (
+                          <div key={vaccine.id} style={{
+                            padding: "1rem",
+                            backgroundColor: "#ffffff",
+                            borderRadius: "6px",
                             marginBottom: "0.75rem",
                             border: "1px solid #e5e7eb",
                             boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)"
