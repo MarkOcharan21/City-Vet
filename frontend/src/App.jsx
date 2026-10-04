@@ -57,7 +57,6 @@ import ActivityAuditTrail from "./pages/admin/ActivityAuditTrail";
 import ProductCatalog from "./pages/admin/ProductCatalog";
 import AdminSecurity from "./pages/admin/AdminSecurity";
 import AdminWelcome from "./pages/admin/AdminWelcome";
-import SecurityPage from "./pages/shared/SecurityPage";
 import NotificationCenter from "./pages/shared/NotificationCenter";
 
 // LAYOUTS
@@ -219,11 +218,6 @@ export default function App() {
               path="outreach-monitoring"
               element={<OutreachMonitoring />}
             />
-
-            <Route
-              path="security"
-              element={<SecurityPage />}
-            />
            </Route>
 
            {/* ===================== VETERINARIAN ===================== */}
@@ -265,11 +259,6 @@ export default function App() {
               <Route
                 path="medicine-records"
                 element={<Navigate to="/veterinarian/clinical-records" replace />}
-              />
-
-              <Route
-                path="security"
-                element={<SecurityPage />}
               />
             </Route>
 

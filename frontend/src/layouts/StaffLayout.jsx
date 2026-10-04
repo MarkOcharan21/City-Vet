@@ -7,7 +7,6 @@ import {
   FileOutput,
   Receipt,
   HandCoins,
-  ShieldCheck,
   Moon,
   Sun,
   PanelLeftClose,
@@ -143,11 +142,6 @@ export default function StaffLayout() {
           <NavLink to="/staff/outreach-monitoring" onClick={() => setMobileOpen(false)}>
             <HandCoins size={16} />
             <span className="sidebar-label">Outreach Payment Monitoring</span>
-          </NavLink>
-
-          <NavLink to="/staff/security" onClick={() => setMobileOpen(false)}>
-            <ShieldCheck size={16} />
-            <span className="sidebar-label">Account Security</span>
           </NavLink>
         </nav>
 

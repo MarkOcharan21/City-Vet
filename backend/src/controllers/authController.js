@@ -1259,7 +1259,7 @@ function normalizeRecoveryKey(value) {
   return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-// POST /api/auth/recovery-key  (Admin, Staff, Veterinarian, Owner)
+// POST /api/auth/recovery-key  (Admin only)
 // Issues a single-use offline recovery key. The plaintext is returned ONCE —
 // only its bcrypt hash is stored. Generating a new key invalidates any
 // previous unused key.
@@ -1303,7 +1303,7 @@ async function generateRecoveryKey(req, res) {
   }
 }
 
-// GET /api/auth/recovery-key/status  (Admin, Staff, Veterinarian, Owner)
+// GET /api/auth/recovery-key/status  (Admin only)
 // Tells the UI whether an unused key exists (never returns the key itself).
 async function recoveryKeyStatus(req, res) {
   try {
@@ -1323,10 +1323,9 @@ async function recoveryKeyStatus(req, res) {
 }
 
 // POST /api/auth/recover-with-key  (public — no login needed)
-// Email-outage-proof recovery: email + single-use recovery key sets a new
-// password directly, no inbox needed. Works for Admin, Staff, Veterinarian,
-// and Owner accounts. Responses are generic so the endpoint cannot be used
-// to enumerate accounts.
+// Email-outage-proof admin recovery: email + single-use recovery key sets a
+// new password directly, no inbox needed. Restricted to Admin accounts.
+// Responses are generic so the endpoint cannot be used to enumerate accounts.
 async function recoverWithKey(req, res) {
   const { email, recovery_key, new_password, confirm_password } = req.body || {};
 
@@ -1348,8 +1347,7 @@ async function recoverWithKey(req, res) {
     );
     const user = rows[0];
 
-    // Recovery keys work for Admin, Staff, Veterinarian, and Owner accounts.
-    if (!user || !['Admin', 'Staff', 'Veterinarian', 'Owner'].includes(user.role) || user.status !== 'active') {
+    if (!user || user.role !== 'Admin' || user.status !== 'active') {
       return res.status(400).json({ success: false, message: 'Invalid email or recovery key.' });
     }
 
@@ -1378,9 +1376,7 @@ async function recoverWithKey(req, res) {
 
     res.json({
       success: true,
-      message: user.role === 'Admin'
-        ? 'Password reset successfully. You will set a new access code on your next login.'
-        : 'Password reset successfully. You may now log in. Generate a new recovery key after signing in.',
+      message: 'Password reset successfully. You will set a new access code on your next login.',
     });
 
     await logAudit(req, {

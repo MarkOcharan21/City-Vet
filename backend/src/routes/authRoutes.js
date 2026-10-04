@@ -59,13 +59,11 @@ router.post("/logout", authMiddleware, logout);
 // Change password (logged-in users, any role) — requires the current password
 router.post("/change-password", authMiddleware, changePassword);
 
-// Offline recovery key (Admin, Staff, Veterinarian, Owner) — works even when
-// email is down
-const recoveryKeyRoles = ["Admin", "Staff", "Veterinarian", "Owner"];
-router.post("/recovery-key", authMiddleware, requireRole(recoveryKeyRoles), generateRecoveryKey);
-router.get("/recovery-key/status", authMiddleware, requireRole(recoveryKeyRoles), recoveryKeyStatus);
+// Offline recovery key (Admin only) — works even when email is down
+router.post("/recovery-key", authMiddleware, requireRole(["Admin"]), generateRecoveryKey);
+router.get("/recovery-key/status", authMiddleware, requireRole(["Admin"]), recoveryKeyStatus);
 
-// Recover with key (public — no login needed)
+// Recover with key (public — no login needed, Admin accounts only)
 router.post("/recover-with-key", recoverWithKey);
 
 // Admin access code (login PIN) — two-step admin login

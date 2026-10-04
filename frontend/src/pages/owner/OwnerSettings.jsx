@@ -5,7 +5,6 @@ import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import GlobalLoadingOverlay from '../../components/GlobalLoadingOverlay';
 import ErrorState from '../../components/ui/ErrorState';
-import RecoveryKeyCard from '../../components/security/RecoveryKeyCard';
 
 // Barangay list (mirrors backend constant — read-only on frontend)
 const CABUYAO_BARANGAYS = [
@@ -301,11 +300,6 @@ export default function OwnerSettings() {
           <p className="settings-card-desc">Choose a strong password with at least 8 characters.</p>
           <PasswordForm />
         </div>
-      </div>
-
-      {/* Offline recovery key — resets your password even when email is down */}
-      <div style={{ marginTop: '1.75rem' }}>
-        <RecoveryKeyCard />
       </div>
     </div>
   );

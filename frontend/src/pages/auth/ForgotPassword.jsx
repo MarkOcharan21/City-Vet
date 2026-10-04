@@ -14,7 +14,7 @@ export default function ForgotPassword({ portal = "owner" }) {
   const [loading, setLoading] = useState(false);
   const [waitingForApproval, setWaitingForApproval] = useState(false);
   const [declinedMessage, setDeclinedMessage] = useState("");
-  // Offline recovery key (works even when email is down) — all portals.
+  // Admin-only offline recovery (works even when email is down).
   const [useRecoveryKey, setUseRecoveryKey] = useState(false);
   const [recoveryKey, setRecoveryKey] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -168,13 +168,13 @@ export default function ForgotPassword({ portal = "owner" }) {
 
         <h3>Reset Your Password</h3>
 
-        {useRecoveryKey ? (
+        {portal === "admin" && useRecoveryKey ? (
           <form onSubmit={handleRecoveryKeySubmit}>
             <label>Email</label>
             <input
               type="email"
               name="email"
-              placeholder={portal === "admin" ? "Enter your admin email" : "Enter your email"}
+              placeholder="Enter your admin email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -213,7 +213,7 @@ export default function ForgotPassword({ portal = "owner" }) {
             {error && <p className="form-error">{error}</p>}
             {message && <p className="form-success">{message}</p>}
 
-            {!keyDone && (
+        {portal === "admin" && !keyDone && (
               <button type="submit" disabled={loading}>
                 {loading ? "Resetting..." : "Reset Password"}
               </button>
@@ -345,7 +345,7 @@ export default function ForgotPassword({ portal = "owner" }) {
           </p>
         )}
 
-        {isClinicRequestFlow && !useRecoveryKey && (
+        {isClinicRequestFlow && (
           <p
             style={{
               textAlign: "center",
