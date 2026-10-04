@@ -250,7 +250,12 @@ async function main() {
         else if (bucketRoll < 0.75) regDaysAgo = randInt(46, 300); // Earlier this year
         else regDaysAgo = randInt(301, 540);                 // Earlier registrations
         const registrationDate = DATES.daysAgo(regDaysAgo);
-        const status = rng() < 0.85 ? "Verified" : "Registered";
+        // Keep a visible, recent queue of pending (unverified) registrations for
+        // the staff Verify Registration page: pets registered in the last two
+        // weeks are much more likely to still be awaiting verification, while
+        // older registrations are almost all verified.
+        const verifiedChance = regDaysAgo <= 13 ? 0.6 : 0.92;
+        const status = rng() < verifiedChance ? "Verified" : "Registered";
         const isLost = rng() < 0.02;
 
         const [petResult] = await db.query(

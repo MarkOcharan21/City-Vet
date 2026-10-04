@@ -22,6 +22,7 @@ const QUEUE_SELECT = `
          p.name AS pet_name,
          p.pet_code,
          p.photo AS pet_photo,
+         p.status AS pet_status,
          po.full_name AS owner_name,
          po.barangay,
          po.contact_number,
@@ -234,7 +235,7 @@ async function addBatchItems(req, res) {
 
     const placeholders = petIds.map(() => '?').join(', ');
     const [pets] = await connection.query(
-      `SELECT p.id, p.name, p.pet_code
+      `SELECT p.id, p.name, p.pet_code, p.status
        FROM pets p
        JOIN pet_owners po ON p.pet_owner_id = po.id
        WHERE p.id IN (${placeholders})
@@ -245,6 +246,12 @@ async function addBatchItems(req, res) {
       await connection.rollback();
       transactionStarted = false;
       return res.status(404).json({ success: false, message: 'One or more pets were not found.' });
+    }
+    const unverifiedPet = pets.find((pet) => pet.status !== 'Verified');
+    if (unverifiedPet) {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(409).json({ success: false, message: `${unverifiedPet.name} is not yet verified. Only verified pets can be added to the consultation batch.` });
     }
 
     const [existingRows] = await connection.query(
@@ -485,7 +492,7 @@ async function createEntry(req, res) {
     await connection.beginTransaction();
 
     const [[pet]] = await connection.query(
-      `SELECT p.id, p.name, p.pet_code, po.full_name AS owner_name
+      `SELECT p.id, p.name, p.pet_code, p.status, po.full_name AS owner_name
        FROM pets p
        JOIN pet_owners po ON p.pet_owner_id = po.id
        WHERE p.id = ?
@@ -496,6 +503,11 @@ async function createEntry(req, res) {
     if (!pet) {
       await connection.rollback();
       return res.status(404).json({ success: false, message: 'Pet not found.' });
+    }
+
+    if (pet.status !== 'Verified') {
+      await connection.rollback();
+      return res.status(409).json({ success: false, message: `${pet.name} is not yet verified. Only verified pets can be added to the clinic queue.` });
     }
 
     const [[activeEntry]] = await connection.query(
@@ -616,6 +628,15 @@ async function updateStatus(req, res) {
       await connection.rollback();
       transactionStarted = false;
       return res.json({ success: true, message: 'Queue status is already up to date.', entry: current });
+    }
+
+    if (nextStatus === 'In Consultation' && current.pet_status !== 'Verified') {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(409).json({
+        success: false,
+        message: `${current.pet_name} is not yet verified. Only verified pets can be consulted.`,
+      });
     }
 
     if (nextStatus === 'Completed') {

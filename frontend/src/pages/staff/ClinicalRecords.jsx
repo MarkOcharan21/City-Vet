@@ -84,7 +84,7 @@ export default function ClinicalRecords() {
   const [searchPetName, setSearchPetName] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  const [pickerStatus, setPickerStatus] = useState("");
+  const [pickerStatus, setPickerStatus] = useState("Verified");
   const [pickerPage, setPickerPage] = useState(1);
   const searchDebounceRef = useRef(null);
   const [savedReceipt, setSavedReceipt] = useState(null);
@@ -126,7 +126,12 @@ export default function ClinicalRecords() {
     if (!preselectedPetId || pets.length === 0) return;
     const match = pets.find((pet) => String(pet.id) === String(preselectedPetId));
     if (!match) return;
-    setSelectedPet({ pet_id: match.id, name: match.name, pet_code: match.pet_code, owner_name: match.owner_name, id: match.id });
+    if (match.status && match.status !== 'Verified') {
+      setFieldErrors({ pet: `"${match.name}" is not yet verified. Verify the pet registration before consulting.` });
+      toast.error(`"${match.name}" is not yet verified and cannot be consulted yet.`);
+      return;
+    }
+    setSelectedPet({ pet_id: match.id, name: match.name, pet_code: match.pet_code, owner_name: match.owner_name, id: match.id, status: match.status });
   }, [preselectedPetId, pets]);
 
   const catalogProducts = useMemo(() => catalogGroups.flatMap((group) => group.products || []), [catalogGroups]);
@@ -244,7 +249,16 @@ export default function ClinicalRecords() {
     setScannedPets([]);
   }
 
+  function canConsult(pet) {
+    if (pet && pet.status && pet.status !== 'Verified') {
+      toast.error(`"${pet.name}" is not yet verified. Verify the pet registration before consulting.`);
+      return false;
+    }
+    return true;
+  }
+
   function selectBatchPet(pet) {
+    if (!canConsult(pet)) return;
     setSelectedPet(pet);
     setQrModalOpen(false);
     clearBatch();
@@ -256,6 +270,7 @@ export default function ClinicalRecords() {
   }
 
   function handlePetScanned(petData, mode) {
+    if (!canConsult(petData)) return;
     if (mode === "batch") {
       if (scannedPetIdsRef.current.has(petData.pet_id)) return;
       scannedPetIdsRef.current.add(petData.pet_id);
@@ -285,6 +300,7 @@ export default function ClinicalRecords() {
 
   const pickerFilteredPets = useMemo(() => {
     if (!pickerStatus) return pickerSource;
+    if (pickerStatus === 'Pending') return pickerSource.filter((pet) => pet.status !== 'Verified');
     return pickerSource.filter((pet) => pet.status === pickerStatus);
   }, [pickerSource, pickerStatus]);
 
@@ -300,7 +316,8 @@ export default function ClinicalRecords() {
   }, [searchPetName, pickerStatus]);
 
   function selectFromSearch(pet) {
-    setSelectedPet({ pet_id: pet.id, name: pet.name, pet_code: pet.pet_code, owner_name: pet.owner_name, id: pet.id });
+    if (!canConsult(pet)) return;
+    setSelectedPet({ pet_id: pet.id, name: pet.name, pet_code: pet.pet_code, owner_name: pet.owner_name, id: pet.id, status: pet.status });
     setSearchPetName("");
     setSearchResults([]);
     setSearchParams({});
@@ -348,6 +365,11 @@ export default function ClinicalRecords() {
     if (!selectedPet) {
       setFieldErrors({ pet: "Select a patient first." });
       toast.error("Select a patient first.");
+      return;
+    }
+    if (selectedPet.status && selectedPet.status !== 'Verified') {
+      setFieldErrors({ pet: `"${selectedPet.name}" is not yet verified. Verify the pet registration before consulting.` });
+      toast.error(`"${selectedPet.name}" is not yet verified and cannot be consulted yet.`);
       return;
     }
     if (!charges.length) {
@@ -533,6 +555,11 @@ export default function ClinicalRecords() {
                   </select>
                 </div>
               </div>
+
+              <p className="filter-hint" style={{ marginTop: "0.5rem" }}>
+                <strong>Only verified pets can be consulted.</strong> Pets whose registration is
+                still pending must first be verified in Staff &rarr; Verify Registration.
+              </p>
 
               {isPickerSearching && (
                 <p className="filter-hint">

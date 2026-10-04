@@ -310,11 +310,12 @@ async function addClinicalRecord(req, res) {
         transactionStarted = false;
       } else {
         const [queueRows] = await connection.query(
-          `SELECT q.id, q.pet_id, q.batch_id, q.status, q.veterinarian_id, p.name AS pet_name, p.pet_code, p.pet_owner_id, po.user_id AS owner_user_id FROM clinic_queue q JOIN pets p ON p.id = q.pet_id JOIN pet_owners po ON po.id = p.pet_owner_id WHERE q.id = ? LIMIT 1 FOR UPDATE`,
+          `SELECT q.id, q.pet_id, q.batch_id, q.status, q.veterinarian_id, p.name AS pet_name, p.pet_code, p.status AS pet_status, p.pet_owner_id, po.user_id AS owner_user_id FROM clinic_queue q JOIN pets p ON p.id = q.pet_id JOIN pet_owners po ON po.id = p.pet_owner_id WHERE q.id = ? LIMIT 1 FOR UPDATE`,
           [queueId],
         );
         queueRow = queueRows[0] || null;
         if (!queueRow) throw clinicalError(404, 'Queue entry not found.');
+        if (queueRow.pet_status !== 'Verified') throw clinicalError(409, `${queueRow.pet_name} is not yet verified. Verify the pet registration before consulting.`);
         if (Number(queueRow.pet_id) !== petId) throw clinicalError(409, 'The queue entry does not match the selected pet.');
         if (!['Waiting', 'In Consultation'].includes(queueRow.status)) throw clinicalError(409, 'The queue entry has already been finalized.');
         if (req.user.role === 'Veterinarian' && queueRow.veterinarian_id != null && Number(queueRow.veterinarian_id) !== Number(req.user.id)) throw clinicalError(409, 'This queue entry is assigned to another veterinarian.');
@@ -387,9 +388,10 @@ async function addClinicalRecord(req, res) {
         await connection.rollback();
         transactionStarted = false;
       } else {
-        const [petRows] = await connection.query(`SELECT p.name AS pet_name, p.pet_code, p.pet_owner_id, po.user_id AS owner_user_id FROM pets p JOIN pet_owners po ON po.id = p.pet_owner_id WHERE p.id = ? LIMIT 1`, [petId]);
+        const [petRows] = await connection.query(`SELECT p.name AS pet_name, p.pet_code, p.status, p.pet_owner_id, po.user_id AS owner_user_id FROM pets p JOIN pet_owners po ON po.id = p.pet_owner_id WHERE p.id = ? LIMIT 1`, [petId]);
         const petRow = petRows[0];
         if (!petRow) throw clinicalError(404, 'Pet not found.');
+        if (petRow.status !== 'Verified') throw clinicalError(409, `${petRow.pet_name} is not yet verified. Verify the pet registration before consulting.`);
 
         const productIds = chargeInput.map((c) => c.catalogProductId);
         const products = [];
@@ -508,11 +510,14 @@ async function receiveMobileScanResult(req, res) {
   const scanMode = mode === "batch" ? "batch" : "single";
   try {
     const [petRows] = await db.query(
-      `SELECT p.id AS pet_id, p.name, p.pet_code, po.full_name AS owner_name FROM pets p JOIN pet_owners po ON po.id = p.pet_owner_id WHERE p.id = ? LIMIT 1`,
+      `SELECT p.id AS pet_id, p.name, p.pet_code, p.status, po.full_name AS owner_name FROM pets p JOIN pet_owners po ON po.id = p.pet_owner_id WHERE p.id = ? LIMIT 1`,
       [petId],
     );
     if (!petRows[0]) {
       return res.status(404).json({ success: false, message: "Pet not found." });
+    }
+    if (petRows[0].status !== 'Verified') {
+      return res.status(409).json({ success: false, message: `${petRows[0].name} is not yet verified. Only verified pets can be consulted.` });
     }
     // Only database values are stored, so a scan cannot fabricate a patient.
     const resolved = {
@@ -520,6 +525,7 @@ async function receiveMobileScanResult(req, res) {
       id: petRows[0].pet_id,
       name: petRows[0].name,
       pet_code: petRows[0].pet_code,
+      status: petRows[0].status,
       owner_name: petRows[0].owner_name,
     };
     const [rows] = await db.query(

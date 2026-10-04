@@ -487,6 +487,7 @@ async function scanOwnerQr(req, res) {
          p.id AS pet_id,
          p.name AS pet_name,
          p.pet_code AS pet_code,
+         p.status AS pet_status,
          p.sex AS pet_sex,
          p.color AS pet_color,
          p.photo AS pet_photo,

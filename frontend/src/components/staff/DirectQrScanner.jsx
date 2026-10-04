@@ -80,6 +80,7 @@ export default function DirectQrScanner({
           name: owner.pet_name,
           pet_code: owner.pet_code,
           owner_name: owner.full_name,
+          status: owner.pet_status,
           id: owner.pet_id,
         };
 
