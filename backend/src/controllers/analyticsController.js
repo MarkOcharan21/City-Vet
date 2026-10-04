@@ -699,4 +699,5 @@ module.exports = {
     getCharts,
     getTraceability,
     getBarangayHeatmap,
+    geocodeAddress,
 };
