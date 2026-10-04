@@ -89,7 +89,9 @@ finishLogin(res.data.token, res.data.user);
 
 }catch(err){
 
-setError(err.response?.data?.message || "Login failed.");
+// No response = network/timeout (e.g. the free server is waking up) — say so
+// plainly instead of the generic message.
+setError(err.response?.data?.message || "Cannot reach the server. It may be waking up — wait a few seconds, then try again.");
 
 }
 
@@ -136,7 +138,7 @@ async function handleCodeSubmit(e) {
       sessionStorage.removeItem(PRE_TOKEN_KEY);
       return;
     }
-    setError(err.response?.data?.message || "Could not verify access code.");
+    setError(err.response?.data?.message || "Cannot reach the server. It may be waking up — wait a few seconds, then try again.");
   } finally {
     setLoading(false);
   }
