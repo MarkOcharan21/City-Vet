@@ -12251,13 +12251,13 @@ body:has(.clinic-access-page)::before {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-.aat-table-card .data-table th:nth-child(1) { width: 26%; }
-.aat-table-card .data-table th:nth-child(2) { width: 15%; }
-.aat-table-card .data-table th:nth-child(3) { width: 11%; }
+.aat-table-card .data-table th:nth-child(1) { width: 24%; }
+.aat-table-card .data-table th:nth-child(2) { width: 14%; }
+.aat-table-card .data-table th:nth-child(3) { width: 14%; }
 .aat-table-card .data-table th:nth-child(4) { width: 7%; }
-.aat-table-card .data-table th:nth-child(5) { width: 16%; }
+.aat-table-card .data-table th:nth-child(5) { width: 15%; }
 .aat-table-card .data-table th:nth-child(6) { width: 13%; }
-.aat-table-card .data-table th:nth-child(7) { width: 12%; }
+.aat-table-card .data-table th:nth-child(7) { width: 13%; }
 .aat-cell-activity { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
 .aat-cell-description { font-size: 0.84rem; color: var(--color-text-muted); line-height: 1.35; }
 .aat-cell-user { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
@@ -12330,11 +12330,11 @@ body:has(.clinic-access-page)::before {
   transition: all 0.2s ease;
 }
 .aat-modal-close:hover { color: var(--color-primary); border-color: var(--color-primary); }
-.aat-modal-body { padding: 1.5rem; overflow-y: auto; }
+.aat-modal-body { padding: 1.5rem; overflow-y: auto; overflow-x: hidden; }
 
 .aat-detail-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, minmax(0, 1fr)));
   gap: 1.1rem 1.5rem;
   margin-bottom: 1.5rem;
 }
@@ -12355,9 +12355,18 @@ body:has(.clinic-access-page)::before {
   font-size: 0.95rem;
   color: var(--color-ink);
 }
-.aat-diff-table { margin: 0; }
-.aat-diff-table td { font-size: 0.84rem; vertical-align: top; }
-.aat-diff-table td:first-child { width: 30%; }
+.aat-diff { min-width: 0; }
+.aat-diff-table { margin: 0; table-layout: fixed; width: 100%; min-width: 0; }
+.aat-diff-table th, .aat-diff-table td {
+  font-size: 0.84rem;
+  vertical-align: top;
+  padding: 0.5rem 0.6rem;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+.aat-diff-table th:nth-child(1), .aat-diff-table td:nth-child(1) { width: 24%; }
+.aat-diff-table th:nth-child(2), .aat-diff-table td:nth-child(2) { width: 38%; }
+.aat-diff-table th:nth-child(3), .aat-diff-table td:nth-child(3) { width: 38%; }
 .aat-diff-old { color: var(--color-text-muted); text-decoration: line-through; text-decoration-color: #e11d48; }
 .aat-diff-new { color: var(--color-success); font-weight: 600; }
 .aat-diff-json {

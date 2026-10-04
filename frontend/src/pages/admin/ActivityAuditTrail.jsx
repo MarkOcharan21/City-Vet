@@ -775,12 +775,7 @@ export default function ActivityAuditTrail() {
                 ) : null
               )}
 
-              {viewTarget.user_agent && (
-                <p className="aat-ua">
-                  <RefreshCw size={13} /> {viewTarget.user_agent}
-                </p>
-              )}
-            </div>
+              </div>
           </div>
         </div>
       )}
