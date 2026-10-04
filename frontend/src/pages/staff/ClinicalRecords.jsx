@@ -1149,7 +1149,7 @@ export default function ClinicalRecords() {
 
       {recordsModalOpen && (
         <div className="receipt-modal-overlay" onClick={() => setRecordsModalOpen(false)}>
-          <div className="receipt-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "900px" }}>
+          <div className="receipt-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "1000px", maxHeight: "85vh" }}>
             <div className="receipt-modal-head">
               <h3>Pet Records</h3>
               <button type="button" className="receipt-modal-close" onClick={() => setRecordsModalOpen(false)}>
@@ -1162,8 +1162,8 @@ export default function ClinicalRecords() {
                 <LoadingSpinner text="Loading records..." fullPage={false} />
               </div>
             ) : (
-              <div className="receipt-modal-body">
-                <div className="receipt-meta">
+              <div className="receipt-modal-body" style={{ maxHeight: "calc(85vh - 180px)", overflowY: "auto" }}>
+                <div className="receipt-meta" style={{ marginBottom: "1.5rem" }}>
                   <div>
                     <span>Patient</span>
                     <strong>{selectedPet?.name} · {selectedPet?.pet_code}</strong>
@@ -1174,62 +1174,87 @@ export default function ClinicalRecords() {
                   </div>
                 </div>
 
-                {petRecords?.clinical?.length > 0 && (
-                  <div className="receipt-prescription">
-                    <h4>Recent Consultations</h4>
-                    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
-                      {petRecords.clinical.slice(0, 5).map((record) => (
-                        <div key={record.id} style={{ 
-                          padding: "0.75rem", 
-                          border: "1px solid #e5e7eb", 
-                          borderRadius: "8px", 
-                          marginBottom: "0.5rem",
-                          backgroundColor: "#f9fafb"
-                        }}>
-                          <div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>
-                            {formatDate(record.consultation_date)}
-                          </div>
-                          <div style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "0.25rem" }}>
-                            <strong>Diagnosis:</strong> {record.diagnosis || "Not recorded"}
-                          </div>
-                          {record.treatment_plan && (
-                            <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-                              <strong>Treatment:</strong> {record.treatment_plan}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+                  {petRecords?.clinical?.length > 0 && (
+                    <div className="receipt-prescription" style={{ marginBottom: 0 }}>
+                      <h4 style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+                        <FileText size={16} />
+                        Recent Consultations
+                      </h4>
+                      <div style={{ 
+                        maxHeight: "400px", 
+                        overflowY: "auto", 
+                        padding: "0.5rem",
+                        backgroundColor: "#f9fafb",
+                        borderRadius: "8px",
+                        border: "1px solid #e5e7eb"
+                      }}>
+                        {petRecords.clinical.slice(0, 5).map((record) => (
+                          <div key={record.id} style={{ 
+                            padding: "1rem", 
+                            backgroundColor: "#ffffff", 
+                            borderRadius: "6px", 
+                            marginBottom: "0.75rem",
+                            border: "1px solid #e5e7eb",
+                            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)"
+                          }}>
+                            <div style={{ fontWeight: "600", marginBottom: "0.5rem", color: "#111827" }}>
+                              {formatDate(record.consultation_date)}
                             </div>
-                          )}
-                        </div>
-                      ))}
+                            <div style={{ fontSize: "0.875rem", color: "#4b5563", marginBottom: "0.5rem", lineHeight: "1.5" }}>
+                              <strong style={{ color: "#111827" }}>Diagnosis:</strong> {record.diagnosis || "Not recorded"}
+                            </div>
+                            {record.treatment_plan && (
+                              <div style={{ fontSize: "0.875rem", color: "#4b5563", lineHeight: "1.5" }}>
+                                <strong style={{ color: "#111827" }}>Treatment:</strong> {record.treatment_plan}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {petRecords?.vaccinations?.length > 0 && (
-                  <div className="receipt-prescription">
-                    <h4>Vaccination History</h4>
-                    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
-                      {petRecords.vaccinations.slice(0, 5).map((vaccine) => (
-                        <div key={vaccine.id} style={{ 
-                          padding: "0.75rem", 
-                          border: "1px solid #e5e7eb", 
-                          borderRadius: "8px", 
-                          marginBottom: "0.5rem",
-                          backgroundColor: "#f9fafb"
-                        }}>
-                          <div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>
-                            {vaccine.vaccine_name}
+                  {petRecords?.vaccinations?.length > 0 && (
+                    <div className="receipt-prescription" style={{ marginBottom: 0 }}>
+                      <h4 style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+                        <Pill size={16} />
+                        Vaccination History
+                      </h4>
+                      <div style={{ 
+                        maxHeight: "400px", 
+                        overflowY: "auto", 
+                        padding: "0.5rem",
+                        backgroundColor: "#f9fafb",
+                        borderRadius: "8px",
+                        border: "1px solid #e5e7eb"
+                      }}>
+                        {petRecords.vaccinations.slice(0, 5).map((vaccine) => (
+                          <div key={vaccine.id} style={{ 
+                            padding: "1rem", 
+                            backgroundColor: "#ffffff", 
+                            borderRadius: "6px", 
+                            marginBottom: "0.75rem",
+                            border: "1px solid #e5e7eb",
+                            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)"
+                          }}>
+                            <div style={{ fontWeight: "600", marginBottom: "0.5rem", color: "#111827" }}>
+                              {vaccine.vaccine_name}
+                            </div>
+                            <div style={{ fontSize: "0.875rem", color: "#4b5563" }}>
+                              <strong style={{ color: "#111827" }}>Date:</strong> {formatDate(vaccine.vaccination_date)}
+                            </div>
                           </div>
-                          <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-                            <strong>Date:</strong> {formatDate(vaccine.vaccination_date)}
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {(!petRecords?.clinical?.length && !petRecords?.vaccinations?.length) && (
-                  <div className="empty-state-cell" style={{ padding: "2rem" }}>
-                    No records found for this pet.
+                  <div className="empty-state-cell" style={{ padding: "3rem", textAlign: "center" }}>
+                    <ClipboardList size={48} style={{ color: "#9ca3af", marginBottom: "1rem" }} />
+                    <p style={{ color: "#6b7280", fontSize: "1rem" }}>No records found for this pet.</p>
                   </div>
                 )}
               </div>
