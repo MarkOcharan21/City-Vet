@@ -7908,7 +7908,7 @@ body:has(.clinic-access-page)::before {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1rem 1.25rem;
+  padding: 0.85rem 1.25rem 0.55rem;
 }
 
 .traceability-location-kicker {
@@ -7933,10 +7933,10 @@ body:has(.clinic-access-page)::before {
 }
 
 .traceability-location-map {
-  height: 400px;
+  height: 520px;
   width: 100%;
   background: linear-gradient(145deg, #e9f0ec, #dbe4df);
-  border-radius: 0 0 12px 12px;
+  border-radius: 11px;
   overflow: hidden;
 }
 
@@ -8232,6 +8232,11 @@ body:has(.clinic-access-page)::before {
 
 .traceability-map-wrap {
   position: relative;
+  margin: 0 0.85rem 0.9rem;
+  border: 3px solid var(--color-primary);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(200, 16, 46, 0.18);
 }
 
 .traceability-location-map .leaflet-control-zoom {
@@ -8348,7 +8353,7 @@ body:has(.clinic-access-page)::before {
   }
 
   .traceability-location-map {
-    height: 300px;
+    height: 420px;
   }
 
   .traceability-owner-card {
@@ -8471,7 +8476,7 @@ body:has(.clinic-access-page)::before {
 }
 
 .traceability-location-map.traceability-heatmap-map {
-  height: 460px;
+  height: 520px;
 }
 
 /* ===== Traceability — Heatmap popup styling ===== */
@@ -8549,7 +8554,7 @@ body:has(.clinic-access-page)::before {
   }
 
   .traceability-location-map.traceability-heatmap-map {
-    height: 340px;
+    height: 420px;
   }
 }
 
