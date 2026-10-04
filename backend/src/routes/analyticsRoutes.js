@@ -11,7 +11,8 @@ const {
     getSummary,
     getCharts,
     getTraceability,
-    getBarangayHeatmap
+    getBarangayHeatmap,
+    geocodeAddress
 } = require("../controllers/analyticsController");
 
 router.get(
@@ -67,6 +68,17 @@ router.get(
         "Veterinarian"
     ]),
     getTraceability
+);
+
+router.post(
+    "/geocode",
+    auth,
+    requireRole([
+        "Admin",
+        "Staff",
+        "Veterinarian"
+    ]),
+    geocodeAddress
 );
 
 module.exports = router;

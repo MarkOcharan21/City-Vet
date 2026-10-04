@@ -1727,6 +1727,51 @@ body:has(.clinic-access-page)::before {
   line-height: 1.45;
 }
 
+.auth-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.auth-field-row .auth-field {
+  margin-bottom: 0;
+}
+
+.auth-gps-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 0.7rem;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.auth-gps-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: rgba(200, 16, 46, 0.05);
+}
+
+.auth-gps-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.auth-gps-error {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-danger, #c0392b);
+  line-height: 1.45;
+}
+
 .auth-register-form .form-error,
 .auth-register-form .form-success {
   margin: 0;
@@ -11973,6 +12018,49 @@ body:has(.clinic-access-page)::before {
   background: var(--color-bg);
   color: var(--color-text-muted);
   cursor: not-allowed;
+}
+
+.settings-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.settings-field-row .settings-field {
+  margin-bottom: 0;
+}
+
+.settings-gps-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.settings-gps-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: rgba(200, 16, 46, 0.05);
+}
+
+.settings-gps-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.settings-field-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
 }
 .settings-actions {
   display: flex;

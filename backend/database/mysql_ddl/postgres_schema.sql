@@ -285,10 +285,13 @@ CREATE TABLE "owner_locations" (
   "latitude" numeric(10,7) NOT NULL,
   "longitude" numeric(10,7) NOT NULL,
   "accuracy_meters" numeric(10,2),
+  "source" text COLLATE "ci" NOT NULL DEFAULT 'seed',
+  "query_address" varchar(500) COLLATE "ci",
   "status" text COLLATE "ci" NOT NULL DEFAULT 'active',
   "recorded_at" timestamp NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
-  CONSTRAINT "owner_locations_status_check" CHECK ("status" IN ('active', 'inactive'))
+  CONSTRAINT "owner_locations_status_check" CHECK ("status" IN ('active', 'inactive')),
+  CONSTRAINT "owner_locations_source_check" CHECK ("source" IN ('seed', 'gps', 'geocode'))
 );
 
 CREATE TABLE "password_reset_requests" (
@@ -409,6 +412,9 @@ CREATE TABLE "pet_owners" (
   "contact_number" varchar(20) COLLATE "ci",
   "address" varchar(255) COLLATE "ci",
   "barangay" varchar(100) COLLATE "ci",
+  "subdivision" varchar(150) COLLATE "ci",
+  "block" varchar(20) COLLATE "ci",
+  "lot" varchar(20) COLLATE "ci",
   "created_at" timestamp NOT NULL DEFAULT now(),
   "is_payment_current" smallint DEFAULT 0,
   "emergency_contact_name" varchar(150) COLLATE "ci",

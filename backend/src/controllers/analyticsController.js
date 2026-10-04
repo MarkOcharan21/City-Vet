@@ -1,12 +1,34 @@
 ﻿const db = require("../config/db");
 const { vetNameExpr } = require("../utils/vetNameFormat");
 const { dateFormat, mondayIndex } = require("../config/sql");
+const { geocode, buildSearchAddress } = require("../utils/geocode");
 
 const BARANGAY_LIST = [
-  'Baclaran', 'Banay-banay', 'Banlic', 'Bigaa', 'Butong', 'Casile', 'Diezmo',
+  'Baclaran', 'Banaybanay', 'Banlic', 'Bigaa', 'Butong', 'Casile', 'Diezmo',
   'Gulod', 'Mamatid', 'Marinig', 'Niugan', 'Pittland', 'Pulo', 'Sala',
-  'San Isidro', 'Barangay 1 (Poblacion)', 'Barangay 2 (Poblacion)', 'Barangay 3 (Poblacion)'
+  'San Isidro', 'Barangay Uno (Pob.)', 'Barangay Dos (Pob.)', 'Barangay Tres (Pob.)'
 ];
+
+// POST /api/analytics/geocode
+// Lets registration/staff forms look up a pin for a Cabuyao address (or pre-fill
+// it when the browser GPS is unavailable). Server-side so it is throttled and
+// cached per the utility module instead of punching Nominatim from the browser.
+async function geocodeAddress(req, res) {
+    try {
+        const { address, barangay, subdivision, block, lot } = req.body || {};
+        const queryText = buildSearchAddress({ address, barangay, subdivision, block, lot });
+        if (!queryText) {
+            return res.json({ success: false, message: 'Provide an address or barangay to geocode.' });
+        }
+        const geo = await geocode(queryText);
+        if (!geo) {
+            return res.json({ success: false, message: 'Could not resolve that Cabuyao address.' });
+        }
+        res.json({ success: true, lat: geo.lat, lon: geo.lon, display_name: geo.display_name });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
 
 function normalizeFilter(filter) {
     const valid = ["today", "week", "month", "year", "all"];
@@ -487,9 +509,17 @@ async function getTraceability(req, res) {
 
         const [[pet]] = await db.query(`
             SELECT p.*, po.full_name as owner_name, po.contact_number, po.address, po.barangay,
+                   po.subdivision, po.block, po.lot,
+                   loc.latitude, loc.longitude, loc.accuracy_meters AS loc_accuracy, loc.source AS loc_source,
                    s.species_name, COALESCE(b.breed_name, p.breed_custom) AS breed_name
             FROM pets p
             JOIN pet_owners po ON p.pet_owner_id = po.id
+            LEFT JOIN owner_locations loc ON loc.id = (
+                SELECT l.id FROM owner_locations l
+                WHERE l.pet_owner_id = po.id AND l.status = 'active'
+                ORDER BY l.recorded_at DESC, l.id DESC
+                LIMIT 1
+            )
             LEFT JOIN species s ON p.species_id = s.id
             LEFT JOIN breeds b ON p.breed_id = b.id
             WHERE p.id = ?
@@ -548,6 +578,13 @@ async function getTraceability(req, res) {
                 contact_number: pet.contact_number,
                 address: pet.address,
                 barangay: pet.barangay,
+                subdivision: pet.subdivision,
+                block: pet.block,
+                lot: pet.lot,
+                lat: pet.latitude,
+                lng: pet.longitude,
+                loc_accuracy: pet.loc_accuracy,
+                loc_source: pet.loc_source,
             },
             qr,
             vaccinations,

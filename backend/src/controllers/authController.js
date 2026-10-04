@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { sendResetCodeEmail, sendRegistrationOtpEmail, sendNotificationEmail, isEmailConfigured } = require('../services/emailService');
 const { logAudit } = require('../middleware/auditMiddleware');
 const { createStaffResetRequest } = require('./passwordResetController');
+const { syncOwnerLocation } = require('../utils/ownerLocation');
 const {
   trim,
   isValidEmail,
@@ -230,7 +231,7 @@ async function registerOwner(req, res) {
 // account. The credentials used here are the ones that get stored — only the
 // person who owns the email inbox can complete this step.
 async function verifyRegistration(req, res) {
-  const { email, otp, password, full_name, contact_number, address, barangay } = req.body;
+  const { email, otp, password, full_name, contact_number, address, barangay, subdivision, block, lot, gps_lat, gps_lng, gps_accuracy } = req.body;
 
   const validation = validateOwnerRegistration({ email, password, full_name, contact_number, barangay });
   if (!validation.valid) {
@@ -297,20 +298,32 @@ async function verifyRegistration(req, res) {
     );
 
     const [ownerRows] = await db.query('SELECT id FROM pet_owners WHERE user_id = ?', [user.id]);
+    let ownerId = null;
     if (ownerRows.length > 0) {
+      ownerId = ownerRows[0].id;
       await db.query(
         `UPDATE pet_owners
-         SET full_name = ?, contact_number = ?, address = ?, barangay = ?
+         SET full_name = ?, contact_number = ?, address = ?, barangay = ?,
+             subdivision = ?, block = ?, lot = ?
          WHERE user_id = ?`,
-        [fullName, trim(contact_number) || null, trim(address) || null, trim(barangay), user.id]
+        [fullName, trim(contact_number) || null, trim(address) || null, trim(barangay),
+         trim(subdivision) || null, trim(block) || null, trim(lot) || null, user.id]
       );
     } else {
-      await db.query(
-        `INSERT INTO pet_owners (user_id, full_name, contact_number, address, barangay)
-         VALUES (?, ?, ?, ?, ?)`,
-        [user.id, fullName, trim(contact_number) || null, trim(address) || null, trim(barangay)]
+      const [insertRes] = await db.query(
+        `INSERT INTO pet_owners (user_id, full_name, contact_number, address, barangay, subdivision, block, lot)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [user.id, fullName, trim(contact_number) || null, trim(address) || null, trim(barangay),
+         trim(subdivision) || null, trim(block) || null, trim(lot) || null]
       );
+      ownerId = insertRes.insertId;
     }
+
+    await syncOwnerLocation(
+      ownerId,
+      { address, barangay, subdivision, block, lot },
+      gps_lat && gps_lng ? { latitude: gps_lat, longitude: gps_lng, accuracy_meters: gps_accuracy } : null,
+    );
 
     res.json({ success: true, message: 'Email verified. Your account is now active — you may log in.' });
 

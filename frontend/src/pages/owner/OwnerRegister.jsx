@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, Mail } from "lucide-react";
+import { ArrowLeft, MapPin, Mail, Crosshair } from "lucide-react";
 import api from "../../services/api";
 import PasswordInput from "../../components/PasswordInput";
 import PasswordStrength from "../../components/PasswordStrength";
@@ -14,6 +14,7 @@ import SuccessModal from "../../components/ui/SuccessModal";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import useMinLoading from "../../hooks/useMinLoading";
 import { validateOwnerRegistration, isValidOtp } from "../../utils/validation";
+import { requestCurrentPosition } from "../../utils/geolocation";
 
 const OTP_TTL_SECONDS = 300;
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -32,7 +33,14 @@ export default function OwnerRegister() {
     contact_number: "",
     address: "",
     barangay: "",
+    subdivision: "",
+    block: "",
+    lot: "",
   });
+
+  const [gps, setGps] = useState(null);
+  const [locatingGps, setLocatingGps] = useState(false);
+  const [gpsError, setGpsError] = useState("");
 
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
@@ -74,6 +82,18 @@ export default function OwnerRegister() {
     setForm((prev) => ({ ...prev, [name]: nextValue }));
     setFieldErrors((prev) => ({ ...prev, [name]: '' }));
     setError('');
+  }
+
+  async function captureGps() {
+    setGpsError("");
+    setLocatingGps(true);
+    const position = await requestCurrentPosition();
+    setLocatingGps(false);
+    if (!position) {
+      setGpsError("Could not get a GPS fix inside Cabuyao City. You can still register — save your address and a location is mapped automatically.");
+      return;
+    }
+    setGps(position);
   }
 
   async function handleSubmit(e) {
@@ -132,7 +152,13 @@ export default function OwnerRegister() {
     setVerifying(true);
 
     try {
-      const res = await api.post("/auth/verify-registration", { ...form, otp });
+      const res = await api.post("/auth/verify-registration", {
+        ...form,
+        otp,
+        gps_lat: gps?.lat || null,
+        gps_lng: gps?.lng || null,
+        gps_accuracy: gps?.accuracy || null,
+      });
 
       setVerified(true);
       setOtpMessage(res.data.message || "Email verified. Your account is now active.");
@@ -332,6 +358,63 @@ export default function OwnerRegister() {
                     Choose the barangay where you reside in Cabuyao City, Laguna.
                   </p>
                   <FieldError message={fieldErrors.barangay} />
+                </div>
+
+                <div className="auth-field">
+                  <label htmlFor="subdivision">Village / Subdivision</label>
+                  <input
+                    id="subdivision"
+                    name="subdivision"
+                    placeholder="e.g. San Antonio Village (optional)"
+                    value={form.subdivision}
+                    onChange={handleChange}
+                  />
+                </div>
+
+                <div className="auth-field auth-field-row">
+                  <div className="auth-field">
+                    <label htmlFor="block">Block</label>
+                    <input
+                      id="block"
+                      name="block"
+                      placeholder="e.g. 12"
+                      value={form.block}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="auth-field">
+                    <label htmlFor="lot">Lot</label>
+                    <input
+                      id="lot"
+                      name="lot"
+                      placeholder="e.g. 27"
+                      value={form.lot}
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
+
+                <div className="auth-field">
+                  <button
+                    type="button"
+                    className="auth-gps-btn"
+                    onClick={captureGps}
+                    disabled={locatingGps}
+                  >
+                    <Crosshair size={15} />
+                    {locatingGps
+                      ? "Detecting location..."
+                      : gps
+                        ? "Location pinned ✓"
+                        : "Use my current location"}
+                  </button>
+                  {gpsError && <p className="auth-gps-error">{gpsError}</p>}
+                  {gps && !gpsError && (
+                    <p className="auth-field-hint">
+                      Pin will be placed at your exact GPS location so barangay
+                      officials can find you.
+                    </p>
+                  )}
                 </div>
               </section>
 

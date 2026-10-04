@@ -1583,3 +1583,22 @@
     grid-column: auto;
   }
 }
+.booklet-edit__field-inline {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.booklet-edit__btn--secondary {
+  background: var(--cvo-paper);
+  border-color: var(--cvo-red);
+  color: var(--cvo-red);
+  width: 100%;
+  justify-content: center;
+}
+.booklet-edit__btn--secondary:hover:not(:disabled) {
+  background: var(--cvo-red-soft);
+}
+.booklet-edit__btn--secondary:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}

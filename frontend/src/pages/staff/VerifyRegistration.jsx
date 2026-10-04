@@ -423,6 +423,11 @@ export default function VerifyRegistration() {
                     ['Color / Markings', viewPet.color || '—'],
                     ['Birthdate', formatDate(viewPet.birthdate)],
                     ['Registered Barangay', viewPet.barangay || '—'],
+                    ['Village / Subdivision', viewPet.subdivision || '—'],
+                    [
+                      'Block / Lot',
+                      [viewPet.block && `Blk ${viewPet.block}`, viewPet.lot && `Lot ${viewPet.lot}`].filter(Boolean).join(', ') || '—',
+                    ],
                     ['Owner', viewPet.owner_name || '—'],
                     ['Registered', formatDate(viewPet.created_at)],
                     ['QR Code', viewPet.qr_status === 'Generated' ? 'Generated' : 'Pending'],

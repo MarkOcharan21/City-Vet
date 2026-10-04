@@ -10,6 +10,7 @@ const { generateQrForPet } = require("../utils/qrGenerator");
 const { uploadLocalFile, isAbsoluteUrl } = require("../utils/cloudUpload");
 const { validatePetRegistration, PET_SEX_VALUES } = require("../utils/validation");
 const { logAudit } = require("../middleware/auditMiddleware");
+const { syncOwnerLocation } = require("../utils/ownerLocation");
 
 // POST /api/pets  (Pet Owner registers a pet)
 async function registerPet(req, res) {
@@ -239,14 +240,20 @@ async function updatePetOwnerInfo(req, res) {
     contact_number,
     address,
     barangay,
+    subdivision,
+    block,
+    lot,
     emergency_contact_name,
     emergency_contact_number,
+    gps_lat,
+    gps_lng,
+    gps_accuracy,
   } = req.body;
 
   try {
     const [[pet]] = await db.query(
       `SELECT p.id, p.name, po.id AS owner_row_id, po.full_name, po.contact_number,
-              po.address, po.barangay, po.emergency_contact_name, po.emergency_contact_number
+              po.address, po.barangay, po.subdivision, po.block, po.lot, po.emergency_contact_name, po.emergency_contact_number
        FROM pets p
        JOIN pet_owners po ON p.pet_owner_id = po.id
        WHERE p.id = ?`,
@@ -263,6 +270,9 @@ async function updatePetOwnerInfo(req, res) {
         contact_number = ?,
         address = ?,
         barangay = ?,
+        subdivision = ?,
+        block = ?,
+        lot = ?,
         emergency_contact_name = ?,
         emergency_contact_number = ?
        WHERE id = ?`,
@@ -271,10 +281,19 @@ async function updatePetOwnerInfo(req, res) {
         contact_number || null,
         address || null,
         barangay || null,
+        subdivision || null,
+        block || null,
+        lot || null,
         emergency_contact_name || null,
         emergency_contact_number || null,
         pet.owner_row_id,
       ]
+    );
+
+    await syncOwnerLocation(
+      pet.owner_row_id,
+      { address, barangay, subdivision, block, lot },
+      gps_lat && gps_lng ? { latitude: gps_lat, longitude: gps_lng, accuracy_meters: gps_accuracy } : null,
     );
 
     res.json({
@@ -292,6 +311,9 @@ async function updatePetOwnerInfo(req, res) {
         contact_number: pet.contact_number,
         address: pet.address,
         barangay: pet.barangay,
+        subdivision: pet.subdivision,
+        block: pet.block,
+        lot: pet.lot,
         emergency_contact_name: pet.emergency_contact_name,
         emergency_contact_number: pet.emergency_contact_number,
       },
@@ -300,6 +322,9 @@ async function updatePetOwnerInfo(req, res) {
         contact_number: contact_number || null,
         address: address || null,
         barangay: barangay || null,
+        subdivision: subdivision || null,
+        block: block || null,
+        lot: lot || null,
         emergency_contact_name: emergency_contact_name || null,
         emergency_contact_number: emergency_contact_number || null,
       },
@@ -362,7 +387,8 @@ async function getPetById(req, res) {
     const [rows] = await db.query(
       `SELECT p.*, s.species_name, COALESCE(b.breed_name, p.breed_custom) AS breed_name,
               qc.status AS qr_status, po.barangay, po.user_id AS owner_user_id,
-              po.full_name AS owner_name,
+              po.full_name AS owner_name, po.address, po.contact_number,
+              po.subdivision, po.block, po.lot,
               (SELECT COUNT(*) FROM vaccination_records vr WHERE vr.pet_id = p.id) AS vaccination_count,
               (SELECT COUNT(*) FROM vaccination_records vr
                  WHERE vr.pet_id = p.id
@@ -583,7 +609,8 @@ async function searchPets(req, res) {
              p.registration_date,
              s.species_name,
              COALESCE(b.breed_name, p.breed_custom) AS breed_name,
-             po.full_name AS owner_name, po.barangay, po.address, po.contact_number
+             po.full_name AS owner_name, po.barangay, po.address, po.contact_number,
+             po.subdivision, po.block, po.lot
       FROM pets p
       JOIN pet_owners po ON p.pet_owner_id = po.id
       LEFT JOIN species s ON p.species_id = s.id
@@ -673,7 +700,9 @@ async function getAllPets(req, res) {
   const { search, status, barangay } = req.query;
   try {
     let query = `
-      SELECT p.*, s.species_name, COALESCE(b.breed_name, p.breed_custom) AS breed_name, po.full_name AS owner_name, po.barangay
+      SELECT p.*, s.species_name, COALESCE(b.breed_name, p.breed_custom) AS breed_name,
+              po.full_name AS owner_name, po.barangay, po.address, po.contact_number,
+              po.subdivision, po.block, po.lot
       FROM pets p
       JOIN pet_owners po ON p.pet_owner_id = po.id
       LEFT JOIN species s ON p.species_id = s.id

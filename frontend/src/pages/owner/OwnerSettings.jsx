@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { KeyRound, Save, User } from 'lucide-react';
+import { KeyRound, Save, User, Crosshair } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import GlobalLoadingOverlay from '../../components/GlobalLoadingOverlay';
 import ErrorState from '../../components/ui/ErrorState';
+import { requestCurrentPosition } from '../../utils/geolocation';
 
 // Barangay list (mirrors backend constant — read-only on frontend)
 const CABUYAO_BARANGAYS = [
@@ -25,7 +26,12 @@ export function ProfileForm({ compact = false, onSaved }) {
 
   const [form, setForm] = useState({
     full_name: '', email: '', contact_number: '', address: '', barangay: '',
+    subdivision: '', block: '', lot: '',
   });
+
+  const [gps, setGps] = useState(null);
+  const [locatingGps, setLocatingGps] = useState(false);
+  const [gpsError, setGpsError] = useState('');
 
   function load() {
     setLoading(true);
@@ -40,6 +46,9 @@ export function ProfileForm({ compact = false, onSaved }) {
           contact_number: p.contact_number || '',
           address:        p.address        || '',
           barangay:       p.barangay       || '',
+          subdivision:    p.subdivision    || '',
+          block:          p.block          || '',
+          lot:            p.lot            || '',
         });
       })
       .catch((err) => setError(err.response?.data?.message || 'Could not load profile.'))
@@ -53,12 +62,29 @@ export function ProfileForm({ compact = false, onSaved }) {
     setMsg({ text: '', ok: true });
   }
 
+  async function captureGps() {
+    setGpsError('');
+    setLocatingGps(true);
+    const position = await requestCurrentPosition();
+    setLocatingGps(false);
+    if (!position) {
+      setGpsError("Could not get a GPS fix inside Cabuyao City. Saving your structured address still maps an approximate pin.");
+      return;
+    }
+    setGps(position);
+  }
+
   async function handleSave(e) {
     e.preventDefault();
     setSaving(true);
     setMsg({ text: '', ok: true });
     try {
-      await api.put('/owner/profile', form);
+      await api.put('/owner/profile', {
+        ...form,
+        gps_lat: gps?.lat || null,
+        gps_lng: gps?.lng || null,
+        gps_accuracy: gps?.accuracy || null,
+      });
       // Sync AuthContext so topbar greeting updates immediately
       if (setUser) setUser((prev) => ({ ...prev, full_name: form.full_name, email: form.email }));
       setMsg({ text: 'Profile saved successfully.', ok: true });
@@ -125,6 +151,44 @@ export function ProfileForm({ compact = false, onSaved }) {
         </div>
       )}
 
+      {!compact && (
+        <div className="settings-field">
+          <label htmlFor="sf-subdivision">Village / Subdivision</label>
+          <input
+            id="sf-subdivision"
+            type="text"
+            value={form.subdivision}
+            onChange={(e) => set('subdivision', e.target.value)}
+            placeholder="e.g. San Antonio Village (optional)"
+          />
+        </div>
+      )}
+
+      {!compact && (
+        <div className="settings-field settings-field-row">
+          <div className="settings-field">
+            <label htmlFor="sf-block">Block</label>
+            <input
+              id="sf-block"
+              type="text"
+              value={form.block}
+              onChange={(e) => set('block', e.target.value)}
+              placeholder="e.g. 12"
+            />
+          </div>
+          <div className="settings-field">
+            <label htmlFor="sf-lot">Lot</label>
+            <input
+              id="sf-lot"
+              type="text"
+              value={form.lot}
+              onChange={(e) => set('lot', e.target.value)}
+              placeholder="e.g. 27"
+            />
+          </div>
+        </div>
+      )}
+
       <div className="settings-field">
         <label htmlFor="sf-barangay">Barangay</label>
         <select
@@ -138,6 +202,23 @@ export function ProfileForm({ compact = false, onSaved }) {
           ))}
         </select>
       </div>
+
+      {!compact && (
+        <div className="settings-field">
+          <button type="button" className="settings-gps-btn" onClick={captureGps} disabled={locatingGps}>
+            <Crosshair size={15} />
+            {locatingGps
+              ? 'Detecting location…'
+              : gps ? 'Location pinned at your exact GPS point ✓' : 'Use my current location'}
+          </button>
+          {gpsError && <p className="settings-msg settings-msg--err">{gpsError}</p>}
+          {gps && !gpsError && (
+            <p className="settings-field-hint">
+              The Traceability map will drop the pin at your exact GPS point.
+            </p>
+          )}
+        </div>
+      )}
 
       {msg.text && (
         <p className={`settings-msg settings-msg--${msg.ok ? 'ok' : 'err'}`}>

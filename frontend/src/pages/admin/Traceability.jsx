@@ -6,6 +6,7 @@ import StatusBadge from '../../components/StatusBadge';
 import PetSearchSelect from '../../components/PetSearchSelect';
 import { Calendar, User, FileText, Syringe, Stethoscope, CheckCircle2, Clock, MapPin, PawPrint } from 'lucide-react';
 import { resolveMediaUrl } from '../../utils/mediaUrl';
+import { normalizeBarangay } from '../../data/cabuyaoBarangays';
 
 const NO_BARANGAY_KEY = '__none__';
 const CABUYAO_CENTER = [14.2471, 121.1367];
@@ -149,177 +150,107 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
     setLocationMessage('Locating the registered owner address...');
     setLocating(true);
 
-    // Improved address formatting for better Philippine geocoding
-    const formatAddressForGeocoding = (address, barangay) => {
-      const parts = [];
+    // 1) Stored coordinates win: a GPS capture or a geocode resolved at save
+    //    time is the most accurate pin we have, so use it directly.
+    const storedLat = Number(pet?.lat);
+    const storedLng = Number(pet?.lng);
+    const hasStored = Number.isFinite(storedLat) && Number.isFinite(storedLng);
 
-      // Add specific address if available
-      if (address && address.trim()) {
-        parts.push(address.trim());
+    const applyPosition = (position, message, zoomLevel) => {
+      if (cancelled) return;
+      setLocating(false);
+      setLocationMessage(message);
+      if (!markerRef.current) {
+        markerRef.current = L.marker(position, { icon: pinIcon }).addTo(map);
+      } else {
+        markerRef.current.setLatLng(position);
+        markerRef.current.setIcon(pinIcon);
       }
-
-      // Add barangay if available (this is crucial for Philippine locations)
-      if (barangay && barangay.trim() && barangay !== 'pulo') {
-        parts.push(`Barangay ${barangay.trim()}`);
-      }
-
-      // Always add city and province for context
-      parts.push('Cabuyao City');
-      parts.push('Laguna');
-      parts.push('Philippines');
-
-      return parts.join(', ');
+      map.setView(position, zoomLevel, { animate: true });
+      markerRef.current.unbindTooltip();
+      markerRef.current.bindTooltip(buildPetCardHtml(pet), {
+        permanent: true,
+        direction: 'top',
+        offset: hasPhoto ? [0, -74] : [0, -50],
+        className: 'traceability-pet-card',
+        interactive: false,
+      });
     };
 
-    const address = formatAddressForGeocoding(pet.address, pet.barangay);
-    const query = encodeURIComponent(address);
+    if (hasStored && CABUYAO_BOUNDS.contains(L.latLng(storedLat, storedLng))) {
+      const sourceMsg = pet.loc_source === 'gps'
+        ? 'Owner\u2019s GPS location'
+        : pet.loc_source === 'geocode'
+          ? 'Registered address location'
+          : 'Approximate registered location';
+      applyPosition(L.latLng(storedLat, storedLng), sourceMsg, 15);
+      return;
+    }
 
-    // Try multiple search strategies for better accuracy
-    const searchWithFallback = async () => {
+    // 2) Ask the backend to geocode the structured address (throttled + cached
+    //    server-side; the client no longer fires a burst of Nominatim calls).
+    const resolvePosition = async () => {
       try {
-        let results = [];
-
-        // Multiple search strategies in order of specificity
-        const searchStrategies = [
-          // Strategy 1: Full detailed address without bounding box (more flexible)
-          `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=ph&q=${query}`,
-          // Strategy 2: Address without "Barangay" prefix, different format
-          `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=ph&q=${encodeURIComponent(`${pet.address || ''}, ${pet.barangay || ''} barangay, Cabuyao City, Laguna`)}`,
-          // Strategy 3: Just barangay and city (more specific)
-          `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=ph&q=${encodeURIComponent(`${pet.barangay || ''} barangay, Cabuyao City, Laguna`)}`,
-          // Strategy 4: Try with "Brgy" abbreviation
-          `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=ph&q=${encodeURIComponent(`${pet.address || ''}, Brgy ${pet.barangay || ''}, Cabuyao City, Laguna`)}`,
-          // Strategy 5: Try specific village/subdivision name if present
-          pet.address && pet.address.includes('Hongkong')
-            ? `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=ph&q=${encodeURIComponent('Hongkong Village, Cabuyao City, Laguna')}`
-            : null,
-          // Strategy 6: With bounding box as last resort
-          `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=ph&bounded=1&viewbox=121.0700,14.3200,121.2100,14.1800&q=${query}`
-        ].filter(Boolean); // Remove null entries
-
-        for (const strategy of searchStrategies) {
-          if (cancelled) return;
-
-          try {
-            const response = await fetch(strategy);
-            if (!response.ok) continue;
-
-            const strategyResults = await response.json();
-            if (strategyResults && strategyResults.length > 0) {
-              results = strategyResults;
-              console.log('Geocoding results from strategy:', strategy);
-              console.log('Results:', strategyResults);
-              break; // Use first successful results
-            }
-          } catch (e) {
-            console.log('Search strategy failed:', e);
-            continue; // Try next strategy
-          }
-        }
-
-        if (cancelled) return;
-
-        // Pick the first result that is inside Cabuyao AND consistent with
-        // the pet's declared barangay; otherwise treat the geocode as unreliable.
-        let result = results.find((candidate) => validateResult(candidate, pet.barangay)) || null;
-        let position = result ? L.latLng(Number(result.lat), Number(result.lon)) : fallbackPosition;
-        let locationMessage = 'Cabuyao City location; exact address not found';
-        let isBarangayFallback = false;
-
-        // If no reliable geocoding result, try known subdivision coordinates first
-        if (!result && pet.address) {
-          const subdivisionKey = Object.keys(SUBDIVISION_COORDINATES).find(
-            key => pet.address.toLowerCase().includes(key.toLowerCase())
-          );
-
-          if (subdivisionKey && SUBDIVISION_COORDINATES[subdivisionKey]) {
-            position = L.latLng(SUBDIVISION_COORDINATES[subdivisionKey]);
-            locationMessage = `Approximate location in ${subdivisionKey}`;
-            isBarangayFallback = true;
-            console.log(`Using subdivision coordinates for ${subdivisionKey}:`, SUBDIVISION_COORDINATES[subdivisionKey]);
-          }
-        }
-
-        // If still no reliable result, use the barangay's official coordinates
-        if (!result && !isBarangayFallback && pet.barangay) {
-          const center = barangayCenter(pet.barangay);
-          if (center) {
-            position = L.latLng(center);
-            locationMessage = `Approximate location in Barangay ${pet.barangay}`;
-            isBarangayFallback = true;
-          }
-        }
-
-        if (result && CABUYAO_BOUNDS.contains(position)) {
-          locationMessage = 'Registered owner location';
-        }
-
-        if (!CABUYAO_BOUNDS.contains(position)) {
-          if (cancelled) return;
-          setLocating(false);
-          setLocationMessage('The registered address is outside Cabuyao City.');
-          if (markerRef.current) markerRef.current.remove();
-          markerRef.current = null;
-          map.setView(CABUYAO_CENTER, 12);
-          return;
-        }
-
-        setLocating(false);
-        setLocationMessage(locationMessage);
-        if (!markerRef.current) {
-          markerRef.current = L.marker(position, { icon: pinIcon }).addTo(map);
-        } else {
-          markerRef.current.setLatLng(position);
-          markerRef.current.setIcon(pinIcon);
-        }
-        // Use higher zoom for exact address, lower zoom for approximate barangay location
-        const zoomLevel = result ? 15 : (isBarangayFallback ? 13 : 12);
-        map.setView(position, zoomLevel, { animate: true });
-        markerRef.current.unbindTooltip();
-        markerRef.current.bindTooltip(buildPetCardHtml(pet), {
-          permanent: true,
-          direction: 'top',
-          offset: hasPhoto ? [0, -74] : [0, -50],
-          className: 'traceability-pet-card',
-          interactive: false,
+        const { data } = await api.post('/analytics/geocode', {
+          address: pet.address,
+          barangay: pet.barangay,
+          subdivision: pet.subdivision,
+          block: pet.block,
+          lot: pet.lot,
         });
+        if (!cancelled && data && data.success) {
+          const position = L.latLng(Number(data.lat), Number(data.lon));
+          if (CABUYAO_BOUNDS.contains(position)) {
+            applyPosition(position, 'Registered address location', 15);
+            return;
+          }
+        }
+      } catch (e) {
+        console.log('Server geocode unavailable:', e);
+      }
+      if (cancelled) return;
 
-      } catch (error) {
-        if (cancelled) return;
-        console.error('Geocoding error:', error);
-        setLocating(false);
-        setLocationMessage('Cabuyao City location; address lookup unavailable');
-        if (!markerRef.current) markerRef.current = L.marker(fallbackPosition, { icon: pinIcon }).addTo(map);
-        map.setView(fallbackPosition, 12);
+      // 3) Known subdivision coordinates before falling back to the barangay.
+      const addressText = [
+        pet.address,
+        pet.subdivision,
+        pet.barangay ? `Barangay ${pet.barangay}` : '',
+        pet.block,
+        pet.lot,
+      ]
+        .filter(Boolean)
+        .join(', ');
+      const subdivisionKey = addressText
+        ? Object.keys(SUBDIVISION_COORDINATES).find(
+            key => addressText.toLowerCase().includes(key.toLowerCase())
+          )
+        : null;
+      if (subdivisionKey && SUBDIVISION_COORDINATES[subdivisionKey]) {
+        applyPosition(L.latLng(SUBDIVISION_COORDINATES[subdivisionKey]), `Approximate location in ${subdivisionKey}`, 13);
+        return;
+      }
+
+      // 4) Barangay's official coordinates, then the city center as a last stop.
+      const center = pet.barangay ? barangayCenter(pet.barangay) : null;
+      if (center) {
+        applyPosition(L.latLng(center), `Approximate location in Barangay ${pet.barangay}`, 13);
+      } else {
+        applyPosition(fallbackPosition, 'Cabuyao City location; exact address not found', 12);
       }
     };
 
-    searchWithFallback();
+    resolvePosition();
 
     function barangayCenter(name) {
       if (!name) return null;
-      const lower = String(name).toLowerCase();
+      const canonical = normalizeBarangay(name);
+      if (BARANGAY_COORDINATES[canonical]) return BARANGAY_COORDINATES[canonical];
+      const lower = String(canonical).toLowerCase();
       const key = Object.keys(BARANGAY_COORDINATES).find(
         (k) => k.toLowerCase() === lower
           || (lower.includes(k.toLowerCase()) || k.toLowerCase().includes(lower)),
       );
       return key ? BARANGAY_COORDINATES[key] : null;
-    }
-
-    // Validate that a geocoded result is truly within Cabuyao AND close to the
-    // pet's declared barangay (geocoders sometimes return same-city places from
-    // the wrong side of town). We accept only results within ~4km of the
-    // barangay's known center; anything farther is treated as unreliable.
-    function validateResult(candidate, brgyName) {
-      if (!candidate) return false;
-      const lat = Number(candidate.lat);
-      const lon = Number(candidate.lon);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
-      const position = L.latLng(lat, lon);
-      if (!CABUYAO_BOUNDS.contains(position)) return false;
-      const center = barangayCenter(brgyName);
-      if (center && position.distanceTo(L.latLng(center)) > 4000) return false;
-      return true;
     }
 
     return () => { cancelled = true; };
@@ -368,6 +299,8 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
               <div className="traceability-owner-details">
                 <span><strong>Pet</strong>{pet.name || '—'}</span>
                 <span><strong>Barangay</strong>{pet.barangay || '—'}</span>
+                <span><strong>Village / Subdivision</strong>{pet.subdivision || '—'}</span>
+                <span><strong>Block / Lot</strong>{[pet.block && `Blk ${pet.block}`, pet.lot && `Lot ${pet.lot}`].filter(Boolean).join(', ') || '—'}</span>
                 <span><strong>Contact number</strong>{pet.contact_number || '—'}</span>
                 <span><strong>Address</strong>{pet.address || '—'}</span>
               </div>
@@ -431,7 +364,7 @@ function BarangayHeatmapMap({ data, loading, onSelectBarangay }) {
       data.forEach((row) => {
         try {
           const color = riskColor(row.risk_level);
-          const radius = BARANGAY_RADIUS[row.barangay] || BARANGAY_RADIUS['San Isidro'] || 1000;
+          const radius = BARANGAY_RADIUS[normalizeBarangay(row.barangay)] || 1000;
           
           // Create circle for the barangay with larger radius to show coverage area
           const marker = L.circle(row.coords, {
@@ -485,7 +418,7 @@ function BarangayHeatmapMap({ data, loading, onSelectBarangay }) {
 
       const group = L.featureGroup(data.map((row) => {
         try {
-          const radius = BARANGAY_RADIUS[row.barangay] || BARANGAY_RADIUS['San Isidro'] || 1000;
+          const radius = BARANGAY_RADIUS[normalizeBarangay(row.barangay)] || 1000;
           return L.circle(row.coords, { radius });
         } catch (err) {
           console.error('Error creating circle for bounds:', row.barangay, err);
@@ -582,6 +515,8 @@ function buildPetCardHtml(pet) {
   const species = pet?.species_name ? escapeHtml(pet.species_name) : '';
   const owner = pet?.owner_name ? escapeHtml(pet.owner_name) : '';
   const barangay = pet?.barangay ? escapeHtml(pet.barangay) : '';
+  const village = pet?.subdivision ? escapeHtml(pet.subdivision) : '';
+  const blockLot = [pet?.block && `Blk ${pet.block}`, pet?.lot && `Lot ${pet.lot}`].filter(Boolean).join(', ');
   const address = pet?.address ? escapeHtml(pet.address) : '';
   const sub = [code, species].filter(Boolean).join(' · ');
   return '<div class="traceability-pet-card">'
@@ -589,15 +524,18 @@ function buildPetCardHtml(pet) {
     + (sub ? `<span class="traceability-pet-card-sub">${sub}</span>` : '')
     + (owner ? `<span class="traceability-pet-card-row"><strong>Owner</strong>${owner}</span>` : '')
     + (barangay ? `<span class="traceability-pet-card-row"><strong>Barangay</strong>${barangay}</span>` : '')
+    + (village ? `<span class="traceability-pet-card-row"><strong>Village</strong>${village}</span>` : '')
+    + (blockLot ? `<span class="traceability-pet-card-row"><strong>Block / Lot</strong>${escapeHtml(blockLot)}</span>` : '')
     + (address ? `<span class="traceability-pet-card-row"><strong>Address</strong>${address}</span>` : '')
     + '</div>';
 }
 
 function barangayCoord(name) {
   if (!name) return null;
-  const exact = BARANGAY_COORDINATES[name];
+  const canonical = normalizeBarangay(name);
+  const exact = BARANGAY_COORDINATES[canonical];
   if (exact) return exact;
-  const lower = String(name).toLowerCase();
+  const lower = String(canonical).toLowerCase();
   const key = Object.keys(BARANGAY_COORDINATES).find(
     (k) => k.toLowerCase() === lower
       || k.toLowerCase().includes(lower)

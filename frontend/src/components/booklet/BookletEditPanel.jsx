@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { Camera, Check, Loader, Save, X } from "lucide-react";
+import { Camera, Check, Crosshair, Loader, Save, X } from "lucide-react";
 import api from "../../services/api";
 import { resolveMediaUrl } from "../../utils/mediaUrl";
 import { validatePetRegistration, CABUYAO_BARANGAYS } from "../../utils/validation";
+import { requestCurrentPosition } from "../../utils/geolocation";
 
 const EMPTY_PET_FORM = {
   name: "",
@@ -21,6 +22,9 @@ const EMPTY_OWNER_FORM = {
   contact_number: "",
   address: "",
   barangay: "",
+  subdivision: "",
+  block: "",
+  lot: "",
   emergency_contact_name: "",
   emergency_contact_number: "",
 };
@@ -71,6 +75,10 @@ export default function BookletEditPanel({ pet, role, onSaved }) {
   const [ownerError, setOwnerError] = useState("");
   const [savingOwner, setSavingOwner] = useState(false);
 
+  const [gps, setGps] = useState(null);
+  const [locatingGps, setLocatingGps] = useState(false);
+  const [gpsError, setGpsError] = useState("");
+
   const [healthForm, setHealthForm] = useState(EMPTY_HEALTH_FORM);
   const [healthError, setHealthError] = useState("");
   const [savingHealth, setSavingHealth] = useState(false);
@@ -117,6 +125,9 @@ export default function BookletEditPanel({ pet, role, onSaved }) {
       contact_number: pet.contact_number || "",
       address: pet.address || "",
       barangay: pet.barangay || "",
+      subdivision: pet.subdivision || "",
+      block: pet.block || "",
+      lot: pet.lot || "",
       emergency_contact_name: pet.emergency_contact_name || "",
       emergency_contact_number: pet.emergency_contact_number || "",
     }));
@@ -197,6 +208,18 @@ export default function BookletEditPanel({ pet, role, onSaved }) {
     setPetError("");
   }
 
+  async function captureGps() {
+    setGpsError("");
+    setLocatingGps(true);
+    const position = await requestCurrentPosition();
+    setLocatingGps(false);
+    if (!position) {
+      setOwnerError("Could not get a GPS fix inside Cabuyao City. The saved address is still mapped automatically.");
+      return;
+    }
+    setGps(position);
+  }
+
   async function savePet() {
     setPetError("");
     setPetErrors({});
@@ -230,8 +253,14 @@ export default function BookletEditPanel({ pet, role, onSaved }) {
       contact_number: ownerForm.contact_number,
       address: ownerForm.address,
       barangay: ownerForm.barangay,
+      subdivision: ownerForm.subdivision,
+      block: ownerForm.block,
+      lot: ownerForm.lot,
       emergency_contact_name: ownerForm.emergency_contact_name,
       emergency_contact_number: ownerForm.emergency_contact_number,
+      gps_lat: gps?.lat || null,
+      gps_lng: gps?.lng || null,
+      gps_accuracy: gps?.accuracy || null,
     };
     setSavingOwner(true);
     try {
@@ -434,6 +463,32 @@ export default function BookletEditPanel({ pet, role, onSaved }) {
               ))}
             </select>
           </Field>
+          <Field label="Village / Subdivision" hint="Optional — e.g. San Antonio Village">
+            <input
+              type="text"
+              value={ownerForm.subdivision}
+              onChange={(e) => setOwner("subdivision", e.target.value)}
+              placeholder="Subdivision or village"
+            />
+          </Field>
+          <Field label="Block / Lot" hint="Optional — helps pin the exact spot">
+            <div className="booklet-edit__field-inline">
+              <input
+                type="text"
+                value={ownerForm.block}
+                onChange={(e) => setOwner("block", e.target.value)}
+                placeholder="Block"
+                style={{ minWidth: 0 }}
+              />
+              <input
+                type="text"
+                value={ownerForm.lot}
+                onChange={(e) => setOwner("lot", e.target.value)}
+                placeholder="Lot"
+                style={{ minWidth: 0 }}
+              />
+            </div>
+          </Field>
           <Field label="Address">
             <input
               type="text"
@@ -441,6 +496,15 @@ export default function BookletEditPanel({ pet, role, onSaved }) {
               onChange={(e) => setOwner("address", e.target.value)}
               placeholder="House / Street / Subdivision"
             />
+          </Field>
+          <Field label="Map pin">
+            <button type="button" className="booklet-edit__btn booklet-edit__btn--secondary" onClick={captureGps} disabled={locatingGps}>
+              <Crosshair size={15} strokeWidth={2.4} />
+              {locatingGps
+                ? "Detecting location…"
+                : gps ? "Location pinned at your GPS point ✓" : "Use my current location"}
+            </button>
+            {gpsError && <div className="booklet-edit__error">{gpsError}</div>}
           </Field>
           <Field label="Emergency Contact Name">
             <input

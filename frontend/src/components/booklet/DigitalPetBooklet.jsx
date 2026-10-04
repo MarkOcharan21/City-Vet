@@ -291,6 +291,11 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
             <ProfileField label="Contact Number" value={pet.contact_number || "—"} />
             <ProfileField label="Registered Address" value={pet.address || "—"} span={2} />
             <ProfileField label="Barangay" value={pet.barangay || "—"} />
+            <ProfileField label="Village / Subdivision" value={pet.subdivision || "—"} />
+            <ProfileField
+              label="Block / Lot"
+              value={[pet.block && `Blk ${pet.block}`, pet.lot && `Lot ${pet.lot}`].filter(Boolean).join(", ") || "—"}
+            />
             <ProfileField
               label="Emergency Contact"
               value={

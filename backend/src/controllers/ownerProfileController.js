@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const { CABUYAO_BARANGAYS } = require('../constants/cabuyaoBarangays');
+const { syncOwnerLocation } = require('../utils/ownerLocation');
 
 // ─── helpers ─────────────────────────────────────────────────
 
@@ -24,6 +25,9 @@ async function getOwnerProfile(req, res) {
          po.contact_number,
          po.address,
          po.barangay,
+         po.subdivision,
+         po.block,
+         po.lot,
          po.emergency_contact_name,
          po.emergency_contact_number
        FROM users u
@@ -51,8 +55,14 @@ async function updateOwnerProfile(req, res) {
     contact_number,
     address,
     barangay,
+    subdivision,
+    block,
+    lot,
     emergency_contact_name,
     emergency_contact_number,
+    gps_lat,
+    gps_lng,
+    gps_accuracy,
   } = req.body;
 
   // Validate
@@ -93,10 +103,13 @@ async function updateOwnerProfile(req, res) {
       [req.user.id],
     );
 
+    let ownerId = null;
     if (poRows.length > 0) {
+      ownerId = poRows[0].id;
       await db.query(
         `UPDATE pet_owners
          SET full_name = ?, contact_number = ?, address = ?, barangay = ?,
+             subdivision = ?, block = ?, lot = ?,
              emergency_contact_name = ?, emergency_contact_number = ?
          WHERE user_id = ?`,
         [
@@ -104,26 +117,39 @@ async function updateOwnerProfile(req, res) {
           trim(contact_number) || null,
           trim(address) || null,
           barangay || null,
+          trim(subdivision) || null,
+          trim(block) || null,
+          trim(lot) || null,
           trim(emergency_contact_name) || null,
           trim(emergency_contact_number) || null,
           req.user.id,
         ],
       );
     } else {
-      await db.query(
-        `INSERT INTO pet_owners (user_id, full_name, contact_number, address, barangay, emergency_contact_name, emergency_contact_number)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      const [insertRes] = await db.query(
+        `INSERT INTO pet_owners (user_id, full_name, contact_number, address, barangay, subdivision, block, lot, emergency_contact_name, emergency_contact_number)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           req.user.id,
           trimmedName,
           trim(contact_number) || null,
           trim(address) || null,
           barangay || null,
+          trim(subdivision) || null,
+          trim(block) || null,
+          trim(lot) || null,
           trim(emergency_contact_name) || null,
           trim(emergency_contact_number) || null,
         ],
       );
+      ownerId = insertRes.insertId;
     }
+
+    await syncOwnerLocation(
+      ownerId,
+      { address, barangay, subdivision, block, lot },
+      gps_lat && gps_lng ? { latitude: gps_lat, longitude: gps_lng, accuracy_meters: gps_accuracy } : null,
+    );
 
     res.json({ success: true, message: 'Profile updated successfully.' });
   } catch (error) {
