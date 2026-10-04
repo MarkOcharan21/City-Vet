@@ -252,6 +252,9 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
           markerRef.current.setLatLng(position);
           markerRef.current.setIcon(pinIcon);
         }
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (!cancelled && markerRef.current) fitPinCard(markerRef.current, pet, photoUrl, pinCollapsed);
+        }));
         // Use higher zoom for exact address, lower zoom for approximate barangay location
         const zoomLevel = result ? 15 : (isBarangayFallback ? 13 : 12);
         map.setView(position, zoomLevel, { animate: true });
@@ -262,6 +265,9 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
         setLocating(false);
         setLocationMessage('Cabuyao City location; address lookup unavailable');
         if (!markerRef.current) markerRef.current = L.marker(fallbackPosition, { icon: pinIcon }).addTo(map);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (!cancelled && markerRef.current) fitPinCard(markerRef.current, pet, photoUrl, pinCollapsed);
+        }));
         map.setView(fallbackPosition, 12);
       }
     };
@@ -303,6 +309,9 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
     const hasPhoto = Boolean(pet?.photo && String(pet.photo).trim() !== '');
     const photoUrl = hasPhoto ? resolveMediaUrl(pet.photo) : null;
     marker.setIcon(buildPinIcon(pet, photoUrl, pinCollapsed));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      fitPinCard(marker, pet, photoUrl, pinCollapsed);
+    }));
   }, [pinCollapsed, pet]);
 
   return (
@@ -556,9 +565,9 @@ function LogoPulse({ size = 72 }) {
   );
 }
 
-function buildPinIcon(pet, photoUrl, collapsed) {
-  const width = collapsed ? 236 : 300;
-  const height = collapsed ? 74 : 164;
+function buildPinIcon(pet, photoUrl, collapsed, size) {
+  const width = collapsed ? 236 : (size ? size[0] : 362);
+  const height = collapsed ? 74 : (size ? size[1] : 190);
   const tailHeight = collapsed ? 20 : 28;
   return L.divIcon({
     className: 'traceability-map-pin pin-big-card',
@@ -566,6 +575,21 @@ function buildPinIcon(pet, photoUrl, collapsed) {
     iconSize: [width, height],
     iconAnchor: [width / 2, height + tailHeight],
   });
+}
+
+// The expanded card is height-auto so no detail is ever cut off; measure the
+// real rendered size and re-anchor the pin to it so the arrow tip stays on the
+// pet's location while the whole card remains visible.
+function fitPinCard(marker, pet, photoUrl, collapsed) {
+  if (collapsed || !marker || !marker.getElement()) return;
+  const cardEl = marker.getElement().querySelector('.big-pin');
+  if (!cardEl) return;
+  const w = Math.ceil(cardEl.offsetWidth);
+  const h = Math.ceil(cardEl.offsetHeight);
+  if (!w || !h) return;
+  const cur = marker.options.icon.options.iconSize;
+  if (cur && Number(cur[0]) === w && Number(cur[1]) === h) return;
+  marker.setIcon(buildPinIcon(pet, photoUrl, collapsed, [w, h]));
 }
 
 function buildPetPinHtml(pet, { photo = null, collapsed = false } = {}) {
@@ -593,8 +617,8 @@ function buildPetPinHtml(pet, { photo = null, collapsed = false } = {}) {
     + `<div class="big-pin-thumb">${thumb}</div>`
     + `<div class="big-pin-body">`
     + `<div class="big-pin-header">`
-    + `<span class="big-pin-name"${collapsed ? ` title="${name}"` : ''}>${name}</span>`
-    + (sub ? `<span class="big-pin-sub"${collapsed ? ` title="${sub}"` : ''}>${sub}</span>` : '')
+    + `<span class="big-pin-name" title="${name}">${name}</span>`
+    + (sub ? `<span class="big-pin-sub" title="${sub}">${sub}</span>` : '')
     + `</div>`
     + `<div class="big-pin-rows">${rows}</div>`
     + `</div>`

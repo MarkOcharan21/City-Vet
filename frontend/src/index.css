@@ -7992,7 +7992,11 @@ body:has(.clinic-access-page)::before {
   box-shadow: 0 14px 34px rgba(36, 20, 22, 0.28);
   animation: traceabilityPinBob 1.9s ease-in-out infinite;
 }
-.big-pin-expanded { width: 300px; height: 164px; }
+.big-pin-expanded {
+  width: min(362px, calc(100vw - 56px));
+  height: auto;
+  margin-inline: auto;
+}
 .big-pin-compact { width: 236px; height: 74px; }
 
 .big-pin-thumb {
@@ -8005,11 +8009,12 @@ body:has(.clinic-access-page)::before {
   border-top-left-radius: 12px;
   border-bottom-left-radius: 12px;
 }
-.big-pin-expanded .big-pin-thumb { width: 116px; }
+.big-pin-expanded .big-pin-thumb { width: 104px; }
 .big-pin-compact .big-pin-thumb { width: 74px; }
 
 .big-pin-img {
-  display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-position: center;
@@ -8021,6 +8026,8 @@ body:has(.clinic-access-page)::before {
 .big-pin-img.big-pin-fit-cover { object-fit: cover; }
 
 .big-pin-placeholder {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8035,7 +8042,7 @@ body:has(.clinic-access-page)::before {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 0.55rem 0.8rem;
+  padding: 0.7rem 0.95rem;
   overflow: hidden;
 }
 
@@ -8047,12 +8054,18 @@ body:has(.clinic-access-page)::before {
 .big-pin-name {
   display: block;
   font-weight: 800;
-  font-size: 0.98rem;
-  line-height: 1.25;
+  font-size: 1rem;
+  line-height: 1.28;
   color: var(--color-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.big-pin-expanded .big-pin-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  white-space: normal;
 }
 .big-pin-sub {
   display: block;
@@ -8064,20 +8077,23 @@ body:has(.clinic-access-page)::before {
   text-overflow: ellipsis;
 }
 
-.big-pin-rows { margin-top: 0.15rem; }
+.big-pin-rows { margin-top: 0.22rem; }
 .big-pin-row {
   display: grid;
-  grid-template-columns: 58px 1fr;
-  column-gap: 10px;
+  grid-template-columns: 64px 1fr;
+  column-gap: 12px;
   align-items: baseline;
-  padding: 0.26rem 0;
+  padding: 0.34rem 0;
   border-top: 1px dashed var(--color-border);
-  font-size: 0.76rem;
-  line-height: 1.3;
+  font-size: 0.8rem;
+  line-height: 1.4;
   color: var(--color-ink);
 }
 .big-pin-row strong {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 0.64rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--color-text-muted);
 }
 .big-pin-row > span:last-child {
@@ -8086,7 +8102,7 @@ body:has(.clinic-access-page)::before {
 }
 .big-pin-address {
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
