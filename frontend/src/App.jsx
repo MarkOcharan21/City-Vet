@@ -57,6 +57,7 @@ import ActivityAuditTrail from "./pages/admin/ActivityAuditTrail";
 import ProductCatalog from "./pages/admin/ProductCatalog";
 import AdminSecurity from "./pages/admin/AdminSecurity";
 import AdminWelcome from "./pages/admin/AdminWelcome";
+import AdminWelcomeLanding from "./pages/admin/AdminWelcomeLanding";
 import NotificationCenter from "./pages/shared/NotificationCenter";
 
 // LAYOUTS
@@ -126,8 +127,11 @@ export default function App() {
 
           <Route path="/admin/login" element={<AdminLogin />} />
 
+          {/* Pre-login welcome (shown before proceeding into the admin login) */}
+          <Route path="/admin/welcome" element={<AdminWelcomeLanding />} />
+
           {/* First-login setup (open route — no session token exists yet) */}
-          <Route path="/admin/welcome" element={<AdminWelcome />} />
+          <Route path="/admin/setup" element={<AdminWelcome />} />
 
           {/* ===================== OWNER ===================== */}
 

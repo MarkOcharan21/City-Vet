@@ -4,6 +4,7 @@ import { ArrowLeft, Clock, LockKeyhole } from "lucide-react";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import PasswordInput from "../../components/PasswordInput";
+import AdminWelcomeLanding from "./AdminWelcomeLanding";
 
 const PRE_TOKEN_KEY = "admin_pre_token";
 
@@ -18,15 +19,20 @@ const [error,setError]=useState("");
 const [loading,setLoading]=useState(false);
 const [sessionExpired, setSessionExpired] = useState(false);
 
+const [searchParams] = useSearchParams();
+
 // Step 2 of admin login: the personal access code (PIN).
-const [stage, setStage] = useState("password");
+// The portal greets you with a welcome screen BEFORE the login form; a direct
+// ?proceed=1 link (e.g. after session expiry) skips straight to the form.
+const [stage, setStage] = useState(
+  searchParams.get("proceed") ? "password" : "welcome"
+);
 const [code, setCode] = useState("");
 const [codeError, setCodeError] = useState("");
 
 const {login}=useAuth();
 
 const navigate=useNavigate();
-const [searchParams] = useSearchParams();
 
 useEffect(() => {
   if (searchParams.get('session') === 'expired') {
@@ -80,7 +86,7 @@ if (res.data.step === "code") {
   if (res.data.has_access_code) {
     setStage("code");
   } else {
-    navigate("/admin/welcome");
+    navigate("/admin/setup");
   }
   return;
 }
@@ -129,7 +135,7 @@ async function handleCodeSubmit(e) {
     finishLogin(res.data.token, res.data.user);
   } catch (err) {
     if (err.response?.status === 409 && err.response?.data?.set_code_required) {
-      navigate("/admin/welcome");
+      navigate("/admin/setup");
       return;
     }
     if (err.response?.status === 429) {
@@ -153,6 +159,10 @@ function backToPassword() {
 }
 
 return(
+
+stage === "welcome" ? (
+  <AdminWelcomeLanding onContinue={() => { setSessionExpired(false); setStage("password"); }} />
+) : (
 
 <div className="auth-page">
 
@@ -286,7 +296,7 @@ disabled={loading}
 </div>
 
 </div>
-
+)
 );
 
 }
