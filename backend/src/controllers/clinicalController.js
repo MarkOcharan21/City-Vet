@@ -75,8 +75,9 @@ async function getMyClinicalRecords(req, res) {
 // GET /api/clinical  (Staff/Vet - all consultation records)
 async function getAllClinicalRecords(req, res) {
   try {
-    const [rows] = await db.query(
-      `SELECT cr.*,
+    const { pet_id } = req.query;
+    let query = `
+      SELECT cr.*,
               p.name AS pet_name,
               p.pet_code,
               po.full_name AS owner_name,
@@ -85,8 +86,17 @@ async function getAllClinicalRecords(req, res) {
        JOIN pets p ON cr.pet_id = p.id
        JOIN pet_owners po ON p.pet_owner_id = po.id
        LEFT JOIN users u ON cr.vet_id = u.id
-       ORDER BY cr.consultation_date DESC, cr.created_at DESC`
-    );
+    `;
+    const params = [];
+
+    if (pet_id) {
+      query += ` WHERE cr.pet_id = ?`;
+      params.push(pet_id);
+    }
+
+    query += ` ORDER BY cr.consultation_date DESC, cr.created_at DESC`;
+
+    const [rows] = await db.query(query, params);
     res.json({ success: true, records: rows });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Could not load consultation records.', error: error.message });

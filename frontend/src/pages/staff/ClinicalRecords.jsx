@@ -129,7 +129,7 @@ export default function ClinicalRecords() {
       ]);
       setPetRecords({
         clinical: clinicalRes.data.records || [],
-        vaccinations: vaccineRes.data.vaccinations || []
+        vaccinations: vaccineRes.data.history || []
       });
     } catch (error) {
       toast.error("Failed to load pet records");
