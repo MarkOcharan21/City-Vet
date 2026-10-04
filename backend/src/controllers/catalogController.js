@@ -212,6 +212,21 @@ async function deleteCatalogItem(req, res) {
     if (!existing) {
       return res.status(404).json({ success: false, message: "Catalog item not found." });
     }
+
+    // Check if this catalog item is referenced in existing consultation charges
+    const [[refCount]] = await db.query(
+      "SELECT COUNT(*) AS count FROM consultation_charges WHERE catalog_product_id = ?",
+      [id]
+    );
+    if (Number(refCount.count) > 0) {
+      return res.status(409).json({
+        success: false,
+        message: `Cannot delete "${existing.product_name}" — it is used in ${refCount.count} consultation charge record(s). Use "Deactivate" instead to hide it from new consultations while preserving history.`,
+        referenced: true,
+        referenceCount: Number(refCount.count),
+      });
+    }
+
     await db.query("DELETE FROM catalog_products WHERE id = ?", [id]);
     res.json({ success: true, message: `Catalog item "${existing.product_name}" removed.` });
 
@@ -224,6 +239,14 @@ async function deleteCatalogItem(req, res) {
     });
   } catch (error) {
     console.error("Delete catalog item error:", error);
+    // Handle FK constraint error from other references (e.g., payment_monitoring.payment_items JSON)
+    if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.code === '23503') {
+      return res.status(409).json({
+        success: false,
+        message: `Cannot delete "${existing?.product_name || 'this item'}" — it is referenced by existing records. Use "Deactivate" instead.`,
+        referenced: true,
+      });
+    }
     res.status(500).json({ success: false, message: "Could not remove the catalog item.", error: error.message });
   }
 }
