@@ -14,6 +14,8 @@ import {
   Calendar,
   FileText,
   Eye,
+  History,
+  X,
 } from "lucide-react";
 import DirectQrScanner from "../../components/staff/DirectQrScanner";
 import MedicinePrescriptionSection from "../../components/staff/MedicinePrescriptionSection";
@@ -90,6 +92,9 @@ export default function ClinicalRecords() {
   const [savedReceipt, setSavedReceipt] = useState(null);
   const successModalRef = useRef(null);
   const [healthPet, setHealthPet] = useState(null);
+  const [recordsModalOpen, setRecordsModalOpen] = useState(false);
+  const [petRecords, setPetRecords] = useState(null);
+  const [loadingRecords, setLoadingRecords] = useState(false);
 
   function loadPets() {
     return api.get("/pets").then((res) => {
@@ -113,6 +118,32 @@ export default function ClinicalRecords() {
     return api.get("/regimens")
       .then((res) => setRegimens(res.data.regimens || []))
       .catch(() => setRegimens([]));
+  }
+
+  async function loadPetRecords(petId) {
+    setLoadingRecords(true);
+    try {
+      const [clinicalRes, vaccineRes] = await Promise.all([
+        api.get(`/clinical?pet_id=${petId}`),
+        api.get(`/vaccinations/pet/${petId}`)
+      ]);
+      setPetRecords({
+        clinical: clinicalRes.data.records || [],
+        vaccinations: vaccineRes.data.vaccinations || []
+      });
+    } catch (error) {
+      toast.error("Failed to load pet records");
+      setPetRecords({ clinical: [], vaccinations: [] });
+    } finally {
+      setLoadingRecords(false);
+    }
+  }
+
+  function openRecordsModal() {
+    if (selectedPet?.pet_id) {
+      setRecordsModalOpen(true);
+      loadPetRecords(selectedPet.pet_id);
+    }
   }
 
   useEffect(() => {
@@ -718,6 +749,9 @@ export default function ClinicalRecords() {
               <h2>Visit Notes</h2>
               <p>{selectedPet.name} · {selectedPet.pet_code} · {selectedPet.owner_name}</p>
             </div>
+            <button type="button" className="btn-secondary btn-sm" onClick={openRecordsModal}>
+              <History size={14} /> Review Records
+            </button>
           </div>
           <form onSubmit={(e) => e.preventDefault()} className="clinical-form">
             <section className="clinical-form-section">
@@ -781,6 +815,9 @@ export default function ClinicalRecords() {
               <h2>Medicines &amp; Prescription</h2>
               <p>{selectedPet.name} · {selectedPet.pet_code} — select medicines and review auto-computed dosing</p>
             </div>
+            <button type="button" className="btn-secondary btn-sm" onClick={openRecordsModal}>
+              <History size={14} /> Review Records
+            </button>
           </div>
           <form onSubmit={(e) => e.preventDefault()} className="clinical-form">
             <MedicinePrescriptionSection
@@ -1109,6 +1146,106 @@ export default function ClinicalRecords() {
           </div>
         </div>
       )}
+
+      {recordsModalOpen && (
+        <div className="receipt-modal-overlay" onClick={() => setRecordsModalOpen(false)}>
+          <div className="receipt-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "900px" }}>
+            <div className="receipt-modal-head">
+              <h3>Pet Records</h3>
+              <button type="button" className="receipt-modal-close" onClick={() => setRecordsModalOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {loadingRecords ? (
+              <div className="empty-state-cell">
+                <LoadingSpinner text="Loading records..." fullPage={false} />
+              </div>
+            ) : (
+              <div className="receipt-modal-body">
+                <div className="receipt-meta">
+                  <div>
+                    <span>Patient</span>
+                    <strong>{selectedPet?.name} · {selectedPet?.pet_code}</strong>
+                  </div>
+                  <div>
+                    <span>Owner</span>
+                    <strong>{selectedPet?.owner_name}</strong>
+                  </div>
+                </div>
+
+                {petRecords?.clinical?.length > 0 && (
+                  <div className="receipt-prescription">
+                    <h4>Recent Consultations</h4>
+                    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                      {petRecords.clinical.slice(0, 5).map((record) => (
+                        <div key={record.id} style={{ 
+                          padding: "0.75rem", 
+                          border: "1px solid #e5e7eb", 
+                          borderRadius: "8px", 
+                          marginBottom: "0.5rem",
+                          backgroundColor: "#f9fafb"
+                        }}>
+                          <div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>
+                            {formatDate(record.consultation_date)}
+                          </div>
+                          <div style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "0.25rem" }}>
+                            <strong>Diagnosis:</strong> {record.diagnosis || "Not recorded"}
+                          </div>
+                          {record.treatment_plan && (
+                            <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+                              <strong>Treatment:</strong> {record.treatment_plan}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {petRecords?.vaccinations?.length > 0 && (
+                  <div className="receipt-prescription">
+                    <h4>Vaccination History</h4>
+                    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                      {petRecords.vaccinations.slice(0, 5).map((vaccine) => (
+                        <div key={vaccine.id} style={{ 
+                          padding: "0.75rem", 
+                          border: "1px solid #e5e7eb", 
+                          borderRadius: "8px", 
+                          marginBottom: "0.5rem",
+                          backgroundColor: "#f9fafb"
+                        }}>
+                          <div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>
+                            {vaccine.vaccine_name}
+                          </div>
+                          <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+                            <strong>Date:</strong> {formatDate(vaccine.vaccination_date)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(!petRecords?.clinical?.length && !petRecords?.vaccinations?.length) && (
+                  <div className="empty-state-cell" style={{ padding: "2rem" }}>
+                    No records found for this pet.
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="receipt-modal-foot">
+              <div className="receipt-modal-actions">
+                <button type="button" className="btn-primary" onClick={() => setRecordsModalOpen(false)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     {healthPet && <PetHealthNotesModal pet={healthPet} onClose={() => setHealthPet(null)} />}
     </div>
   );
