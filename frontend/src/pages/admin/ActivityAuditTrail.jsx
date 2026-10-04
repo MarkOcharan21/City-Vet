@@ -647,7 +647,6 @@ export default function ActivityAuditTrail() {
                           title="View details"
                         >
                           <Eye size={15} />
-                          Details
                         </button>
                       </td>
                     </tr>
