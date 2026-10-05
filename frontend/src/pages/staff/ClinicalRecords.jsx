@@ -763,19 +763,31 @@ export default function ClinicalRecords() {
                 <div className="field-group">
                   <label>Quick Templates</label>
                   <div className="quick-template-row">
-                    {regimens.map((regimen) => (
-                      <button
-                        type="button"
-                        className={`quick-template-chip${activeRegimen?.id === regimen.id ? " is-active" : ""}`}
-                        key={regimen.id}
-                        onClick={() => applyTemplate(regimen)}
-                        title={regimen.medicines?.length ? `Fills the notes and prescribes ${regimen.medicines.map((m) => m.medicine_name).join(", ")}` : "Fills the consultation notes"}
-                      >
-                        {regimen.name}
-                      </button>
-                    ))}
+                    {regimens
+                      .filter(
+                        (r) =>
+                          !r.name?.toLowerCase().includes("vaccine") &&
+                          !r.name?.toLowerCase().includes("vaccination") &&
+                          !r.name?.toLowerCase().includes("vacc")
+                      )
+                      .map((regimen) => (
+                        <button
+                          type="button"
+                          className={`quick-template-chip${activeRegimen?.id === regimen.id ? " is-active" : ""}`}
+                          key={regimen.id}
+                          onClick={() => applyTemplate(regimen)}
+                          title={regimen.medicines?.length ? `Fills the notes and prescribes ${regimen.medicines.map((m) => m.medicine_name).join(", ")}` : "Fills the consultation notes"}
+                        >
+                          {regimen.name}
+                        </button>
+                      ))}
                   </div>
-                  {regimens.length === 0 && (
+                  {regimens.filter(
+                    (r) =>
+                      !r.name?.toLowerCase().includes("vaccine") &&
+                      !r.name?.toLowerCase().includes("vaccination") &&
+                      !r.name?.toLowerCase().includes("vacc")
+                  ).length === 0 && (
                     <p className="field-hint">No consultation templates available.</p>
                   )}
                 </div>

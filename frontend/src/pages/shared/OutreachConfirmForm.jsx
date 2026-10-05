@@ -8,10 +8,16 @@ import {
   Search,
   ShieldCheck,
   XCircle,
+  Wifi,
+  WifiOff,
+  Database,
+  Trash2,
+  RefreshCw,
 } from "lucide-react";
 import api from "../../services/api";
 import { ALL_CABUYAO_BARANGAYS } from "../../data/cabuyaoBarangays";
 import GlobalLoadingOverlay from "../../components/GlobalLoadingOverlay";
+import toast from "react-hot-toast";
 
 // ─── helpers ────────────────────────────────────────────────────
 
@@ -38,6 +44,45 @@ function fmtDate(str) {
 const GREEN = "#0b3d2e";
 const GREEN_LIGHT = "#e6f4ee";
 const GREEN_BORDER = "#a7d4bc";
+
+// ─── Draft System Constants ───────────────────────────────────────
+const DRAFT_STORAGE_KEY = "outreach_drafts";
+const SYNC_STORAGE_KEY = "outreach_sync_status";
+
+// ─── Draft Management Helpers ─────────────────────────────────────
+function getDrafts() {
+  try {
+    const stored = localStorage.getItem(DRAFT_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDraft(draft) {
+  const drafts = getDrafts();
+  const existingIndex = drafts.findIndex(d => d.id === draft.id);
+  if (existingIndex >= 0) {
+    drafts[existingIndex] = draft;
+  } else {
+    drafts.push(draft);
+  }
+  localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(drafts));
+}
+
+function deleteDraft(draftId) {
+  const drafts = getDrafts().filter(d => d.id !== draftId);
+  localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(drafts));
+}
+
+function clearDrafts() {
+  localStorage.removeItem(DRAFT_STORAGE_KEY);
+  localStorage.removeItem(SYNC_STORAGE_KEY);
+}
+
+function isOnline() {
+  return navigator.onLine;
+}
 
 // ─── ReceiptPanel (shown after successful submit) ────────────────
 function ReceiptPanel({ ownerName, petName, serviceDate, serviceTime, items, total, linkedPet, programName }) {
@@ -328,9 +373,131 @@ export default function OutreachConfirmForm() {
   const [submitError, setSubmitError] = useState("");
   const [doneData, setDoneData] = useState(null); // { linkedPet, selectedItems, total }
 
+  // Draft system state
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [drafts, setDrafts] = useState([]);
+  const [syncing, setSyncing] = useState(false);
+  const [showDraftsModal, setShowDraftsModal] = useState(false);
+
   useEffect(() => {
     loadForm();
+    loadDrafts();
+    setupOnlineListeners();
   }, [token]);
+
+  function setupOnlineListeners() {
+    const handleOnline = () => {
+      setIsOnline(true);
+      toast.success("Back online! Syncing drafts...");
+      syncDrafts();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast.error("You are offline. Form will be saved as draft.");
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }
+
+  function loadDrafts() {
+    setDrafts(getDrafts());
+  }
+
+  function saveAsDraft() {
+    const selected = items.filter((it) => it.checked).map((it) => ({ service_name: it.service_name, amount: it.amount }));
+    if (selected.length === 0) {
+      toast.error("Please select at least one service.");
+      return;
+    }
+    if (!ownerName.trim()) {
+      toast.error("Pet owner name is required.");
+      return;
+    }
+
+    const draft = {
+      id: Date.now().toString(),
+      token,
+      owner_name: ownerName.trim(),
+      pet_name: petName.trim(),
+      service_date: serviceDate,
+      service_time: serviceTime,
+      barangay: barangay.trim(),
+      items: selected,
+      pet_code: petCode || null,
+      created_at: new Date().toISOString(),
+      synced: false,
+    };
+
+    saveDraft(draft);
+    setDrafts(getDrafts());
+    toast.success("Saved as draft. Will sync when online.");
+  }
+
+  async function syncDrafts() {
+    const pendingDrafts = getDrafts().filter(d => !d.synced);
+    if (pendingDrafts.length === 0) return;
+
+    setSyncing(true);
+    let syncedCount = 0;
+    let failedCount = 0;
+
+    for (const draft of pendingDrafts) {
+      try {
+        const response = await api.post(`/outreach/qr/${draft.token}/submit`, {
+          owner_name: draft.owner_name,
+          pet_name: draft.pet_name,
+          service_date: draft.service_date,
+          service_time: draft.service_time,
+          barangay: draft.barangay,
+          items: draft.items,
+          pet_code: draft.pet_code,
+        });
+
+        if (response.data.success) {
+          draft.synced = true;
+          saveDraft(draft);
+          syncedCount++;
+        }
+      } catch (error) {
+        console.error("Sync failed for draft:", draft.id, error);
+        failedCount++;
+      }
+    }
+
+    // Remove synced drafts
+    const remainingDrafts = getDrafts().filter(d => !d.synced);
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(remainingDrafts));
+    setDrafts(remainingDrafts);
+
+    setSyncing(false);
+
+    if (syncedCount > 0) {
+      toast.success(`Synced ${syncedCount} draft(s) successfully.`);
+    }
+    if (failedCount > 0) {
+      toast.error(`${failedCount} draft(s) failed to sync. Will retry later.`);
+    }
+  }
+
+  function handleDeleteDraft(draftId) {
+    deleteDraft(draftId);
+    setDrafts(getDrafts());
+    toast.success("Draft deleted.");
+  }
+
+  function handleManualSync() {
+    if (!isOnline) {
+      toast.error("Cannot sync while offline.");
+      return;
+    }
+    syncDrafts();
+  }
 
   async function loadForm() {
     setLoading(true);
@@ -407,6 +574,12 @@ export default function OutreachConfirmForm() {
       return;
     }
 
+    // If offline, save as draft instead
+    if (!isOnline) {
+      saveAsDraft();
+      return;
+    }
+
     setSubmitting(true);
     try {
       const response = await api.post(`/outreach/qr/${token}/submit`, {
@@ -428,6 +601,12 @@ export default function OutreachConfirmForm() {
         total,
       });
     } catch (err) {
+      // If network error, save as draft
+      if (!err.response && !isOnline) {
+        saveAsDraft();
+        setSubmitError("");
+        return;
+      }
       setSubmitError(err.response?.data?.message || "Could not submit. Please try again.");
     } finally {
       setSubmitting(false);
@@ -454,15 +633,45 @@ export default function OutreachConfirmForm() {
 
   const header = (
     <div style={{ background: GREEN, color: "#fff", padding: "18px 22px", borderRadius: "14px 14px 0 0" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <PawPrint size={22} />
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 17 }}>City of Cabuyao — Outreach</div>
-          <div style={{ fontSize: 12.5, opacity: 0.85 }}>
-            {formData.programName}
-            {formData.eventDate ? ` · ${formData.eventDate.slice(0, 10)}` : ""}
-            {formData.venue ? ` · ${formData.venue}` : ""}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <PawPrint size={22} />
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 17 }}>City of Cabuyao — Outreach</div>
+            <div style={{ fontSize: 12.5, opacity: 0.85 }}>
+              {formData.programName}
+              {formData.eventDate ? ` · ${formData.eventDate.slice(0, 10)}` : ""}
+              {formData.venue ? ` · ${formData.venue}` : ""}
+            </div>
           </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {isOnline ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, background: "rgba(255,255,255,0.2)", padding: "4px 8px", borderRadius: 6 }}>
+              <Wifi size={14} />
+              Online
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, background: "rgba(239,68,68,0.2)", padding: "4px 8px", borderRadius: 6 }}>
+              <WifiOff size={14} />
+              Offline
+            </div>
+          )}
+          {drafts.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowDraftsModal(true)}
+              style={{
+                display: "flex", alignItems: "center", gap: 4,
+                background: "rgba(255,255,255,0.2)", border: "none",
+                color: "#fff", padding: "4px 8px", borderRadius: 6,
+                fontSize: 12, cursor: "pointer",
+              }}
+            >
+              <Database size={14} />
+              {drafts.length} Draft{drafts.length > 1 ? "s" : ""}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -647,7 +856,7 @@ export default function OutreachConfirmForm() {
               {submitting ? (
                 <><Loader2 size={18} className="spin" /> Submitting...</>
               ) : (
-                "Confirm and Submit"
+                !isOnline ? "Save as Draft (Offline)" : "Confirm and Submit"
               )}
             </button>
           </div>
@@ -657,6 +866,109 @@ export default function OutreachConfirmForm() {
       <p style={{ textAlign: "center", color: "#9CA3AF", fontSize: 12, marginTop: 12 }}>
         City Veterinary Office of Cabuyao · Outreach Program
       </p>
+
+      {/* Drafts Modal */}
+      {showDraftsModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 1000, padding: "16px"
+        }} onClick={() => setShowDraftsModal(false)}>
+          <div style={{
+            background: "#fff", borderRadius: 16, maxWidth: 500, width: "100%",
+            maxHeight: "80vh", overflow: "hidden", display: "flex", flexDirection: "column"
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: "20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Database size={20} color={GREEN} />
+                <h3 style={{ margin: 0, fontSize: 18, color: "#111827" }}>
+                  Pending Drafts ({drafts.length})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDraftsModal(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#6B7280", padding: 4 }}
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: "20px", overflowY: "auto", flex: 1 }}>
+              {drafts.length === 0 ? (
+                <div style={{ textAlign: "center", color: "#6B7280", padding: "40px 20px" }}>
+                  <Database size={48} style={{ color: "#d1d5db", marginBottom: "12px" }} />
+                  <p>No pending drafts</p>
+                </div>
+              ) : (
+                drafts.map((draft) => (
+                  <div key={draft.id} style={{
+                    padding: "12px", marginBottom: "12px",
+                    background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8
+                  }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: "#111827", marginBottom: 4 }}>
+                      {draft.owner_name}
+                    </div>
+                    <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 4 }}>
+                      Pet: {draft.pet_name || "Not specified"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 8 }}>
+                      {fmtDate(draft.service_date)} · {draft.service_time}
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDraft(draft.id)}
+                        style={{
+                          flex: 1, padding: "6px 12px", borderRadius: 6,
+                          background: "#fee2e2", color: "#dc2626", border: "none",
+                          fontSize: 12, fontWeight: 600, cursor: "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center", gap: 4
+                        }}
+                      >
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div style={{ padding: "16px 20px", borderTop: "1px solid #e5e7eb", display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                onClick={handleManualSync}
+                disabled={syncing || !isOnline || drafts.length === 0}
+                style={{
+                  flex: 1, padding: "10px 16px", borderRadius: 8,
+                  background: isOnline ? GREEN : "#d1d5db",
+                  color: "#fff", border: "none", fontWeight: 600, fontSize: 14,
+                  cursor: (syncing || !isOnline || drafts.length === 0) ? "not-allowed" : "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  opacity: (syncing || !isOnline || drafts.length === 0) ? 0.6 : 1
+                }}
+              >
+                {syncing ? (
+                  <><Loader2 size={16} className="spin" /> Syncing...</>
+                ) : (
+                  <><RefreshCw size={16} /> Sync Now</>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDraftsModal(false)}
+                style={{
+                  padding: "10px 16px", borderRadius: 8,
+                  background: "#f3f4f6", color: "#374151", border: "none",
+                  fontWeight: 600, fontSize: 14, cursor: "pointer"
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
