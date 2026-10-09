@@ -185,7 +185,7 @@ export default function PetRegistration() {
   }, [draftId, editingPetId]);
 
   const filteredBreeds = breeds.filter(
-    (b) => String(b.species_id) === String(form.species_id)
+    (b) => !form.species_id || String(b.species_id) === String(form.species_id)
   );
 
   function handleChange(e) {
