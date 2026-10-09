@@ -184,9 +184,11 @@ export default function PetRegistration() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId, editingPetId]);
 
-  const filteredBreeds = breeds.filter(
-    (b) => !form.species_id || String(b.species_id) === String(form.species_id)
-  );
+  const filteredBreeds = breeds
+    .filter(
+      (b) => !form.species_id || String(b.species_id) === String(form.species_id)
+    )
+    .sort((a, b) => a.breed_name.localeCompare(b.breed_name));
 
   function handleChange(e) {
     const { name, value } = e.target;

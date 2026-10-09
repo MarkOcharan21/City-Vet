@@ -747,7 +747,7 @@ async function getAllPets(req, res) {
 async function getSpeciesAndBreeds(req, res) {
   try {
     const [species] = await db.query("SELECT * FROM species");
-    const [breeds] = await db.query("SELECT * FROM breeds");
+    const [breeds] = await db.query("SELECT * FROM breeds ORDER BY breed_name ASC");
     res.json({ success: true, species, breeds });
   } catch (error) {
     res.status(500).json({
