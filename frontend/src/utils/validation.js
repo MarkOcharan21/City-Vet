@@ -144,6 +144,7 @@ export function validateOwnerRegistration(data) {
   if (!isValidEmail(data.email)) errors.email = 'Enter a valid email address.';
   const passwordError = getPasswordError(data.password);
   if (passwordError) errors.password = passwordError;
+  if (data.password !== data.confirmPassword) errors.confirmPassword = 'Passwords do not match.';
   const phoneError = getPhoneError(trim(data.contact_number));
   if (phoneError) errors.contact_number = phoneError;
   if (!isValidBarangay(data.barangay)) errors.barangay = 'Select a valid barangay in Cabuyao.';

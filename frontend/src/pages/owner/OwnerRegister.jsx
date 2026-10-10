@@ -30,6 +30,7 @@ export default function OwnerRegister() {
     full_name: "",
     email: "",
     password: "",
+    confirmPassword: "",
     contact_number: "",
     address: "",
     barangay: "",
@@ -290,6 +291,17 @@ export default function OwnerRegister() {
                   <PasswordStrength password={form.password} />
                   <PasswordChecklist password={form.password} />
                   <FieldError message={fieldErrors.password} />
+                </div>
+
+                <div className="auth-field">
+                  <label htmlFor="confirmPassword">Confirm Password</label>
+                  <PasswordInput
+                    name="confirmPassword"
+                    value={form.confirmPassword}
+                    onChange={handleChange}
+                    placeholder="Re-enter your password"
+                  />
+                  <FieldError message={fieldErrors.confirmPassword} />
                 </div>
               </section>
 
