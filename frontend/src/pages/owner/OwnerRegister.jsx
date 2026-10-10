@@ -425,7 +425,7 @@ export default function OwnerRegister() {
                   )}
                   {pin && !gpsError && (
                     <p className="auth-field-hint">
-                      The pin follows your address — drag it to fine-tune. Barangay
+                      The pin follows your block and lot — drag it to fine-tune. Barangay
                       officials will use it to find you.
                     </p>
                   )}
@@ -435,7 +435,7 @@ export default function OwnerRegister() {
                       <div ref={mapContainerRef} className="auth-location-map" />
                       <p className="auth-field-hint">
                         {geocoding
-                          ? "Updating pin from your address..."
+                          ? "Updating pin from your block and lot..."
                           : `Pinned at ${pin.lat.toFixed(6)}, ${pin.lng.toFixed(6)}${
                               pin.accuracy ? ` (±${Math.round(pin.accuracy)} m)` : ""
                             }`}

@@ -20,11 +20,13 @@ const PIN_ICON = L.divIcon({
  * Owns the "location verification" map shared by owner registration and the
  * profile/settings form.
  *
- * A single pin is kept in state and it tracks the owner's address automatically:
- * whenever `address` (barangay / subdivision / block / lot / street) changes it
- * is geocoded through the server-side, throttled + cached endpoint and the pin
- * moves to the result. The owner can override the pin with an exact device GPS
- * fix (setExactPin) or by dragging the marker — whichever happens last wins.
+ * A single pin is kept in state and it tracks the owner's location automatically:
+ * whenever the barangay / subdivision / block / lot changes it is geocoded
+ * through the server-side, throttled + cached endpoint — which anchors on the
+ * subdivision/barangay and offsets by the block & lot grid — and the pin moves
+ * to the result. The free-text street address does not move the pin. The owner
+ * can override the pin with an exact device GPS fix (setExactPin) or by dragging
+ * the marker — whichever happens last wins.
  *
  * @param {{ address?, barangay?, subdivision?, block?, lot? }} address
  * @param {{ debounceMs?: number }} [options]
@@ -90,19 +92,19 @@ export default function useOwnerLocationMap(address, { debounceMs = 800 } = {}) 
     mapRef.current.panTo([pin.lat, pin.lng]);
   }, [pin?.lat, pin?.lng]);
 
-  // Auto-update the pin from the structured address (debounced so typing does
-  // not fire a request per keystroke). Best-effort: on failure the previous pin
-  // is kept rather than clearing the map.
-  const { address: street, barangay, subdivision, block, lot } = address || {};
+  // Auto-update the pin from the barangay/subdivision + block & lot (debounced so
+  // typing does not fire a request per keystroke). The free-text street address is
+  // intentionally NOT sent — the pin is positioned by the block & lot grid, not by
+  // whatever street text was typed. Best-effort: on failure the previous pin is kept.
+  const { barangay, subdivision, block, lot } = address || {};
   useEffect(() => {
-    const hasAny = [street, barangay, subdivision, block, lot].some((v) => String(v || "").trim());
+    const hasAny = [barangay, subdivision, block, lot].some((v) => String(v || "").trim());
     if (!hasAny) return undefined;
 
     const handle = setTimeout(async () => {
       setGeocoding(true);
       try {
         const res = await api.post("/auth/geocode", {
-          address: street,
           barangay,
           subdivision,
           block,
@@ -121,7 +123,7 @@ export default function useOwnerLocationMap(address, { debounceMs = 800 } = {}) 
     }, debounceMs);
 
     return () => clearTimeout(handle);
-  }, [street, barangay, subdivision, block, lot, debounceMs]);
+  }, [barangay, subdivision, block, lot, debounceMs]);
 
   // Pin from an exact device GPS fix.
   function setExactPin(coords) {

@@ -10,7 +10,7 @@
  * `status = 'active' ORDER BY recorded_at DESC LIMIT 1`.
  */
 const db = require('../config/db');
-const { geocode, buildSearchAddress } = require('./geocode');
+const { buildAnchorAddress, geocodeOwnerLocation } = require('./geocode');
 
 async function getLatestOwnerLocation(ownerId) {
   if (!ownerId) return null;
@@ -65,15 +65,13 @@ async function syncOwnerLocation(ownerId, ownerData, gps) {
   }
 
   try {
-    const queryText = buildSearchAddress(ownerData);
-    if (!queryText) return null;
-    const geo = await geocode(queryText);
+    const geo = await geocodeOwnerLocation(ownerData);
     if (!geo) return null;
     return recordOwnerLocation(ownerId, {
       latitude: geo.lat,
       longitude: geo.lon,
       source: 'geocode',
-      query_address: queryText,
+      query_address: buildAnchorAddress(ownerData),
     });
   } catch (e) {
     console.log(`[ownerLocation] sync skipped for owner #${ownerId}: ${e && e.message ? e.message : e}`);

@@ -224,7 +224,7 @@ export function ProfileForm({ compact = false, onSaved }) {
         )}
         {pin && !gpsError && (
           <p className="settings-field-hint">
-            The pin follows your address — drag it if it&apos;s not exactly right.
+            The pin follows your block and lot — drag it if it&apos;s not exactly right.
           </p>
         )}
         {pin && (
@@ -232,7 +232,7 @@ export function ProfileForm({ compact = false, onSaved }) {
             <div ref={mapContainerRef} className="auth-location-map" />
             <p className="settings-field-hint">
               {geocoding
-                ? 'Updating pin from your address…'
+                ? 'Updating pin from your block and lot…'
                 : `Pinned at ${pin.lat.toFixed(6)}, ${pin.lng.toFixed(6)}${
                     pin.accuracy ? ` (±${Math.round(pin.accuracy)} m)` : ''
                   }`}

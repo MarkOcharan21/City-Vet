@@ -1,7 +1,7 @@
 ﻿const db = require("../config/db");
 const { vetNameExpr } = require("../utils/vetNameFormat");
 const { dateFormat, mondayIndex } = require("../config/sql");
-const { geocode, buildSearchAddress } = require("../utils/geocode");
+const { geocodeOwnerLocation } = require("../utils/geocode");
 
 const BARANGAY_LIST = [
   'Baclaran', 'Banaybanay', 'Banlic', 'Bigaa', 'Butong', 'Casile', 'Diezmo',
@@ -15,14 +15,10 @@ const BARANGAY_LIST = [
 // cached per the utility module instead of punching Nominatim from the browser.
 async function geocodeAddress(req, res) {
     try {
-        const { address, barangay, subdivision, block, lot } = req.body || {};
-        const queryText = buildSearchAddress({ address, barangay, subdivision, block, lot });
-        if (!queryText) {
-            return res.json({ success: false, message: 'Provide an address or barangay to geocode.' });
-        }
-        const geo = await geocode(queryText);
+        const { barangay, subdivision, block, lot } = req.body || {};
+        const geo = await geocodeOwnerLocation({ barangay, subdivision, block, lot });
         if (!geo) {
-            return res.json({ success: false, message: 'Could not resolve that Cabuyao address.' });
+            return res.json({ success: false, message: 'Could not resolve that Cabuyao barangay or subdivision.' });
         }
         res.json({ success: true, lat: geo.lat, lon: geo.lon, display_name: geo.display_name });
     } catch (error) {

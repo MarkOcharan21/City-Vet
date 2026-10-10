@@ -87,6 +87,83 @@ function buildSearchAddress({ address, barangay, subdivision, block, lot } = {})
   return parts.join(', ');
 }
 
+// ---------------------------------------------------------------------------
+// Block & lot positioning
+//
+// OpenStreetMap (and therefore Nominatim) has no block/lot parcel data for
+// Philippine subdivisions, so a "Blk 5 Lot 10" query just degrades to the
+// subdivision/barangay centroid — the pin never really followed the block or
+// lot the owner typed. Instead we anchor on the geocoded subdivision/barangay
+// and lay the household onto a deterministic grid: the LOT number walks along
+// the street (east-west) and the BLOCK number steps between parallel streets
+// (north-south). The same block/lot always lands on the same spot, so the pin
+// visibly follows the block & lot fields rather than the free-text address.
+// ---------------------------------------------------------------------------
+const METERS_PER_DEG_LAT = 111320;
+const LOT_STEP_METERS = 15;    // spacing between adjacent lots along a street
+const BLOCK_STEP_METERS = 45;  // spacing between blocks (one street apart)
+const MAX_GRID_STEPS = 60;     // clamp absurd block/lot numbers
+
+function numericIndex(value) {
+  const match = String(value == null ? '' : value).match(/\d+/);
+  const n = match ? Number(match[0]) : 0;
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(n - 1, MAX_GRID_STEPS);
+}
+
+function clampToBounds(lat, lon) {
+  return {
+    lat: Math.min(Math.max(lat, CABUYAO_LAT_MIN), CABUYAO_LAT_MAX),
+    lon: Math.min(Math.max(lon, CABUYAO_LON_MIN), CABUYAO_LON_MAX),
+  };
+}
+
+function applyBlockLotGrid(anchor, block, lot) {
+  const blockSteps = numericIndex(block);
+  const lotSteps = numericIndex(lot);
+  if (!blockSteps && !lotSteps) return anchor;
+  const cosLat = Math.cos((anchor.lat * Math.PI) / 180) || 1;
+  const dLat = (blockSteps * BLOCK_STEP_METERS) / METERS_PER_DEG_LAT;
+  const dLon = (lotSteps * LOT_STEP_METERS) / (METERS_PER_DEG_LAT * cosLat);
+  const { lat, lon } = clampToBounds(anchor.lat + dLat, anchor.lon + dLon);
+  return { ...anchor, lat, lon };
+}
+
+/**
+ * Anchor query for an owner location: the subdivision (most specific named
+ * place OSM tends to know) then the barangay. Deliberately excludes the
+ * free-text street address and the block/lot so the pin is positioned by the
+ * block/lot grid, not by whatever text was typed.
+ */
+function buildAnchorAddress({ barangay, subdivision } = {}) {
+  const parts = [];
+  if (subdivision && String(subdivision).trim()) parts.push(String(subdivision).trim());
+  if (barangay && String(barangay).trim()) parts.push(`Barangay ${String(barangay).trim()}`);
+  if (parts.length === 0) return null;
+  parts.push('Cabuyao City', 'Laguna', 'Philippines');
+  return parts.join(', ');
+}
+
+/**
+ * Resolves an owner's pin from barangay/subdivision + block/lot. Returns
+ * { lat, lon, display_name } or null. Never throws.
+ */
+async function geocodeOwnerLocation({ barangay, subdivision, block, lot } = {}) {
+  const anchorQuery = buildAnchorAddress({ barangay, subdivision });
+  if (!anchorQuery) return null;
+  const anchor = await geocode(anchorQuery);
+  if (!anchor) return null;
+  const pin = applyBlockLotGrid(anchor, block, lot);
+  const blk = block != null && String(block).trim() ? String(block).trim() : '';
+  const lt = lot != null && String(lot).trim() ? String(lot).trim() : '';
+  const suffix = blk || lt ? ` (${blk ? `Blk ${blk}` : ''}${blk && lt ? ' ' : ''}${lt ? `Lot ${lt}` : ''})` : '';
+  return {
+    lat: pin.lat,
+    lon: pin.lon,
+    display_name: anchor.display_name ? `${anchor.display_name}${suffix}` : null,
+  };
+}
+
 /**
  * Geocodes a Cabuyao address to { lat, lon, display_name } or null.
  * Never throws: network/rate-limit problems return null so callers treat a
@@ -179,4 +256,4 @@ async function geocode(queryText) {
   return result;
 }
 
-module.exports = { geocode, buildSearchAddress, inBounds };
+module.exports = { geocode, buildSearchAddress, buildAnchorAddress, geocodeOwnerLocation, inBounds };
