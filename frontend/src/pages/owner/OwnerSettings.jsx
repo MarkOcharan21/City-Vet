@@ -210,43 +210,39 @@ export function ProfileForm({ compact = false, onSaved }) {
         </div>
       )}
 
-      {!compact && (
+      <div className="settings-field">
+        <label htmlFor="sf-subdivision">Village / Subdivision</label>
+        <input
+          id="sf-subdivision"
+          type="text"
+          value={form.subdivision}
+          onChange={(e) => set('subdivision', e.target.value)}
+          placeholder="e.g. San Antonio Village (optional)"
+        />
+      </div>
+
+      <div className="settings-field settings-field-row">
         <div className="settings-field">
-          <label htmlFor="sf-subdivision">Village / Subdivision</label>
+          <label htmlFor="sf-block">Block</label>
           <input
-            id="sf-subdivision"
+            id="sf-block"
             type="text"
-            value={form.subdivision}
-            onChange={(e) => set('subdivision', e.target.value)}
-            placeholder="e.g. San Antonio Village (optional)"
+            value={form.block}
+            onChange={(e) => set('block', e.target.value)}
+            placeholder="e.g. 12"
           />
         </div>
-      )}
-
-      {!compact && (
-        <div className="settings-field settings-field-row">
-          <div className="settings-field">
-            <label htmlFor="sf-block">Block</label>
-            <input
-              id="sf-block"
-              type="text"
-              value={form.block}
-              onChange={(e) => set('block', e.target.value)}
-              placeholder="e.g. 12"
-            />
-          </div>
-          <div className="settings-field">
-            <label htmlFor="sf-lot">Lot</label>
-            <input
-              id="sf-lot"
-              type="text"
-              value={form.lot}
-              onChange={(e) => set('lot', e.target.value)}
-              placeholder="e.g. 27"
-            />
-          </div>
+        <div className="settings-field">
+          <label htmlFor="sf-lot">Lot</label>
+          <input
+            id="sf-lot"
+            type="text"
+            value={form.lot}
+            onChange={(e) => set('lot', e.target.value)}
+            placeholder="e.g. 27"
+          />
         </div>
-      )}
+      </div>
 
       <div className="settings-field">
         <label htmlFor="sf-barangay">Barangay</label>
@@ -262,37 +258,35 @@ export function ProfileForm({ compact = false, onSaved }) {
         </select>
       </div>
 
-      {!compact && (
-        <div className="settings-field">
-          <button type="button" className="settings-gps-btn" onClick={captureGps} disabled={locatingGps}>
-            <Crosshair size={15} />
-            {locatingGps
-              ? 'Detecting location…'
-              : gps ? 'Location pinned at your exact GPS point ✓' : 'Use my current location'}
-          </button>
-{gpsError && <p className="settings-msg settings-msg--err">{gpsError}</p>}
-            {!gpsError && !gps && !locatingGps && (
-              <p className="settings-field-hint">
-                Tap this to auto-fill your exact location — the Traceability map
-                will then drop the pin at your actual address.
-              </p>
-            )}
-            {gps && !gpsError && (
-              <p className="settings-field-hint">
-                Check the pin below — drag it if it&apos;s not exactly your location.
-              </p>
-            )}
-            {gps && (
-              <div className="auth-location-map-wrap">
-                <div ref={mapContainerRef} className="auth-location-map" />
-                <p className="settings-field-hint">
-                  Pinned at {gps.lat.toFixed(6)}, {gps.lng.toFixed(6)}
-                  {gps.accuracy ? ` (±${Math.round(gps.accuracy)} m)` : ''}
-                </p>
-              </div>
-            )}
-        </div>
-      )}
+      <div className="settings-field">
+        <button type="button" className="settings-gps-btn" onClick={captureGps} disabled={locatingGps}>
+          <Crosshair size={15} />
+          {locatingGps
+            ? 'Detecting location…'
+            : gps ? 'Location pinned at your exact GPS point ✓' : 'Use my current location'}
+        </button>
+        {gpsError && <p className="settings-msg settings-msg--err">{gpsError}</p>}
+        {!gpsError && !gps && !locatingGps && (
+          <p className="settings-field-hint">
+            Tap this to auto-fill your exact location — the Traceability map
+            will then drop the pin at your actual address.
+          </p>
+        )}
+        {gps && !gpsError && (
+          <p className="settings-field-hint">
+            Check the pin below — drag it if it&apos;s not exactly your location.
+          </p>
+        )}
+        {gps && (
+          <div className="auth-location-map-wrap">
+            <div ref={mapContainerRef} className="auth-location-map" />
+            <p className="settings-field-hint">
+              Pinned at {gps.lat.toFixed(6)}, {gps.lng.toFixed(6)}
+              {gps.accuracy ? ` (±${Math.round(gps.accuracy)} m)` : ''}
+            </p>
+          </div>
+        )}
+      </div>
 
       {msg.text && (
         <p className={`settings-msg settings-msg--${msg.ok ? 'ok' : 'err'}`}>
