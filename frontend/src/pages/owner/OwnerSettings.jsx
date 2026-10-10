@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { KeyRound, Save, User, Crosshair } from 'lucide-react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
@@ -33,6 +35,10 @@ export function ProfileForm({ compact = false, onSaved }) {
   const [locatingGps, setLocatingGps] = useState(false);
   const [gpsError, setGpsError] = useState('');
 
+  const mapContainerRef = useRef(null);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
+
   function load() {
     setLoading(true);
     setError('');
@@ -56,6 +62,59 @@ export function ProfileForm({ compact = false, onSaved }) {
   }
 
   useEffect(() => { load(); }, []);
+
+  // Build the location-verification map once a GPS pin exists (same flow as the
+  // owner registration form). The marker is draggable so the owner can correct an
+  // inaccurate fix; the adjusted coordinates are kept in `gps` and saved on submit.
+  useEffect(() => {
+    if (!gps || !mapContainerRef.current || mapRef.current) return undefined;
+
+    const map = L.map(mapContainerRef.current, {
+      center: [gps.lat, gps.lng],
+      zoom: 17,
+      minZoom: 12,
+      maxZoom: 19,
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    const pinIcon = L.divIcon({
+      className: 'auth-map-pin',
+      html:
+        '<svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true">' +
+        '<path fill="#c8102e" stroke="#ffffff" stroke-width="1.4" ' +
+        'd="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>' +
+        '<circle cx="12" cy="9" r="2.7" fill="#ffffff"/></svg>',
+      iconSize: [36, 36],
+      iconAnchor: [18, 35],
+    });
+
+    const marker = L.marker([gps.lat, gps.lng], { draggable: true, icon: pinIcon }).addTo(map);
+    marker.on('dragend', () => {
+      const { lat, lng } = marker.getLatLng();
+      setGps((prev) => (prev ? { ...prev, lat, lng, accuracy: null } : prev));
+    });
+
+    mapRef.current = map;
+    markerRef.current = marker;
+    setTimeout(() => map.invalidateSize(), 0);
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(gps)]);
+
+  useEffect(() => {
+    if (!gps || !mapRef.current || !markerRef.current) return;
+    markerRef.current.setLatLng([gps.lat, gps.lng]);
+    mapRef.current.panTo([gps.lat, gps.lng]);
+  }, [gps?.lat, gps?.lng]);
 
   function set(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -220,8 +279,17 @@ export function ProfileForm({ compact = false, onSaved }) {
             )}
             {gps && !gpsError && (
               <p className="settings-field-hint">
-                The Traceability map will drop the pin at your exact GPS point.
+                Check the pin below — drag it if it&apos;s not exactly your location.
               </p>
+            )}
+            {gps && (
+              <div className="auth-location-map-wrap">
+                <div ref={mapContainerRef} className="auth-location-map" />
+                <p className="settings-field-hint">
+                  Pinned at {gps.lat.toFixed(6)}, {gps.lng.toFixed(6)}
+                  {gps.accuracy ? ` (±${Math.round(gps.accuracy)} m)` : ''}
+                </p>
+              </div>
             )}
         </div>
       )}
