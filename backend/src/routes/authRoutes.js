@@ -23,6 +23,7 @@ const {
 const authMiddleware = require("../middleware/authMiddleware");
 const requireRole = require("../middleware/roleMiddleware");
 const { getResetRequestStatus } = require("../controllers/passwordResetController");
+const { geocodeAddress } = require("../controllers/analyticsController");
 
 // Register Owner — step 1: creates a pending account and emails the OTP
 router.post("/register-owner", registerOwner);
@@ -32,6 +33,11 @@ router.post("/verify-registration", verifyRegistration);
 
 // Register Owner — re-sends a fresh OTP for a pending registration
 router.post("/resend-registration-otp", resendRegistrationOtp);
+
+// Geocode a Cabuyao address into a map pin. Public because the owner
+// registration form uses it before an account exists; it reuses the same
+// server-side, throttled + cached geocoder as the analytics map.
+router.post("/geocode", geocodeAddress);
 
 // Login (Owner, Staff, Admin — Staff/Vet may use Account ID or email)
 router.post("/login", login);

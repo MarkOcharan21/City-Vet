@@ -1,13 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyRound, Save, User, Crosshair } from 'lucide-react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import GlobalLoadingOverlay from '../../components/GlobalLoadingOverlay';
 import ErrorState from '../../components/ui/ErrorState';
 import { requestCurrentPosition } from '../../utils/geolocation';
+import useOwnerLocationMap from '../../hooks/useOwnerLocationMap';
 
 // Barangay list (mirrors backend constant — read-only on frontend)
 const CABUYAO_BARANGAYS = [
@@ -31,13 +30,17 @@ export function ProfileForm({ compact = false, onSaved }) {
     subdivision: '', block: '', lot: '',
   });
 
-  const [gps, setGps] = useState(null);
   const [locatingGps, setLocatingGps] = useState(false);
   const [gpsError, setGpsError] = useState('');
 
-  const mapContainerRef = useRef(null);
-  const mapRef = useRef(null);
-  const markerRef = useRef(null);
+  const { pin, pinSource, exactGps, mapContainerRef, geocoding, setExactPin } =
+    useOwnerLocationMap({
+      address: form.address,
+      barangay: form.barangay,
+      subdivision: form.subdivision,
+      block: form.block,
+      lot: form.lot,
+    });
 
   function load() {
     setLoading(true);
@@ -63,59 +66,6 @@ export function ProfileForm({ compact = false, onSaved }) {
 
   useEffect(() => { load(); }, []);
 
-  // Build the location-verification map once a GPS pin exists (same flow as the
-  // owner registration form). The marker is draggable so the owner can correct an
-  // inaccurate fix; the adjusted coordinates are kept in `gps` and saved on submit.
-  useEffect(() => {
-    if (!gps || !mapContainerRef.current || mapRef.current) return undefined;
-
-    const map = L.map(mapContainerRef.current, {
-      center: [gps.lat, gps.lng],
-      zoom: 17,
-      minZoom: 12,
-      maxZoom: 19,
-    });
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(map);
-
-    const pinIcon = L.divIcon({
-      className: 'auth-map-pin',
-      html:
-        '<svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true">' +
-        '<path fill="#c8102e" stroke="#ffffff" stroke-width="1.4" ' +
-        'd="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>' +
-        '<circle cx="12" cy="9" r="2.7" fill="#ffffff"/></svg>',
-      iconSize: [36, 36],
-      iconAnchor: [18, 35],
-    });
-
-    const marker = L.marker([gps.lat, gps.lng], { draggable: true, icon: pinIcon }).addTo(map);
-    marker.on('dragend', () => {
-      const { lat, lng } = marker.getLatLng();
-      setGps((prev) => (prev ? { ...prev, lat, lng, accuracy: null } : prev));
-    });
-
-    mapRef.current = map;
-    markerRef.current = marker;
-    setTimeout(() => map.invalidateSize(), 0);
-
-    return () => {
-      map.remove();
-      mapRef.current = null;
-      markerRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [Boolean(gps)]);
-
-  useEffect(() => {
-    if (!gps || !mapRef.current || !markerRef.current) return;
-    markerRef.current.setLatLng([gps.lat, gps.lng]);
-    mapRef.current.panTo([gps.lat, gps.lng]);
-  }, [gps?.lat, gps?.lng]);
-
   function set(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
     setMsg({ text: '', ok: true });
@@ -130,7 +80,7 @@ export function ProfileForm({ compact = false, onSaved }) {
       setGpsError("Could not get a GPS fix inside Cabuyao City. Saving your structured address still maps an approximate pin.");
       return;
     }
-    setGps(position);
+    setExactPin(position);
   }
 
   async function handleSave(e) {
@@ -140,9 +90,9 @@ export function ProfileForm({ compact = false, onSaved }) {
     try {
       await api.put('/owner/profile', {
         ...form,
-        gps_lat: gps?.lat || null,
-        gps_lng: gps?.lng || null,
-        gps_accuracy: gps?.accuracy || null,
+        gps_lat: exactGps?.lat || null,
+        gps_lng: exactGps?.lng || null,
+        gps_accuracy: exactGps?.accuracy || null,
       });
       // Sync AuthContext so topbar greeting updates immediately
       if (setUser) setUser((prev) => ({ ...prev, full_name: form.full_name, email: form.email }));
@@ -263,26 +213,29 @@ export function ProfileForm({ compact = false, onSaved }) {
           <Crosshair size={15} />
           {locatingGps
             ? 'Detecting location…'
-            : gps ? 'Location pinned at your exact GPS point ✓' : 'Use my current location'}
+            : pinSource === 'gps' ? 'Location pinned at your exact GPS point ✓' : 'Use my current location'}
         </button>
         {gpsError && <p className="settings-msg settings-msg--err">{gpsError}</p>}
-        {!gpsError && !gps && !locatingGps && (
+        {!gpsError && !pin && !locatingGps && (
           <p className="settings-field-hint">
-            Tap this to auto-fill your exact location — the Traceability map
-            will then drop the pin at your actual address.
+            Your pin is placed from your barangay, subdivision, block and lot — tap
+            the button to use your exact GPS location instead.
           </p>
         )}
-        {gps && !gpsError && (
+        {pin && !gpsError && (
           <p className="settings-field-hint">
-            Check the pin below — drag it if it&apos;s not exactly your location.
+            The pin follows your address — drag it if it&apos;s not exactly right.
           </p>
         )}
-        {gps && (
+        {pin && (
           <div className="auth-location-map-wrap">
             <div ref={mapContainerRef} className="auth-location-map" />
             <p className="settings-field-hint">
-              Pinned at {gps.lat.toFixed(6)}, {gps.lng.toFixed(6)}
-              {gps.accuracy ? ` (±${Math.round(gps.accuracy)} m)` : ''}
+              {geocoding
+                ? 'Updating pin from your address…'
+                : `Pinned at ${pin.lat.toFixed(6)}, ${pin.lng.toFixed(6)}${
+                    pin.accuracy ? ` (±${Math.round(pin.accuracy)} m)` : ''
+                  }`}
             </p>
           </div>
         )}
