@@ -6,6 +6,7 @@ import StatusBadge from '../../components/StatusBadge';
 import PetSearchSelect from '../../components/PetSearchSelect';
 import { Calendar, User, FileText, Syringe, Stethoscope, CheckCircle2, Clock, MapPin, PawPrint } from 'lucide-react';
 import { resolveMediaUrl } from '../../utils/mediaUrl';
+import { addSatelliteBase } from '../../utils/mapTiles';
 import { normalizeBarangay } from '../../data/cabuyaoBarangays';
 
 const NO_BARANGAY_KEY = '__none__';
@@ -91,10 +92,7 @@ function CabuyaoLocationMap({ pet, ownerPets, onSelectPet }) {
       attributionControl: true,
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(map);
+    addSatelliteBase(map);
 
     mapRef.current = map;
 
@@ -333,10 +331,7 @@ function BarangayHeatmapMap({ data, loading, onSelectBarangay }) {
       attributionControl: true,
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(map);
+    addSatelliteBase(map);
 
     mapRef.current = map;
 

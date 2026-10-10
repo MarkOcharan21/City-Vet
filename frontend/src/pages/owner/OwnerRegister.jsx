@@ -425,7 +425,7 @@ export default function OwnerRegister() {
                   )}
                   {pin && !gpsError && (
                     <p className="auth-field-hint">
-                      The pin follows your block and lot — drag it to fine-tune. Barangay
+                      Zoom in and tap your exact house, or drag the pin. Barangay
                       officials will use it to find you.
                     </p>
                   )}

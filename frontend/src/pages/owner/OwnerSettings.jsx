@@ -224,7 +224,7 @@ export function ProfileForm({ compact = false, onSaved }) {
         )}
         {pin && !gpsError && (
           <p className="settings-field-hint">
-            The pin follows your block and lot — drag it if it&apos;s not exactly right.
+            Zoom in and tap your exact house, or drag the pin to fine-tune it.
           </p>
         )}
         {pin && (

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import api from "../services/api";
+import { addSatelliteBase } from "../utils/mapTiles";
 
 // Shared red teardrop pin — the default Leaflet marker image breaks under Vite,
 // so the marker is drawn as inline SVG instead.
@@ -32,7 +33,7 @@ const PIN_ICON = L.divIcon({
  * @param {{ debounceMs?: number }} [options]
  * @returns {{
  *   pin: { lat: number, lng: number } | null,
- *   pinSource: 'gps' | 'drag' | 'geocode' | null,
+ *   pinSource: 'gps' | 'manual' | 'geocode' | null,
  *   exactGps: { lat: number, lng: number } | null,
  *   mapContainerRef: import('react').RefObject<HTMLDivElement>,
  *   geocoding: boolean,
@@ -54,22 +55,25 @@ export default function useOwnerLocationMap(address, { debounceMs = 800 } = {}) 
 
     const map = L.map(mapContainerRef.current, {
       center: [pin.lat, pin.lng],
-      zoom: 17,
+      zoom: 18,
       minZoom: 12,
       maxZoom: 19,
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap contributors",
-      maxZoom: 19,
-    }).addTo(map);
+    addSatelliteBase(map);
 
     const marker = L.marker([pin.lat, pin.lng], { draggable: true, icon: PIN_ICON }).addTo(map);
+
+    // Drag the pin, or tap anywhere on the satellite view, to set the exact spot.
+    const setManual = (lat, lng) => {
+      setPin({ lat, lng, accuracy: null });
+      setPinSource("manual");
+    };
     marker.on("dragend", () => {
       const { lat, lng } = marker.getLatLng();
-      setPin({ lat, lng, accuracy: null });
-      setPinSource("drag");
+      setManual(lat, lng);
     });
+    map.on("click", (e) => setManual(e.latlng.lat, e.latlng.lng));
 
     mapRef.current = map;
     markerRef.current = marker;
@@ -85,7 +89,7 @@ export default function useOwnerLocationMap(address, { debounceMs = 800 } = {}) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [Boolean(pin)]);
 
-  // Move the marker whenever the pin changes (GPS fix, drag or geocode).
+  // Move the marker whenever the pin changes (GPS fix, manual tap/drag or geocode).
   useEffect(() => {
     if (!pin || !mapRef.current || !markerRef.current) return;
     markerRef.current.setLatLng([pin.lat, pin.lng]);
@@ -139,7 +143,7 @@ export default function useOwnerLocationMap(address, { debounceMs = 800 } = {}) 
   // Coordinates that represent a real device/manual fix (as opposed to an
   // address lookup). This is what should be persisted explicitly; an address
   // pin is re-derived on the server, so it need not be sent.
-  const exactGps = pin && (pinSource === "gps" || pinSource === "drag") ? pin : null;
+  const exactGps = pin && (pinSource === "gps" || pinSource === "manual") ? pin : null;
 
   return { pin, pinSource, exactGps, mapContainerRef, geocoding, setExactPin };
 }

@@ -144,6 +144,86 @@ function buildAnchorAddress({ barangay, subdivision } = {}) {
   return parts.join(', ');
 }
 
+// ---------------------------------------------------------------------------
+// Building-footprint snapping
+//
+// The block/lot grid gets the pin into the right neighbourhood; this nudges it
+// onto the nearest real building footprint so it lands on a house rather than
+// the middle of a block. Footprints come from OpenStreetMap via the Overpass
+// API (free, no key). Coverage in Cabuyao is partial, so this is strictly
+// best-effort: if nothing is found, unreachable, or farther than a small snap
+// radius, the grid pin is kept untouched. Anchor query for an owner location.
+// ---------------------------------------------------------------------------
+const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_UA = 'CityVetPetRegistration/1.0 (capstone; contact: cityvetoffice04@gmail.com)';
+const SNAP_MAX_METERS = 80; // only refine when a footprint is genuinely nearby
+
+function metersBetween(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/**
+ * Returns the centroid { lat, lon } of the nearest building footprint within
+ * `radiusMeters` of (lat, lon), or null. Cached; never throws.
+ */
+async function nearestBuilding(lat, lon, radiusMeters = SNAP_MAX_METERS) {
+  const key = `bld:${lat.toFixed(5)},${lon.toFixed(5)},${radiusMeters}`;
+  const hit = cacheGet(key);
+  if (hit !== undefined) return hit;
+
+  const query =
+    `[out:json][timeout:8];` +
+    `(way["building"](around:${radiusMeters},${lat},${lon});` +
+    `node["building"](around:${radiusMeters},${lat},${lon});` +
+    `relation["building"](around:${radiusMeters},${lat},${lon}););` +
+    `out center 30;`;
+
+  let result = null;
+  try {
+    result = await throttle(async () => {
+      const response = await fetch(OVERPASS_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': OVERPASS_UA,
+        },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: AbortSignal.timeout(9000),
+      });
+      if (!response.ok) return null;
+      const json = await response.json();
+      const elements = Array.isArray(json.elements) ? json.elements : [];
+      let best = null;
+      let bestDist = Infinity;
+      for (const el of elements) {
+        const center = el.center || (el.lat != null && el.lon != null ? el : null);
+        if (!center) continue;
+        const cLat = Number(center.lat);
+        const cLon = Number(center.lon);
+        if (!Number.isFinite(cLat) || !Number.isFinite(cLon)) continue;
+        const d = metersBetween(lat, lon, cLat, cLon);
+        if (d < bestDist) {
+          bestDist = d;
+          best = { lat: cLat, lon: cLon };
+        }
+      }
+      return best;
+    });
+  } catch (e) {
+    console.log(`[geocode] building snap failed: ${e && e.message ? e.message : e}`);
+    result = null;
+  }
+  cacheSet(key, result);
+  return result;
+}
+
 /**
  * Resolves an owner's pin from barangay/subdivision + block/lot. Returns
  * { lat, lon, display_name } or null. Never throws.
@@ -153,7 +233,17 @@ async function geocodeOwnerLocation({ barangay, subdivision, block, lot } = {}) 
   if (!anchorQuery) return null;
   const anchor = await geocode(anchorQuery);
   if (!anchor) return null;
-  const pin = applyBlockLotGrid(anchor, block, lot);
+
+  const grid = applyBlockLotGrid(anchor, block, lot);
+  let pin = grid;
+
+  // Only refine a block/lot grid point, and only onto a nearby footprint, so
+  // the pin still clearly follows the block & lot the owner typed.
+  if (grid !== anchor) {
+    const building = await nearestBuilding(grid.lat, grid.lon);
+    if (building) pin = { ...grid, ...building };
+  }
+
   const blk = block != null && String(block).trim() ? String(block).trim() : '';
   const lt = lot != null && String(lot).trim() ? String(lot).trim() : '';
   const suffix = blk || lt ? ` (${blk ? `Blk ${blk}` : ''}${blk && lt ? ' ' : ''}${lt ? `Lot ${lt}` : ''})` : '';
