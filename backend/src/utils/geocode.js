@@ -17,6 +17,8 @@
 
 const NOMINATIM_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
 
+const { barangayCoordinate, normalizeBarangay } = require('./cabuyaoBarangays');
+
 // Cabuyao City rough bounding box (same as the frontend map's CABUYAO_BOUNDS).
 const CABUYAO_LAT_MIN = 14.1500;
 const CABUYAO_LAT_MAX = 14.3300;
@@ -68,23 +70,6 @@ function inBounds(lat, lon) {
     lon >= CABUYAO_LON_MIN &&
     lon <= CABUYAO_LON_MAX
   );
-}
-
-/**
- * Joins the structured address pieces the same way in registration, the map,
- * and the backfill so every code path geocodes an identical string.
- * Accepts: { address, barangay, subdivision, block, lot }
- */
-function buildSearchAddress({ address, barangay, subdivision, block, lot } = {}) {
-  const parts = [];
-  const blockLot = [block && `Blk ${block}`, lot && `Lot ${lot}`].filter(Boolean).join(' ');
-  if (blockLot) parts.push(blockLot);
-  if (address && String(address).trim()) parts.push(String(address).trim());
-  if (subdivision && String(subdivision).trim()) parts.push(String(subdivision).trim());
-  if (barangay && String(barangay).trim()) parts.push(`Barangay ${String(barangay).trim()}`);
-  if (parts.length === 0) return null;
-  parts.push('Cabuyao City', 'Laguna', 'Philippines');
-  return parts.join(', ');
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +143,16 @@ const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter';
 const OVERPASS_UA = 'CityVetPetRegistration/1.0 (capstone; contact: cityvetoffice04@gmail.com)';
 const SNAP_MAX_METERS = 80; // only refine when a footprint is genuinely nearby
 
+// Building snapping needs the public Overpass API, which is frequently
+// overloaded (504) and would add many seconds to every lookup for no gain.
+// Off by default; set GEOCODE_BUILDING_SNAP=1 to enable it where Overpass is
+// responsive.
+const BUILDING_SNAP_ENABLED = /^(1|true|yes|on)$/i.test(String(process.env.GEOCODE_BUILDING_SNAP || ''));
+
+// A subdivision result this far from its barangay centroid is treated as a
+// wrong-name match and the authoritative barangay anchor is used instead.
+const SUBDIVISION_MAX_FROM_BARANGAY_M = 3000;
+
 function metersBetween(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const toRad = (d) => (d * Math.PI) / 180;
@@ -195,7 +190,7 @@ async function nearestBuilding(lat, lon, radiusMeters = SNAP_MAX_METERS) {
           'User-Agent': OVERPASS_UA,
         },
         body: `data=${encodeURIComponent(query)}`,
-        signal: AbortSignal.timeout(9000),
+        signal: AbortSignal.timeout(5000),
       });
       if (!response.ok) return null;
       const json = await response.json();
@@ -225,13 +220,50 @@ async function nearestBuilding(lat, lon, radiusMeters = SNAP_MAX_METERS) {
 }
 
 /**
+ * Picks the best anchor point for an owner location.
+ *
+ * Nominatim cannot reliably resolve Cabuyao barangay names (it returns the city
+ * centroid for many of them), so the barangay is anchored on the authoritative
+ * PhilAtlas coordinate table instead. A named subdivision — the finest place OSM
+ * tends to know — is preferred when it is consistent with the chosen barangay.
+ * Returns { lat, lon, display_name } or null.
+ */
+async function resolveAnchor({ barangay, subdivision } = {}) {
+  const known = barangayCoordinate(barangay);
+  const knownPoint = known ? { lat: known[0], lon: known[1] } : null;
+
+  if (subdivision && String(subdivision).trim()) {
+    const subdivisionGeo = await geocodeOnce(`${String(subdivision).trim()}, Cabuyao City, Laguna, Philippines`);
+    if (subdivisionGeo) {
+      const consistent =
+        !knownPoint ||
+        metersBetween(knownPoint.lat, knownPoint.lon, subdivisionGeo.lat, subdivisionGeo.lon) <=
+          SUBDIVISION_MAX_FROM_BARANGAY_M;
+      if (consistent) return { ...subdivisionGeo, source: 'subdivision' };
+    }
+  }
+
+  if (knownPoint) {
+    return {
+      lat: knownPoint.lat,
+      lon: knownPoint.lon,
+      display_name: `Barangay ${normalizeBarangay(barangay)}, Cabuyao City, Laguna`,
+      source: 'barangay',
+    };
+  }
+
+  const anchorQuery = buildAnchorAddress({ barangay, subdivision });
+  if (!anchorQuery) return null;
+  const geo = await geocode(anchorQuery);
+  return geo ? { ...geo, source: 'geocode' } : null;
+}
+
+/**
  * Resolves an owner's pin from barangay/subdivision + block/lot. Returns
  * { lat, lon, display_name } or null. Never throws.
  */
 async function geocodeOwnerLocation({ barangay, subdivision, block, lot } = {}) {
-  const anchorQuery = buildAnchorAddress({ barangay, subdivision });
-  if (!anchorQuery) return null;
-  const anchor = await geocode(anchorQuery);
+  const anchor = await resolveAnchor({ barangay, subdivision });
   if (!anchor) return null;
 
   const grid = applyBlockLotGrid(anchor, block, lot);
@@ -239,7 +271,7 @@ async function geocodeOwnerLocation({ barangay, subdivision, block, lot } = {}) 
 
   // Only refine a block/lot grid point, and only onto a nearby footprint, so
   // the pin still clearly follows the block & lot the owner typed.
-  if (grid !== anchor) {
+  if (grid !== anchor && BUILDING_SNAP_ENABLED) {
     const building = await nearestBuilding(grid.lat, grid.lon);
     if (building) pin = { ...grid, ...building };
   }
@@ -252,6 +284,56 @@ async function geocodeOwnerLocation({ barangay, subdivision, block, lot } = {}) 
     lon: pin.lon,
     display_name: anchor.display_name ? `${anchor.display_name}${suffix}` : null,
   };
+}
+
+/**
+ * Single Nominatim lookup for one candidate string (throttled + bounds-checked).
+ * Returns { lat, lon, display_name } or null.
+ */
+async function queryNominatim(candidate) {
+  return throttle(async () => {
+    const url =
+      `${NOMINATIM_ENDPOINT}?format=jsonv2&limit=5&countrycodes=ph` +
+      `&q=${encodeURIComponent(candidate)}`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'CityVetPetRegistration/1.0 (capstone; contact: cityvetoffice04@gmail.com)',
+        'Accept-Language': 'en,ph;q=0.9',
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return null;
+    const list = await response.json();
+    if (!Array.isArray(list) || list.length === 0) return null;
+    for (const item of list) {
+      const lat = Number(item.lat);
+      const lon = Number(item.lon);
+      if (!inBounds(lat, lon)) continue;
+      return { lat, lon, display_name: item.display_name || null };
+    }
+    return null;
+  });
+}
+
+/**
+ * Geocodes a single exact string with no degradation (one request, cached).
+ * Used for subdivision names, where a partial match would blur the pin back to
+ * the city. Returns { lat, lon, display_name } or null.
+ */
+async function geocodeOnce(queryText) {
+  const text = String(queryText || '').trim();
+  if (!text) return null;
+  const key = memoryKey(text);
+  const hit = cacheGet(key);
+  if (hit !== undefined) return hit;
+  let result = null;
+  try {
+    result = await queryNominatim(text);
+  } catch (e) {
+    console.log(`[geocode] lookup failed for "${text.slice(0, 80)}": ${e && e.message ? e.message : e}`);
+  }
+  cacheSet(key, result);
+  return result;
 }
 
 /**
@@ -308,33 +390,7 @@ async function geocode(queryText) {
       continue;
     }
     try {
-      const found = await throttle(async () => {
-        const url =
-          `${NOMINATIM_ENDPOINT}?format=jsonv2&limit=5&countrycodes=ph` +
-          `&q=${encodeURIComponent(candidate)}`;
-        const response = await fetch(url, {
-          headers: {
-            'User-Agent': 'CityVetPetRegistration/1.0 (capstone; contact: cityvetoffice04@gmail.com)',
-            'Accept-Language': 'en,ph;q=0.9',
-          },
-          signal: AbortSignal.timeout(8000),
-        });
-        if (!response.ok) return null;
-        const list = await response.json();
-        if (!Array.isArray(list) || list.length === 0) return null;
-
-        for (const item of list) {
-          const lat = Number(item.lat);
-          const lon = Number(item.lon);
-          if (!inBounds(lat, lon)) continue;
-          return {
-            lat,
-            lon,
-            display_name: item.display_name || null,
-          };
-        }
-        return null;
-      });
+      const found = await queryNominatim(candidate);
       cacheSet(candidateKey, found);
       if (found) result = found;
     } catch (e) {
@@ -346,4 +402,4 @@ async function geocode(queryText) {
   return result;
 }
 
-module.exports = { geocode, buildSearchAddress, buildAnchorAddress, geocodeOwnerLocation, inBounds };
+module.exports = { geocode, buildAnchorAddress, geocodeOwnerLocation, inBounds };
