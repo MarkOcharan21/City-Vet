@@ -1772,6 +1772,25 @@ body:has(.clinic-access-page)::before {
   line-height: 1.45;
 }
 
+.auth-location-map-wrap {
+  margin-top: 0.7rem;
+}
+
+.auth-location-map {
+  width: 100%;
+  height: 240px;
+  border: 1px solid var(--color-border);
+  border-radius: 0.7rem;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.auth-location-map .leaflet-container {
+  height: 100%;
+  width: 100%;
+  font: inherit;
+}
+
 .auth-register-form .form-error,
 .auth-register-form .form-success {
   margin: 0;

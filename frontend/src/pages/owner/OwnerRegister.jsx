@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, MapPin, Mail, Crosshair } from "lucide-react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import api from "../../services/api";
 import PasswordInput from "../../components/PasswordInput";
 import PasswordStrength from "../../components/PasswordStrength";
@@ -32,7 +34,6 @@ export default function OwnerRegister() {
     password: "",
     confirmPassword: "",
     contact_number: "",
-    address: "",
     barangay: "",
     subdivision: "",
     block: "",
@@ -60,6 +61,10 @@ export default function OwnerRegister() {
   const [verified, setVerified] = useState(false);
   const [fallbackCode, setFallbackCode] = useState(null);
 
+  const mapContainerRef = useRef(null);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -73,6 +78,52 @@ export default function OwnerRegister() {
     const timer = setInterval(() => setResendCooldown((prev) => prev - 1), 1000);
     return () => clearInterval(timer);
   }, [resendCooldown]);
+
+  // Build the verification map once a GPS pin exists. The marker is draggable so
+  // the owner can correct an inaccurate fix; the adjusted coordinates are kept in
+  // `gps` and therefore get sent to the server on verify.
+  useEffect(() => {
+    if (!gps || !mapContainerRef.current || mapRef.current) return undefined;
+
+    const map = L.map(mapContainerRef.current, {
+      center: [gps.lat, gps.lng],
+      zoom: 17,
+      minZoom: 12,
+      maxZoom: 19,
+      attributionControl: true,
+    });
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors",
+      maxZoom: 19,
+    }).addTo(map);
+
+    const marker = L.marker([gps.lat, gps.lng], { draggable: true }).addTo(map);
+    marker.on("dragend", () => {
+      const { lat, lng } = marker.getLatLng();
+      setGps((prev) => (prev ? { ...prev, lat, lng, accuracy: null } : prev));
+    });
+
+    mapRef.current = map;
+    markerRef.current = marker;
+    // Leaflet needs a tick after layout before it can measure the container.
+    setTimeout(() => map.invalidateSize(), 0);
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    };
+    // Only rebuild when a pin appears/disappears; position updates are handled below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(gps)]);
+
+  // Keep the marker/map in sync when the pin moves (re-detected or dragged).
+  useEffect(() => {
+    if (!gps || !mapRef.current || !markerRef.current) return;
+    markerRef.current.setLatLng([gps.lat, gps.lng]);
+    mapRef.current.panTo([gps.lat, gps.lng]);
+  }, [gps?.lat, gps?.lng]);
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -91,7 +142,7 @@ export default function OwnerRegister() {
     const position = await requestCurrentPosition();
     setLocatingGps(false);
     if (!position) {
-      setGpsError("Could not get a GPS fix inside Cabuyao City. You can still register — save your address and a location is mapped automatically.");
+      setGpsError("Could not get a GPS fix inside Cabuyao City. You can still register — fill in your barangay, subdivision, block and lot and a location is mapped automatically.");
       return;
     }
     setGps(position);
@@ -324,17 +375,6 @@ export default function OwnerRegister() {
                 </div>
 
                 <div className="auth-field">
-                  <label htmlFor="address">Address</label>
-                  <input
-                    id="address"
-                    name="address"
-                    placeholder="House No., Street"
-                    value={form.address}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                <div className="auth-field">
                   <label htmlFor="barangay">
                     <span className="auth-label-with-icon">
                       <MapPin size={15} />
@@ -429,9 +469,19 @@ export default function OwnerRegister() {
                   )}
                   {gps && !gpsError && (
                     <p className="auth-field-hint">
-                      Pin will be placed at your exact GPS location so barangay
-                      officials can find you.
+                      Check the pin below — drag it if it&apos;s not exactly your location.
+                      Barangay officials will use it to find you.
                     </p>
+                  )}
+
+                  {gps && (
+                    <div className="auth-location-map-wrap">
+                      <div ref={mapContainerRef} className="auth-location-map" />
+                      <p className="auth-field-hint">
+                        Pinned at {gps.lat.toFixed(6)}, {gps.lng.toFixed(6)}
+                        {gps.accuracy ? ` (±${Math.round(gps.accuracy)} m)` : ""}
+                      </p>
+                    </div>
                   )}
                 </div>
               </section>
