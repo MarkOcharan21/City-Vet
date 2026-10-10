@@ -1791,6 +1791,11 @@ body:has(.clinic-access-page)::before {
   font: inherit;
 }
 
+.auth-map-pin {
+  background: transparent;
+  border: 0;
+}
+
 .auth-register-form .form-error,
 .auth-register-form .form-success {
   margin: 0;

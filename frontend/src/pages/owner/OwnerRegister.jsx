@@ -98,7 +98,18 @@ export default function OwnerRegister() {
       maxZoom: 19,
     }).addTo(map);
 
-    const marker = L.marker([gps.lat, gps.lng], { draggable: true }).addTo(map);
+    const pinIcon = L.divIcon({
+      className: "auth-map-pin",
+      html:
+        '<svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true">' +
+        '<path fill="#c8102e" stroke="#ffffff" stroke-width="1.4" ' +
+        'd="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>' +
+        '<circle cx="12" cy="9" r="2.7" fill="#ffffff"/></svg>',
+      iconSize: [36, 36],
+      iconAnchor: [18, 35],
+    });
+
+    const marker = L.marker([gps.lat, gps.lng], { draggable: true, icon: pinIcon }).addTo(map);
     marker.on("dragend", () => {
       const { lat, lng } = marker.getLatLng();
       setGps((prev) => (prev ? { ...prev, lat, lng, accuracy: null } : prev));
