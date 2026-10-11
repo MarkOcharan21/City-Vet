@@ -76,24 +76,29 @@ function inBounds(lat, lon) {
 // Block & lot positioning
 //
 // OpenStreetMap (and therefore Nominatim) has no block/lot parcel data for
-// Philippine subdivisions, so a "Blk 5 Lot 10" query just degrades to the
-// subdivision/barangay centroid — the pin never really followed the block or
-// lot the owner typed. Instead we anchor on the geocoded subdivision/barangay
-// and lay the household onto a deterministic grid: the LOT number walks along
-// the street (east-west) and the BLOCK number steps between parallel streets
-// (north-south). The same block/lot always lands on the same spot, so the pin
-// visibly follows the block & lot fields rather than the free-text address.
+// Philippine subdivisions, so a "Blk 27 Lot 30" query cannot be geocoded
+// directly. Instead we lay the household onto a compact, deterministic
+// serpentine grid centred on the geocoded subdivision/barangay anchor: the LOT
+// number walks along the street (east-west) and the BLOCK number steps between
+// parallel streets (north-south). The grid is deliberately BOUNDED — block and
+// lot numbers wrap — so large values (e.g. "Blk 27 Lot 30") can never fling the
+// pin a kilometre away into the next barangay; the same block/lot always lands
+// on the same spot, so the pin still visibly follows the fields the owner typed.
 // ---------------------------------------------------------------------------
 const METERS_PER_DEG_LAT = 111320;
-const LOT_STEP_METERS = 15;    // spacing between adjacent lots along a street
-const BLOCK_STEP_METERS = 45;  // spacing between blocks (one street apart)
-const MAX_GRID_STEPS = 60;     // clamp absurd block/lot numbers
+const LOT_PITCH_METERS = 10;    // spacing between adjacent lots along a street
+const LOTS_PER_BLOCK = 16;      // lots on one side of a block
+const BLOCKS_PER_ROW = 3;       // blocks per row (a row = a set of parallel streets)
+const BLOCK_PITCH_METERS = 50;  // spacing between block rows (one street apart)
+const MAX_BLOCKS = 12;          // wrap block numbers into 4 rows
+const MAX_LOTS = 16;            // wrap lot numbers into one block side
 
-function numericIndex(value) {
+function blockLotIndex(value, wrap) {
   const match = String(value == null ? '' : value).match(/\d+/);
-  const n = match ? Number(match[0]) : 0;
-  if (!Number.isFinite(n) || n <= 0) return 0;
-  return Math.min(n - 1, MAX_GRID_STEPS);
+  if (!match) return null;
+  const n = Number(match[0]);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return (n - 1) % wrap;
 }
 
 function clampToBounds(lat, lon) {
@@ -104,12 +109,35 @@ function clampToBounds(lat, lon) {
 }
 
 function applyBlockLotGrid(anchor, block, lot) {
-  const blockSteps = numericIndex(block);
-  const lotSteps = numericIndex(lot);
-  if (!blockSteps && !lotSteps) return anchor;
+  const b = blockLotIndex(block, MAX_BLOCKS);
+  const l = blockLotIndex(lot, MAX_LOTS);
+  if (b === null && l === null) return anchor;
+
+  const bIdx = b === null ? 0 : b;
+  const lIdx = l === null ? 0 : l;
+
+  const row = Math.floor(bIdx / BLOCKS_PER_ROW);
+  const col = bIdx % BLOCKS_PER_ROW;
+  const serpentine = row % 2 === 1; // reverse direction every other row
+  const blockLength = LOTS_PER_BLOCK * LOT_PITCH_METERS;
+  const rowCount = Math.ceil(MAX_BLOCKS / BLOCKS_PER_ROW);
+
+  const lotOffset = serpentine
+    ? blockLength - (lIdx + 1) * LOT_PITCH_METERS
+    : lIdx * LOT_PITCH_METERS;
+  const colPos = serpentine ? BLOCKS_PER_ROW - 1 - col : col;
+
+  // Centre the whole footprint on the anchor so no single corner shoots off.
+  const eastCenter =
+    ((BLOCKS_PER_ROW - 1) * blockLength + (LOTS_PER_BLOCK - 1) * LOT_PITCH_METERS) / 2;
+  const northCenter = ((rowCount - 1) * BLOCK_PITCH_METERS) / 2;
+
+  const east = colPos * blockLength + lotOffset - eastCenter;
+  const north = row * BLOCK_PITCH_METERS - northCenter;
+
   const cosLat = Math.cos((anchor.lat * Math.PI) / 180) || 1;
-  const dLat = (blockSteps * BLOCK_STEP_METERS) / METERS_PER_DEG_LAT;
-  const dLon = (lotSteps * LOT_STEP_METERS) / (METERS_PER_DEG_LAT * cosLat);
+  const dLat = north / METERS_PER_DEG_LAT;
+  const dLon = east / (METERS_PER_DEG_LAT * cosLat);
   const { lat, lon } = clampToBounds(anchor.lat + dLat, anchor.lon + dLon);
   return { ...anchor, lat, lon };
 }
