@@ -7,6 +7,7 @@ import GlobalLoadingOverlay from '../../components/GlobalLoadingOverlay';
 import ErrorState from '../../components/ui/ErrorState';
 import { requestCurrentPosition } from '../../utils/geolocation';
 import useOwnerLocationMap from '../../hooks/useOwnerLocationMap';
+import { CABUYAO_SUBDIVISIONS } from '../../data/cabuyaoSubdivisions';
 
 // Barangay list (mirrors backend constant — read-only on frontend)
 const CABUYAO_BARANGAYS = [
@@ -165,10 +166,16 @@ export function ProfileForm({ compact = false, onSaved }) {
         <input
           id="sf-subdivision"
           type="text"
+          list="cabuyao-subdivisions"
           value={form.subdivision}
           onChange={(e) => set('subdivision', e.target.value)}
           placeholder="e.g. San Antonio Village (optional)"
         />
+        <datalist id="cabuyao-subdivisions">
+          {CABUYAO_SUBDIVISIONS.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
       </div>
 
       <div className="settings-field settings-field-row">

@@ -18,6 +18,7 @@
 const NOMINATIM_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
 
 const { barangayCoordinate, normalizeBarangay } = require('./cabuyaoBarangays');
+const { subdivisionCoordinate } = require('./cabuyaoSubdivisions');
 
 // Cabuyao City rough bounding box (same as the frontend map's CABUYAO_BOUNDS).
 const CABUYAO_LAT_MIN = 14.1500;
@@ -261,13 +262,27 @@ async function resolveAnchor({ barangay, subdivision } = {}) {
   const knownPoint = known ? { lat: known[0], lon: known[1] } : null;
 
   if (subdivision && String(subdivision).trim()) {
-    const subdivisionGeo = await geocodeOnce(`${String(subdivision).trim()}, Cabuyao City, Laguna, Philippines`);
-    if (subdivisionGeo) {
-      const consistent =
-        !knownPoint ||
-        metersBetween(knownPoint.lat, knownPoint.lon, subdivisionGeo.lat, subdivisionGeo.lon) <=
-          SUBDIVISION_MAX_FROM_BARANGAY_M;
-      if (consistent) return { ...subdivisionGeo, source: 'subdivision' };
+    const subdivisionName = String(subdivision).trim();
+    const consistentWithBarangay = (lat, lon) =>
+      !knownPoint || metersBetween(knownPoint.lat, knownPoint.lon, lat, lon) <= SUBDIVISION_MAX_FROM_BARANGAY_M;
+
+    // 1) Authoritative OSM subdivision table — the accurate village centre.
+    //    Trusted directly: it is exact-match curated data inside Cabuyao, so an
+    //    owner's barangay mis-pick must not drag the pin off the real village.
+    const tablePoint = subdivisionCoordinate(subdivisionName);
+    if (tablePoint) {
+      return {
+        lat: tablePoint[0],
+        lon: tablePoint[1],
+        display_name: `${subdivisionName}, Cabuyao City, Laguna`,
+        source: 'subdivision',
+      };
+    }
+
+    // 2) Nominatim fallback for subdivisions OSM names but the table lacks.
+    const subdivisionGeo = await geocodeOnce(`${subdivisionName}, Cabuyao City, Laguna, Philippines`);
+    if (subdivisionGeo && consistentWithBarangay(subdivisionGeo.lat, subdivisionGeo.lon)) {
+      return { ...subdivisionGeo, source: 'subdivision' };
     }
   }
 

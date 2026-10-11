@@ -10,6 +10,7 @@ import {
   CABUYAO_BARANGAYS,
   CABUYAO_POB_BARANGAYS,
 } from "../../data/cabuyaoBarangays";
+import { CABUYAO_SUBDIVISIONS } from "../../data/cabuyaoSubdivisions";
 import FieldError from "../../components/ui/FieldError";
 import SuccessModal from "../../components/ui/SuccessModal";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
@@ -373,10 +374,16 @@ export default function OwnerRegister() {
                   <input
                     id="subdivision"
                     name="subdivision"
+                    list="cabuyao-subdivisions"
                     placeholder="e.g. San Antonio Village (optional)"
                     value={form.subdivision}
                     onChange={handleChange}
                   />
+                  <datalist id="cabuyao-subdivisions">
+                    {CABUYAO_SUBDIVISIONS.map((s) => (
+                      <option key={s} value={s} />
+                    ))}
+                  </datalist>
                 </div>
 
                 <div className="auth-field auth-field-row">
