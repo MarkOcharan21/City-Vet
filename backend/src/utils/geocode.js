@@ -18,7 +18,7 @@
 const NOMINATIM_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
 
 const { barangayCoordinate, normalizeBarangay } = require('./cabuyaoBarangays');
-const { subdivisionCoordinate } = require('./cabuyaoSubdivisions');
+const { subdivisionCoordinate, subdivisionBounds } = require('./cabuyaoSubdivisions');
 
 // Cabuyao City rough bounding box (same as the frontend map's CABUYAO_BOUNDS).
 const CABUYAO_LAT_MIN = 14.1500;
@@ -87,12 +87,14 @@ function inBounds(lat, lon) {
 // on the same spot, so the pin still visibly follows the fields the owner typed.
 // ---------------------------------------------------------------------------
 const METERS_PER_DEG_LAT = 111320;
-const LOT_PITCH_METERS = 10;    // spacing between adjacent lots along a street
-const LOTS_PER_BLOCK = 16;      // lots on one side of a block
-const BLOCKS_PER_ROW = 3;       // blocks per row (a row = a set of parallel streets)
-const BLOCK_PITCH_METERS = 50;  // spacing between block rows (one street apart)
-const MAX_BLOCKS = 12;          // wrap block numbers into 4 rows
-const MAX_LOTS = 16;            // wrap lot numbers into one block side
+const LOTS_PER_BLOCK = 16;   // lots on one side of a block
+const BLOCKS_PER_ROW = 3;    // blocks per row (a row = a set of parallel streets)
+const MAX_BLOCKS = 12;       // wrap block numbers into 4 rows
+const MAX_LOTS = 16;         // wrap lot numbers into one block side
+// Fallback footprint (metres, centred on the anchor) used when the exact
+// subdivision outline is unknown — e.g. a barangay-only address.
+const DEFAULT_HALF_EAST_M = 235;
+const DEFAULT_HALF_NORTH_M = 75;
 
 function blockLotIndex(value, wrap) {
   const match = String(value == null ? '' : value).match(/\d+/);
@@ -109,7 +111,7 @@ function clampToBounds(lat, lon) {
   };
 }
 
-function applyBlockLotGrid(anchor, block, lot) {
+function applyBlockLotGrid(anchor, block, lot, bounds) {
   const b = blockLotIndex(block, MAX_BLOCKS);
   const l = blockLotIndex(lot, MAX_LOTS);
   if (b === null && l === null) return anchor;
@@ -120,27 +122,34 @@ function applyBlockLotGrid(anchor, block, lot) {
   const row = Math.floor(bIdx / BLOCKS_PER_ROW);
   const col = bIdx % BLOCKS_PER_ROW;
   const serpentine = row % 2 === 1; // reverse direction every other row
-  const blockLength = LOTS_PER_BLOCK * LOT_PITCH_METERS;
   const rowCount = Math.ceil(MAX_BLOCKS / BLOCKS_PER_ROW);
 
-  const lotOffset = serpentine
-    ? blockLength - (lIdx + 1) * LOT_PITCH_METERS
-    : lIdx * LOT_PITCH_METERS;
-  const colPos = serpentine ? BLOCKS_PER_ROW - 1 - col : col;
+  // Position as a fraction (0..1) of the footprint: lots fill each street
+  // east-west, blocks stack north-south.
+  const lotFrac = serpentine ? LOTS_PER_BLOCK - 1 - lIdx : lIdx;
+  const colFrac = serpentine ? BLOCKS_PER_ROW - 1 - col : col;
+  const fx = (colFrac * LOTS_PER_BLOCK + lotFrac + 0.5) / (BLOCKS_PER_ROW * LOTS_PER_BLOCK);
+  const fy = (row + 0.5) / rowCount;
 
-  // Centre the whole footprint on the anchor so no single corner shoots off.
-  const eastCenter =
-    ((BLOCKS_PER_ROW - 1) * blockLength + (LOTS_PER_BLOCK - 1) * LOT_PITCH_METERS) / 2;
-  const northCenter = ((rowCount - 1) * BLOCK_PITCH_METERS) / 2;
+  // Bounds come from the subdivision's real OSM outline when known, so the pin
+  // can never leave the subdivision the owner actually selected.
+  let south, west, north, east;
+  if (bounds) {
+    [south, west, north, east] = bounds;
+  } else {
+    const cosLat = Math.cos((anchor.lat * Math.PI) / 180) || 1;
+    const halfNorth = DEFAULT_HALF_NORTH_M / METERS_PER_DEG_LAT;
+    const halfEast = DEFAULT_HALF_EAST_M / (METERS_PER_DEG_LAT * cosLat);
+    south = anchor.lat - halfNorth;
+    north = anchor.lat + halfNorth;
+    west = anchor.lon - halfEast;
+    east = anchor.lon + halfEast;
+  }
 
-  const east = colPos * blockLength + lotOffset - eastCenter;
-  const north = row * BLOCK_PITCH_METERS - northCenter;
-
-  const cosLat = Math.cos((anchor.lat * Math.PI) / 180) || 1;
-  const dLat = north / METERS_PER_DEG_LAT;
-  const dLon = east / (METERS_PER_DEG_LAT * cosLat);
-  const { lat, lon } = clampToBounds(anchor.lat + dLat, anchor.lon + dLon);
-  return { ...anchor, lat, lon };
+  const lat = south + fy * (north - south);
+  const lon = west + fx * (east - west);
+  const clamped = clampToBounds(lat, lon);
+  return { ...anchor, lat: clamped.lat, lon: clamped.lon };
 }
 
 /**
@@ -276,6 +285,7 @@ async function resolveAnchor({ barangay, subdivision } = {}) {
         lon: tablePoint[1],
         display_name: `${subdivisionName}, Cabuyao City, Laguna`,
         source: 'subdivision',
+        bounds: subdivisionBounds(subdivisionName),
       };
     }
 
@@ -309,7 +319,7 @@ async function geocodeOwnerLocation({ barangay, subdivision, block, lot } = {}) 
   const anchor = await resolveAnchor({ barangay, subdivision });
   if (!anchor) return null;
 
-  const grid = applyBlockLotGrid(anchor, block, lot);
+  const grid = applyBlockLotGrid(anchor, block, lot, anchor.bounds);
   let pin = grid;
 
   // Only refine a block/lot grid point, and only onto a nearby footprint, so
