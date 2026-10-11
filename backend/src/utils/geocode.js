@@ -19,6 +19,7 @@ const NOMINATIM_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
 
 const { barangayCoordinate, normalizeBarangay } = require('./cabuyaoBarangays');
 const { subdivisionCoordinate, subdivisionBounds } = require('./cabuyaoSubdivisions');
+const { lookupLot } = require('./subdivisionLots');
 
 // Cabuyao City rough bounding box (same as the frontend map's CABUYAO_BOUNDS).
 const CABUYAO_LAT_MIN = 14.1500;
@@ -311,11 +312,37 @@ async function resolveAnchor({ barangay, subdivision } = {}) {
   return geo ? { ...geo, source: 'geocode' } : null;
 }
 
+/** "(Blk 27 Lot 30)" for the display name, or "" when neither was given. */
+function blockLotSuffix(block, lot) {
+  const blk = block != null && String(block).trim() ? String(block).trim() : '';
+  const lt = lot != null && String(lot).trim() ? String(lot).trim() : '';
+  if (!blk && !lt) return '';
+  return ` (${blk ? `Blk ${blk}` : ''}${blk && lt ? ' ' : ''}${lt ? `Lot ${lt}` : ''})`;
+}
+
 /**
  * Resolves an owner's pin from barangay/subdivision + block/lot. Returns
  * { lat, lon, display_name } or null. Never throws.
  */
 async function geocodeOwnerLocation({ barangay, subdivision, block, lot } = {}) {
+  const suffix = blockLotSuffix(block, lot);
+
+  // 1) Exact lot from an admin-imported block plan — the most accurate source,
+  //    and it needs no network or anchor, so it is tried before anything else.
+  const exact = await lookupLot(subdivision, block, lot);
+  if (exact) {
+    const label = subdivision && String(subdivision).trim()
+      ? String(subdivision).trim()
+      : barangay && String(barangay).trim()
+        ? `Barangay ${normalizeBarangay(barangay)}`
+        : 'Cabuyao City';
+    return {
+      lat: exact.lat,
+      lon: exact.lon,
+      display_name: `${label}${suffix}, Cabuyao City, Laguna`,
+    };
+  }
+
   const anchor = await resolveAnchor({ barangay, subdivision });
   if (!anchor) return null;
 
@@ -329,9 +356,6 @@ async function geocodeOwnerLocation({ barangay, subdivision, block, lot } = {}) 
     if (building) pin = { ...grid, ...building };
   }
 
-  const blk = block != null && String(block).trim() ? String(block).trim() : '';
-  const lt = lot != null && String(lot).trim() ? String(lot).trim() : '';
-  const suffix = blk || lt ? ` (${blk ? `Blk ${blk}` : ''}${blk && lt ? ' ' : ''}${lt ? `Lot ${lt}` : ''})` : '';
   return {
     lat: pin.lat,
     lon: pin.lon,

@@ -6,6 +6,7 @@ import {
   Users,
   ClipboardList,
   Route,
+  Map,
   BarChart3,
   Megaphone,
   FileText,
@@ -120,6 +121,11 @@ export default function AdminLayout() {
           <NavLink to="/admin/traceability" onClick={() => setMobileOpen(false)}>
             <Route size={16} />
             <span className="sidebar-label">Traceability</span>
+          </NavLink>
+
+          <NavLink to="/admin/block-plans" onClick={() => setMobileOpen(false)}>
+            <Map size={16} />
+            <span className="sidebar-label">Block Plans</span>
           </NavLink>
 
           <NavLink to="/admin/analytics" onClick={() => setMobileOpen(false)}>

@@ -53,6 +53,7 @@ import RegistrationRecords from "./pages/admin/RegistrationRecords";
 import Traceability from "./pages/admin/Traceability";
 import AnalyticsReports from "./pages/admin/AnalyticsReports";
 import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
+import BlockPlans from "./pages/admin/BlockPlans";
 import ActivityAuditTrail from "./pages/admin/ActivityAuditTrail";
 import ProductCatalog from "./pages/admin/ProductCatalog";
 import AdminSecurity from "./pages/admin/AdminSecurity";
@@ -300,6 +301,11 @@ export default function App() {
             <Route
               path="traceability"
               element={<Traceability />}
+            />
+
+            <Route
+              path="block-plans"
+              element={<BlockPlans />}
             />
 
             <Route

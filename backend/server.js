@@ -59,6 +59,7 @@ const notificationRoutes = require("./src/routes/notificationRoutes");
 const announcementRoutes = require("./src/routes/announcementRoutes");
 const auditRoutes = require("./src/routes/auditRoutes");
 const ownerProfileRoutes = require("./src/routes/ownerProfileRoutes");
+const blockPlanRoutes = require("./src/routes/blockPlanRoutes");
 
 // ===================================
 // Schedulers
@@ -71,6 +72,7 @@ const {
 const { ensurePaymentTypeOutreach } = require("./src/db/ensurePaymentType");
 const { ensureAdminRecoveryKeys } = require("./src/db/ensureAdminRecovery");
 const { ensureAdminAccessCode } = require("./src/db/ensureAdminAccessCode");
+const { ensureSubdivisionLots } = require("./src/db/ensureSubdivisionLots");
 
 const {
     startAnnouncementScheduler,
@@ -113,7 +115,9 @@ app.use(cors({
   credentials: true,
 }));
  
-app.use(express.json());
+// The default 100 KB body cap is too small for an admin block-plan upload
+// (CSV/GeoJSON of every lot in a subdivision), which is sent as JSON text.
+app.use(express.json({ limit: "8mb" }));
 
 const { normalizeInputMiddleware } = require("./src/middleware/normalizeInputMiddleware");
 app.use(normalizeInputMiddleware);
@@ -202,6 +206,8 @@ app.use("/api/announcements", announcementRoutes);
 app.use("/api/audit", auditRoutes);
 
 app.use("/api/owner", ownerProfileRoutes);
+
+app.use("/api/block-plans", blockPlanRoutes);
 
 // ===================================
 // SPA fallback (must stay last)
@@ -348,6 +354,10 @@ async function startSchedulers() {
     await ensureConsultationPaymentSchema();
     await ensureOutreachTables();
   }
+
+  // Runs on both engines: the live PostgreSQL/Supabase database has no separate
+  // migration runner, so DDL that must exist on every deploy lives here.
+  await ensureSubdivisionLots();
 
   startNotificationScheduler();
   startAnnouncementScheduler();

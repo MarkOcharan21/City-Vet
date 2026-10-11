@@ -272,6 +272,7 @@ module.exports = {
   SUBDIVISION_COORDINATES,
   SUBDIVISION_BOUNDS,
   normalizeSubdivision,
+  resolveSubdivision,
   subdivisionCoordinate,
   subdivisionBounds,
 };

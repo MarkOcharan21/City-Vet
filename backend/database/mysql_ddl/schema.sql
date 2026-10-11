@@ -657,3 +657,17 @@ CREATE TABLE `vaccine_schedules` (
   KEY `idx_vs_vaccine` (`vaccine_id`),
   KEY `idx_vs_vaccine_species` (`vaccine_id`,`species_id`,`dose_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ==== subdivision_lots ====
+-- Admin-imported exact per-lot coordinates (see src/db/ensureSubdivisionLots.js).
+CREATE TABLE `subdivision_lots` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `subdivision_key` varchar(150) NOT NULL,
+  `block` varchar(30) NOT NULL DEFAULT '',
+  `lot` varchar(30) NOT NULL DEFAULT '',
+  `latitude` double NOT NULL,
+  `longitude` double NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_subdivision_lots_blk_lot` (`subdivision_key`,`block`,`lot`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
