@@ -34,7 +34,7 @@ export function ProfileForm({ compact = false, onSaved }) {
   const [locatingGps, setLocatingGps] = useState(false);
   const [gpsError, setGpsError] = useState('');
 
-  const { pin, pinSource, exactGps, mapContainerRef, geocoding, setExactPin } =
+  const { pin, pinSource, confirmedPin, confirmed, confirmPin, mapContainerRef, geocoding, setExactPin } =
     useOwnerLocationMap({
       address: form.address,
       barangay: form.barangay,
@@ -86,14 +86,19 @@ export function ProfileForm({ compact = false, onSaved }) {
 
   async function handleSave(e) {
     e.preventDefault();
+    if (pin && !confirmed) {
+      setMsg({ text: 'Please confirm your pinned location on the map before saving.', ok: false });
+      return;
+    }
     setSaving(true);
     setMsg({ text: '', ok: true });
     try {
       await api.put('/owner/profile', {
         ...form,
-        gps_lat: exactGps?.lat || null,
-        gps_lng: exactGps?.lng || null,
-        gps_accuracy: exactGps?.accuracy || null,
+        gps_lat: confirmedPin?.lat ?? null,
+        gps_lng: confirmedPin?.lng ?? null,
+        gps_accuracy: confirmedPin?.accuracy ?? null,
+        pin_source: confirmedPin ? pinSource : null,
       });
       // Sync AuthContext so topbar greeting updates immediately
       if (setUser) setUser((prev) => ({ ...prev, full_name: form.full_name, email: form.email }));
@@ -244,6 +249,20 @@ export function ProfileForm({ compact = false, onSaved }) {
                     pin.accuracy ? ` (±${Math.round(pin.accuracy)} m)` : ''
                   }`}
             </p>
+            {confirmed ? (
+              <p className="settings-field-hint settings-confirm-done">
+                Location confirmed. Save to apply it.
+              </p>
+            ) : (
+              <button
+                type="button"
+                className="settings-gps-btn settings-confirm-pin"
+                onClick={confirmPin}
+                disabled={geocoding}
+              >
+                Confirm this location
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -258,7 +277,7 @@ export function ProfileForm({ compact = false, onSaved }) {
         <button
           type="submit"
           className="btn-primary"
-          disabled={saving}
+          disabled={saving || (pin && !confirmed)}
           style={{ marginTop: 0, display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
         >
           <Save size={15} />

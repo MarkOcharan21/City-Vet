@@ -60,7 +60,7 @@ export default function OwnerRegister() {
   const [verified, setVerified] = useState(false);
   const [fallbackCode, setFallbackCode] = useState(null);
 
-  const { pin, pinSource, exactGps, mapContainerRef, geocoding, setExactPin } =
+  const { pin, pinSource, exactGps, confirmed, confirmedPin, confirmPin, mapContainerRef, geocoding, setExactPin } =
     useOwnerLocationMap({
       barangay: form.barangay,
       subdivision: form.subdivision,
@@ -117,6 +117,16 @@ export default function OwnerRegister() {
       return;
     }
 
+    if (pin && !confirmed) {
+      setError("Please confirm your pinned location on the map before continuing.");
+      return;
+    }
+
+    if (pin && !confirmed) {
+      setError("Please confirm your pinned location on the map before continuing.");
+      return;
+    }
+
     setSubmitting(true);
     setFallbackCode(null);
 
@@ -161,12 +171,15 @@ export default function OwnerRegister() {
     setVerifying(true);
 
     try {
+      const coords = confirmedPin || exactGps || null;
+      const pinSrc = confirmedPin ? pinSource : (exactGps ? pinSource : null);
       const res = await api.post("/auth/verify-registration", {
         ...form,
         otp,
-        gps_lat: exactGps?.lat || null,
-        gps_lng: exactGps?.lng || null,
-        gps_accuracy: exactGps?.accuracy || null,
+        gps_lat: coords?.lat || null,
+        gps_lng: coords?.lng || null,
+        gps_accuracy: coords?.accuracy || null,
+        pin_source: pinSrc,
       });
 
       setVerified(true);
@@ -433,7 +446,7 @@ export default function OwnerRegister() {
                   {pin && !gpsError && (
                     <p className="auth-field-hint">
                       Zoom in and tap your exact house, or drag the pin. Barangay
-                      officials will use it to find you.
+                      officials will use it to find you — then confirm it below.
                     </p>
                   )}
 
@@ -447,6 +460,20 @@ export default function OwnerRegister() {
                               pin.accuracy ? ` (±${Math.round(pin.accuracy)} m)` : ""
                             }`}
                       </p>
+                      {confirmed ? (
+                        <p className="auth-field-hint auth-confirm-done">
+                          Location confirmed. Continue to save it.
+                        </p>
+                      ) : (
+                        <button
+                          type="button"
+                          className="auth-gps-btn auth-confirm-pin"
+                          onClick={confirmPin}
+                          disabled={geocoding}
+                        >
+                          Confirm this location
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -459,7 +486,7 @@ export default function OwnerRegister() {
                   <LoadingSpinner text="Creating your account..." fullPage={false} />
                 </div>
               ) : (
-                <button type="submit" disabled={submitting}>
+                <button type="submit" disabled={submitting || (pin && !confirmed)}>
                   Continue
                 </button>
               )}

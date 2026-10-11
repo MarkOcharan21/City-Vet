@@ -31,10 +31,16 @@ const PIN_ICON = L.divIcon({
  *
  * @param {{ address?, barangay?, subdivision?, block?, lot? }} address
  * @param {{ debounceMs?: number }} [options]
+ * The owner must explicitly confirm the pin (confirmPin) before it is suitable
+ * for saving; any subsequent pin change clears the confirmation.
+ *
  * @returns {{
  *   pin: { lat: number, lng: number } | null,
  *   pinSource: 'gps' | 'manual' | 'geocode' | null,
  *   exactGps: { lat: number, lng: number } | null,
+ *   confirmedPin: { lat: number, lng: number } | null,
+ *   confirmed: boolean,
+ *   confirmPin: () => void,
  *   mapContainerRef: import('react').RefObject<HTMLDivElement>,
  *   geocoding: boolean,
  *   setExactPin: (coords: { lat: number, lng: number }) => void,
@@ -44,6 +50,9 @@ export default function useOwnerLocationMap(address, { debounceMs = 800 } = {}) 
   const [pin, setPin] = useState(null);
   const [pinSource, setPinSource] = useState(null);
   const [geocoding, setGeocoding] = useState(false);
+  // The owner must explicitly confirm the pin before it can be saved/continued.
+  // Any change to the pin (drag, tap, GPS, address re-geocode) clears it.
+  const [confirmed, setConfirmed] = useState(false);
 
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -68,6 +77,7 @@ export default function useOwnerLocationMap(address, { debounceMs = 800 } = {}) 
     const setManual = (lat, lng) => {
       setPin({ lat, lng, accuracy: null });
       setPinSource("manual");
+      setConfirmed(false);
     };
     marker.on("dragend", () => {
       const { lat, lng } = marker.getLatLng();
@@ -103,6 +113,8 @@ export default function useOwnerLocationMap(address, { debounceMs = 800 } = {}) 
   const { barangay, subdivision, block, lot } = address || {};
   useEffect(() => {
     const hasAny = [barangay, subdivision, block, lot].some((v) => String(v || "").trim());
+    // The address changed, so any previous confirmation is stale.
+    setConfirmed(false);
     if (!hasAny) return undefined;
 
     const handle = setTimeout(async () => {
@@ -138,6 +150,7 @@ export default function useOwnerLocationMap(address, { debounceMs = 800 } = {}) 
       accuracy: Number.isFinite(coords.accuracy) ? coords.accuracy : null,
     });
     setPinSource("gps");
+    setConfirmed(false);
   }
 
   // Coordinates that represent a real device/manual fix (as opposed to an
@@ -145,5 +158,25 @@ export default function useOwnerLocationMap(address, { debounceMs = 800 } = {}) 
   // pin is re-derived on the server, so it need not be sent.
   const exactGps = pin && (pinSource === "gps" || pinSource === "manual") ? pin : null;
 
-  return { pin, pinSource, exactGps, mapContainerRef, geocoding, setExactPin };
+  // Explicitly accept the pin the owner sees. Until this is called the pin is
+  // advisory only and must not be persisted.
+  function confirmPin() {
+    if (pin) setConfirmed(true);
+  }
+
+  // The pin as the owner confirmed it (null while unconfirmed). Send these
+  // coordinates + pinSource when saving so the exact confirmed spot is stored.
+  const confirmedPin = confirmed && pin ? pin : null;
+
+  return {
+    pin,
+    pinSource,
+    exactGps,
+    confirmedPin,
+    confirmed,
+    confirmPin,
+    mapContainerRef,
+    geocoding,
+    setExactPin,
+  };
 }
