@@ -2,6 +2,7 @@
 // a type-ahead list so owners pick a name the backend can anchor accurately —
 // unmatched names fall back to the barangay centroid.
 export const CABUYAO_SUBDIVISIONS = [
+  'Alegria at Dos Rios',
   'Amaia Scapes Cabuyao',
   'Bamboo Orchard Subdivision',
   'Baroro Compound',
@@ -24,6 +25,7 @@ export const CABUYAO_SUBDIVISIONS = [
   'Ciudad Montrina',
   'Don Onofre Subdivision',
   'Don Vicente Villas',
+  'Ebron-Tenorio Compound',
   'Evergreen Subdivision',
   'Felicias Village',
   'Fortezza Phase 1',
@@ -36,6 +38,7 @@ export const CABUYAO_SUBDIVISIONS = [
   'Hong Kong Village',
   'Idesia Cabuyao',
   'Katapatan Mutual Homes',
+  'Katapatan Village',
   'La Bella Homes',
   'Lynville Enclave',
   'Lynville Residences Marinig',

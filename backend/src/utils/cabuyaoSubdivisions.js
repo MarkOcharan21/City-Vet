@@ -12,6 +12,7 @@
  * owner's subdivision land on the actual village instead.
  */
 const SUBDIVISION_COORDINATES = {
+  'Alegria at Dos Rios': [14.22082, 121.07418],
   'Amaia Scapes Cabuyao': [14.27474, 121.13523],
   'Bamboo Orchard Subdivision': [14.25423, 121.13796],
   'Baroro Compound': [14.28594, 121.12677],
@@ -34,6 +35,7 @@ const SUBDIVISION_COORDINATES = {
   'Ciudad Montrina': [14.23354, 121.14949],
   'Don Onofre Subdivision': [14.25299, 121.13157],
   'Don Vicente Villas': [14.25042, 121.14221],
+  'Ebron-Tenorio Compound': [14.24755, 121.13034],
   'Evergreen Subdivision': [14.25143, 121.13601],
   'Felicias Village': [14.23244, 121.13715],
   'Fortezza Phase 1': [14.2385, 121.12537],
@@ -46,6 +48,7 @@ const SUBDIVISION_COORDINATES = {
   'Hong Kong Village': [14.25043, 121.12507],
   'Idesia Cabuyao': [14.26033, 121.14488],
   'Katapatan Mutual Homes': [14.25879, 121.13186],
+  'Katapatan Village': [14.26143, 121.13381],
   'La Bella Homes': [14.27474, 121.13089],
   'Lynville Enclave': [14.24021, 121.15866],
   'Lynville Residences Marinig': [14.27611, 121.14059],
