@@ -57,13 +57,13 @@ CREATE TABLE `catalog_products` (
   `price` decimal(10,2) NOT NULL DEFAULT 0.00,
   `active` tinyint(1) NOT NULL DEFAULT 1,
   `sort_order` int(11) NOT NULL DEFAULT 0,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `medicine_id` int(11) DEFAULT NULL,
+  `stamp_color` varchar(7) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_catalog_category` (`category`),
   KEY `idx_catalog_active` (`active`),
-  KEY `medicine_id` (`medicine_id`)
+  KEY `medicine_id` (`medicine_id`),
+  CONSTRAINT `fk_catalog_medicine` FOREIGN KEY (`medicine_id`) REFERENCES `medicines` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ==== clinic_queue ====
