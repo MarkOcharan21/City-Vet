@@ -22,12 +22,10 @@ async function listCatalog(req, res) {
   try {
     const [rows] = await db.query(
       `SELECT
-        cp.id, cp.category, cp.product_name, cp.species, cp.unit, cp.subcategory, cp.price, cp.active, cp.sort_order, cp.medicine_id,
-        m.stamp_color
-       FROM catalog_products cp
-       LEFT JOIN medicines m ON cp.medicine_id = m.id
-      WHERE cp.active = 1
-      ORDER BY cp.category ASC, cp.sort_order ASC, cp.product_name ASC`
+        id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id
+       FROM catalog_products
+       WHERE active = 1
+       ORDER BY category ASC, sort_order ASC, product_name ASC`
     );
 
     const groups = {};
@@ -39,8 +37,9 @@ async function listCatalog(req, res) {
         unit: row.unit || null,
         subcategory: row.subcategory || null,
         price: row.price,
+        // Non-null means this stocked item also prescribes a medicine, so the
+        // consultation form can add the charge and the dose in one click.
         medicine_id: row.medicine_id || null,
-        stamp_color: row.stamp_color,
       });
     });
 
@@ -62,11 +61,9 @@ async function listCatalogAdmin(req, res) {
   try {
     const [rows] = await db.query(
       `SELECT
-        cp.id, cp.category, cp.product_name, cp.species, cp.unit, cp.subcategory, cp.price, cp.active, cp.sort_order, cp.medicine_id,
-        m.stamp_color
-       FROM catalog_products cp
-       LEFT JOIN medicines m ON cp.medicine_id = m.id
-      ORDER BY category ASC, sort_order ASC, product_name ASC`
+        id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id
+       FROM catalog_products
+       ORDER BY category ASC, sort_order ASC, product_name ASC`
     );
 
     const groups = {};
@@ -80,7 +77,6 @@ async function listCatalogAdmin(req, res) {
         price: row.price,
         active: !!row.active,
         medicine_id: row.medicine_id || null,
-        stamp_color: row.stamp_color,
       });
     });
 
@@ -99,7 +95,7 @@ async function listCatalogAdmin(req, res) {
 
 // POST /api/catalog  (Admin only)
 async function createCatalogItem(req, res) {
-  const { category, product_name, species, unit, subcategory, price, active, stamp_color } = req.body;
+  const { category, product_name, species, unit, subcategory, price, active } = req.body;
   const name = String(product_name || "").trim();
   const cat = String(category || "").trim();
 
@@ -122,9 +118,9 @@ async function createCatalogItem(req, res) {
     );
     const [result] = await db.query(
       `INSERT INTO catalog_products
-        (category, product_name, species, unit, subcategory, price, active, sort_order, stamp_color)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [cat, name, species || "General", unit || null, subcategory || null, amount.toFixed(2), isActive ? 1 : 0, maxSort + 1, stamp_color || null]
+        (category, product_name, species, unit, subcategory, price, active, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [cat, name, species || "General", unit || null, subcategory || null, amount.toFixed(2), isActive ? 1 : 0, maxSort + 1]
     );
 
     res.json({ success: true, message: `Catalog item "${name}" added.`, id: result.insertId });
@@ -133,7 +129,7 @@ async function createCatalogItem(req, res) {
       action: "CREATE",
       entity_type: "catalog",
       entity_id: result.insertId,
-      new_value: { category: cat, product_name: name, price: amount.toFixed(2), stamp_color },
+      new_value: { category: cat, product_name: name, price: amount.toFixed(2) },
       description: `Added catalog product "${name}" (${cat}) — ₱${amount.toFixed(2)}`,
     });
   } catch (error) {
@@ -145,7 +141,7 @@ async function createCatalogItem(req, res) {
 // PUT /api/catalog/:id  (Admin only)
 async function updateCatalogItem(req, res) {
   const { id } = req.params;
-  const { category, product_name, species, unit, subcategory, price, active, sort_order, stamp_color } = req.body;
+  const { category, product_name, species, unit, subcategory, price, active, sort_order } = req.body;
 
   try {
     const [[existing]] = await db.query("SELECT * FROM catalog_products WHERE id = ?", [id]);
@@ -177,7 +173,7 @@ async function updateCatalogItem(req, res) {
     await db.query(
       `UPDATE catalog_products SET
         category = ?, product_name = ?, species = ?, unit = ?, subcategory = ?,
-        price = ?, active = ?, sort_order = ?, stamp_color = ?
+        price = ?, active = ?, sort_order = ?
        WHERE id = ?`,
       [
         cat,
@@ -188,7 +184,6 @@ async function updateCatalogItem(req, res) {
         amount.toFixed(2),
         isActive ? 1 : 0,
         sort_order !== undefined ? Number(sort_order) || 0 : existing.sort_order,
-        stamp_color,
         id,
       ]
     );
@@ -199,8 +194,8 @@ async function updateCatalogItem(req, res) {
       action: "UPDATE",
       entity_type: "catalog",
       entity_id: id,
-      old_value: { product_name: existing.product_name, price: existing.price, active: existing.active, stamp_color: existing.stamp_color },
-      new_value: { category: cat, product_name: name, price: amount.toFixed(2), active: isActive, stamp_color },
+      old_value: { product_name: existing.product_name, price: existing.price, active: existing.active },
+      new_value: { category: cat, product_name: name, price: amount.toFixed(2), active: isActive },
       description: `Updated catalog product "${name}"`,
     });
   } catch (error) {
