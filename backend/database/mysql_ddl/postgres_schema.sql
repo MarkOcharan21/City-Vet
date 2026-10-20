@@ -291,7 +291,7 @@ CREATE TABLE "owner_locations" (
   "recorded_at" timestamp NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
   CONSTRAINT "owner_locations_status_check" CHECK ("status" IN ('active', 'inactive')),
-  CONSTRAINT "owner_locations_source_check" CHECK ("source" IN ('seed', 'gps', 'geocode'))
+  CONSTRAINT "owner_locations_source_check" CHECK ("source" IN ('seed', 'gps', 'geocode', 'manual'))
 );
 
 CREATE TABLE "password_reset_requests" (

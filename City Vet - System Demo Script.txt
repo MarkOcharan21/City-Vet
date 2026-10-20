@@ -1,0 +1,244 @@
+════════════════════════════════════════════════════════════════════
+CITY VET — SYSTEM DEMO SCRIPT (LIVE)
+Paghati-hati ng presentasyon: 4 members | Total: 80 min
+Web-Based QR-Enabled Pet Registration, Vaccination and Traceability
+Management System with Payment Monitoring and Data Analytics
+════════════════════════════════════════════════════════════════════
+
+STORY: Susundan natin ang isang alaga — "LUNA" — mula sa pagpaparehistro
+hanggang sa konsulta, bayad, at analitika. Bawat miyembro ay "gumaganap" ng
+isa sa mga role ng sistema. Walang dead air dahil may handoff line bawat segment.
+
+TIME BUDGET (80 min)
+─────────────────────────────────────────────────────────────
+  5 min   Setup / Opener (lahat)
+ 15 min   Member A — Registration & QR (Role: Owner + Staff verify)
+ 15 min   Member B — Front desk & Vaccination (Role: Staff)
+ 15 min   Member C — Consultation & Records (Role: Veterinarian)
+ 15 min   Member D — Payment, Analytics & Admin (Role: Admin)
+ 15 min   Buffer / Panel Q&A
+─────────────────────────────────────────────────────────────
+
+════════════════════════════════════════════════════════════════════
+0) SETUP CHECKLIST (bago ang defense — gawin isang araw bago + sa umaga)
+════════════════════════════════════════════════════════════════════
+□ Apat na account handa (1 bawat role): Owner, Staff, Veterinarian, Admin.
+  - Opsyon: isang account na may lahat ng role privileges kung gusto
+    ninyong mabilis lang, pero MAS MAGANDA kung magkahiwalay para maipakita
+    ang ROLE-BASED access mismo.
+□ May nakarehistro nang sample pet — "LUNA" — na may:
+  - kumpletong owner address (village/block/lot) at GPS location mark,
+  - vaccination record (dose 1 tapos, dose 2 due o overdue),
+  - at least 1 consultation record + 1 Official Receipt entry.
+□ Apat na tabs/browser profile ang naka-login na (isa per role). I-test
+  ang pag-forward/back bawat tab para hindi nauubos sa paglipat.
+□ Phone/camera ang QR scanning (test na ang mobile scan page).
+□ Backup screenshots ng bawat segment (kung mawalan ng internet).
+□ Projector/presentation screen test; keypad para sa zoom-in kung maliit.
+□ Seguro ng internet: i-share ang phone hotspot kung kailangan.
+
+OPENER (5 min, kahit sinong miyembro)
+  "Magandang umaga. Ito ang LIVE na presentasyon ng sistema. Susundan natin
+   ang buhay ng isang alaga na pinangalanan naming LUNA — mula sa pag-register,
+   pagbakuna, konsulta, bayad, hanggang sa analitika para sa pamamahala ng
+   clinic. Maghahati kami: unang si [A], pangalawa si [B], pangatlo si [C],
+   at pangapat si [D]."
+
+════════════════════════════════════════════════════════════════════
+MEMBER A — REGISTRATION & QR  (15 min)  ·  ROLE: Pet Owner + Staff verify
+════════════════════════════════════════════════════════════════════
+KWENTO: "Papasok sa sistema si Luna."
+
+1) HOME + OWNER REGISTRATION (3 min)
+   - Buksan ang Homepage → Register as Pet Owner.
+   - Punan ang form: pangalan, contact, at ADDRESS — ituro ang
+     Village/Subdivision + Block/Lot fields at ang "Use my current location"
+     na GPS button. Sabihin:
+     "Kapag may GPS, nakukuha natin ang eksaktong lokasyon ng may-ari —
+      ito ang magbibigay ng tunay na pin sa mapa ngayon, hindi barangay
+      center lang."
+   - Submit → makakita ng success.
+
+2) PET REGISTRATION (3 min)
+   - Pet Registration: pangalan (LUNA), species, breed, birthdate, kulay/markings.
+   - Ituro ang VALIDATION — halimbawa pindutin ang submit na may blank field
+     para mapakita na may error ang system (hindi basta-basta nagse-save).
+     "May validation ang bawat field, kaya walang pumapasok na hindi kumpleto."
+
+3) QR CODE + DIGITAL PET BOOKLET (4 min)
+   - Sa record ni Luna, ipakita ang UNIQUE QR CODE.
+   - Buksan ang DIGITAL PET BOOKLET — ituro ang cover, at ang mga tab
+     (owner info, vaccination, clinical, records).
+     "Ang QR na ito ang buhay ni Luna sa sistema — isang identifier na
+      nag-uugnay sa registration, bakuna, konsulta, at bayad niya."
+   - Opsyon: i-scan ang QR mula sa phone para mapakita ang Public Pet
+     Profile / MobileScan.
+
+4) OFFLINE DRAFT (2 min — bonus)
+   - Ipakita ang Offline Draft Registration: i-save ang draft offline,
+     i-simulate ang offline kung kaya, tapos i-submit sa susunod.
+     "Kahit mawalan ng internet ang clinic, may natatandaan na awtomatiko."
+
+5) VERIFY (3 min) — dobleng pagbabaliktad ng papel
+   - Lumipat sa STAFF account → Verify Registration.
+   - Hanapin ang rehistro ni Luna → i-approve/verify.
+   - Ipakita na lumabas na si Luna sa mga opisyal na recording.
+     "Hindi lang basta nagsave — may staff approval pa bago maging opisyal
+      ang rehistro."
+
+HANDOFF LINE:
+  "Rehistrado na si Luna at may QR na siya. Ngayon, dadaan siya sa
+   front desk ng clinic — ipapakita ni [B] paano siya nai-check in at
+   na-update ang kanyang bakuna."
+
+VALUE LINE (reminder): "Isang QR — buong kasaysayan ng alaga."
+
+════════════════════════════════════════════════════════════════════
+MEMBER B — FRONT DESK & VACCINATION  (15 min)  ·  ROLE: Staff
+════════════════════════════════════════════════════════════════════
+KWENTO: "Dumating si Luna sa clinic para sa bakuna."
+
+1) STAFF DASHBOARD / CHECK-IN (4 min)
+   - Ipakita ang Staff Dashboard (summary ng mga naka-line, pending verify,
+     today's vaccinations, payments).
+   - CHECK-IN: i-search si Luna gamit ang QR scan (DirectQrScanner /
+     QrScanModal) o search by name.
+   - Sabihin: "I-scan lang ang QR at agad lalabas ang buong profile ni Luna —
+      walang manu-manong pag-type ng records."
+
+2) VACCINATION MONITORING (5 min)
+   - Buksan ang Vaccination Monitoring → piliin si Luna.
+   - I-record ang dose, i-set ang next due date.
+   - Ipakita na may senyas/highlight kung overdue na.
+     "May monitoring ang bawat dose — alam natin kung sino na ang dapat
+      humabol ng bakuna at kailan."
+
+3) PAYMENT MONITORING (PREVIEW ng D) (2 min)
+   - Pwede nang ituro: makita sa Payment Monitoring ang mga may OR at wala.
+   - "Ipapaliwanag ito nang husto sa bahagi ni [D]."
+
+4) EXTRA 1-LINERS (2 min, kung may oras)
+   - Record Requests / Issue Requested Record: "Maaaring humiling ang owner
+     ng opisyal na record — ini-issue namin dito."
+   - Announcements: "Nag-popublish kami ng notice dito para sa lahat ng owner."
+
+HANDOFF LINE:
+  "Na-check in si Luna at updated na ang bakuna niya. Ngayon ang pangunahin —
+   ang konsulta. Si [C] na ang bahala bilang veterinarian."
+
+VALUE LINE (reminder): "Fast front desk: search o QR scan lang — solid ang records."
+
+════════════════════════════════════════════════════════════════════
+MEMBER C — CONSULTATION & RECORDS  (15 min)  ·  ROLE: Veterinarian
+════════════════════════════════════════════════════════════════════
+KWENTO: "Si Dok ang magpapasuri kay Luna."
+
+1) VETERINARIAN DASHBOARD (2 min)
+   - Ipakita ang Vet Dashboard — listahan ng pets na naka-line, recent
+     consultations, at vaccine due.
+
+2) MULTI-STEP CONSULTATION WIZARD (8 min) — ang bida ng parteng ito
+   - Buksan ang Consultation (ConsultationLog / ClinicalRecords).
+   - Ituro ang 4-STEP STEpper sa itaas:
+     Step 1 — Piliin ang pet (search/scan QR).
+     Step 2 — Assessment/Exam (vitals, history, findings).
+     Step 3 — Treatment plan (medisina + dosage + care instructions).
+     Step 4 — Review/Summary (i-check bago i-save, pwede i-edit kahit
+               huling hakbang na).
+   - SA STEP 3: i-highlight ang auto-computed dosage ng gamot.
+     "Kino-compute ng sistema ang dosage base sa gamot at timbang —
+      kaunting pagkakamali sa dose ay bawas agad."
+
+3) CLINICAL RECORD + BOOKLET UPDATE (3 min)
+   - I-save ang konsulta → lalabas sa Clinical Records ni Luna.
+   - Buksan ulit ang Digital Pet Booklet at ipakita na may bagong clinical
+     entry na siya — "walang dini-duplicate na papel".
+
+4) NOTIFICATION (2 min)
+   - Ipakita na may notipikasyon kay Owner (dadaan sa Notification Center)
+     — "Na-notify ang owner na may resulta na ang konsulta ng alaga."
+
+HANDOFF LINE:
+  "Tapos na ang konsulta at may reseta na si Luna. Ngayon ang katapat niya —
+   ang bayad. Ipapakita ni [D] ang pagsubaybay ng Official Receipts, ang mapa
+   ng traceability, at ang analitika."
+
+VALUE LINE (reminder): "4-step na standard na konsulta + auto dosage — consistency sa care."
+
+════════════════════════════════════════════════════════════════════
+MEMBER D — PAYMENT, ANALYTICS & ADMIN  (15 min)  ·  ROLE: Admin
+════════════════════════════════════════════════════════════════════
+KWENTO: "Ang bayad at ang buong pamamahala ng clinic."
+
+1) PAYMENT MONITORING (3 min)
+   - Admin view ng PaymentMonitoring: tingnan si Luna — ipakita ang
+     Treasury-issued Official Receipt (OR) na naka-link.
+     "Ang nakikita mo ay ang koneksyon ng OR sa bayad — malalaman natin
+      kung sino ang bayad na at sino pa ang kulang — walang haka-haka."
+
+2) TRACEABILITY MAP (4 min)
+   - Buksan ang Traceability (mapa ng mga owner sa Cabuyao).
+   - I-zoom papuntang kay Luna: ituro na ang pin ay sa eksaktong lokasyon
+     (GPS o geocoded) — hindi puro barangay center.
+     "Ang bawat pin ay tunay na lokasyon — may per-owner accuracy na GPS
+      o geocode. Ito ang traceability para sa mga programa ng clinic."
+   - Ituro rin ang mobile scan para sa pag-verify ng identity (kong nasa field).
+
+3) ANALYTICS & REPORTS (4 min)
+   - Analytics/Reports o Barangay Dashboard: ipakita ang summary card,
+     charts, breakdown per barangay.
+     "Pagpa-plano ng clinic: saan maraming alaga, ano ang pinaka-common
+      na kondisyon, anong barangay ang kailangan ng outreach."
+   - Ituro ang pag-export ng report kung may Print/Export.
+
+4) ADMIN 1-LINERS (2 min)
+   - System Overview / Registration Records — buod ng lahat ng rehistro.
+   - Activity Audit Trail — "Bawat aksyon may nakatala — sino, kailan,
+     anong binago. May pananagutan ang bawat pagbabago ng records."
+   - User Directory — paghawak ng account/roles.
+   - Announcements — pagpapadala ng notice sa mga owner.
+
+CLOSING BUOD (2 min)
+  "Buod: sa rehistro → QR → bakuna → konsulta → bayad → analitika, iisa
+   lang ang sistema, isang database, walang nawawalang papel. Ito ang
+   solusyon sa mga suliraning tinukoy natin sa rationale. Salamat."
+
+VALUE LINE (reminder): "Mag-asawa ang records at analytics — desisyon na may basehan."
+
+════════════════════════════════════════════════════════════════════
+PANEL Q&A CHEAT SHEET (bawat numero ay nasa slides ninyo)
+════════════════════════════════════════════════════════════════════
+- Testing: 17/17 unit tests, 8/8 integration scenarios.
+- Respondents: N=55 (50 end users + 5 IT experts).
+- End user: 4.25 weighted mean (Strongly Agree); pinakamataas
+  Performance Efficiency 4.28; pinakamababa vaccination recording 4.04.
+- IT experts: 4.95 overall, Usability 5.00, lowest Performance 4.87.
+- "Paano pag walang internet?" → Offline Draft — naka-save locally,
+  i-submit kapag may internet; device-local nga lang (nakasulat sa limitations).
+- "Paano makatitiyak na tama ang lokasyon?" → GPS (kung nag-share ang
+  owner) → kung hindi, server-side geocode sa bounding ng Cabuyao → kung
+  wala pa, barangay center.
+- "Ano ang dose computation?" → Auto-computed dosage sa prescription base
+  sa gamot at timbang (i-verify sa medicine record).
+
+════════════════════════════════════════════════════════════════════
+EMERGENCY BACKUP (kung mawalan ng internet / bumagal)
+════════════════════════════════════════════════════════════════════
+- Bawat segment ay may 3–5 "anchor screenshots": (1) form/validation,
+  (2) result/record, (3) QR/booklet, (4) dashboard/map.
+- Kung mawala ang internet: sabihin "Ito ang mga screenshot ng aktwal na
+  output" at ituloy ang story nang walang live click.
+- Kung masira ang isang feature sa live: sabihin "ipapakita ko muna ang
+  next scene — babalik tayo" at tumuloy. Huwag i-hang ang screen habang
+  nagde-debug sa harap ng panel.
+
+════════════════════════════════════════════════════════════════════
+REHEARSAL TIPS (bago ang defense)
+════════════════════════════════════════════════════════════════════
+- 2 dry runs na may timer: Run 1 — yakap ng flow (walang bago). Run 2 —
+  puno ng pacing + handoff lines.
+- May "click script" bawat isa — mas madaling magsalita kaysa mag-aral ng
+  menu. (Nasa bawat segment ang mga step.)
+- Tandaan: isang tao lang ang nagsasalita sa screen; ang iba naka-standby.
+- Practice ang live QR scan — siya ang pinaka-malamang na "show me ito"
+  ng panel.

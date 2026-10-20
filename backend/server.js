@@ -73,6 +73,7 @@ const { ensurePaymentTypeOutreach } = require("./src/db/ensurePaymentType");
 const { ensureAdminRecoveryKeys } = require("./src/db/ensureAdminRecovery");
 const { ensureAdminAccessCode } = require("./src/db/ensureAdminAccessCode");
 const { ensureSubdivisionLots } = require("./src/db/ensureSubdivisionLots");
+const { ensureOwnerLocationSource } = require("./src/db/ensureOwnerLocationSource");
 
 const {
     startAnnouncementScheduler,
@@ -358,6 +359,7 @@ async function startSchedulers() {
   // Runs on both engines: the live PostgreSQL/Supabase database has no separate
   // migration runner, so DDL that must exist on every deploy lives here.
   await ensureSubdivisionLots();
+  await ensureOwnerLocationSource();
 
   startNotificationScheduler();
   startAnnouncementScheduler();

@@ -8,6 +8,17 @@ const { createNotification } = require('./notificationService');
  * prescription commit or roll back together. Callers with no transaction to
  * join can pass the `db` pool directly.
  */
+function assignStampColor(category) {
+  const palette = {
+    antibiotic: '#DC2626',
+    anti_inflammatory: '#D97706',
+    antiparasitic: '#059669',
+    pain: '#7C3AED',
+    general: '#6B7280',
+  };
+  return palette[category] || palette.general;
+}
+
 async function insertPrescription(connection, consultationId, items) {
   const [prescriptionResult] = await connection.query(
     'INSERT INTO prescriptions (consultation_id) VALUES (?)',
@@ -20,17 +31,31 @@ async function insertPrescription(connection, consultationId, items) {
   }
 
   for (const item of items) {
+    const medicineId = Number(item.medicine_id);
+    const [medicine] = await connection.query(
+      'SELECT medicine_name, category, expiry_date FROM medicines WHERE id = ?',
+      [medicineId]
+    );
+    const stampColor = assignStampColor(medicine?.[0]?.category || 'general');
+
+    const batchNumber = `MED-${medicineId}-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 8)}`;
+
     await connection.query(
-      `INSERT INTO prescription_items (prescription_id, medicine_id, quantity, dosage, frequency, duration, instructions)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO prescription_items (prescription_id, medicine_id, quantity, dosage, frequency, duration, instructions, batch_number, expiry_date, dispensed_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         prescriptionId,
-        Number(item.medicine_id),
+        medicineId,
         item.quantity || null,
         item.dosage || null,
         item.frequency || null,
         item.duration || null,
         item.instructions || null,
+        batchNumber,
+        medicine?.[0]?.expiry_date || null,
+        new Date().toISOString().slice(0, 10),
       ]
     );
   }

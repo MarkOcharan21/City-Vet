@@ -1,0 +1,380 @@
+════════════════════════════════════════════════════════════════════
+CITY VET — CAPSTONE DEFENSE SLIDE-BY-SLIDE EXPLANATION
+Slides 2–12
+Web-Based QR-Enabled Pet Registration, Vaccination and Traceability
+Management System with Payment Monitoring and Data Analytics
+City Veterinary Animal Clinic, Cabuyao City, Laguna
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 2 — RATIONALE
+============================
+(Explanation)
+
+Ito ang "bakit tayo gumawa nito" — ang problema at research gap na sinasagot ng system
+natin. Dito mo dapat ipakita na may TOTOO at NAPAPATUNAYANG problema sa clinic, hindi
+gawa-gawa lang.
+
+Sasabihin:
+- Ang City Veterinary Animal Clinic ng Cabuyao ay nakikipagsakahan ng maraming pet owner,
+  pero hanggang ngayon ang records nila ay puro manual pa rin — papel at sulat-kamay.
+- Dahil manual: mabagal ang proseso, may mga hindi tugma o nagkaka-iba ang data, at mahirap
+  hanapin kung sino na ang nakapagbayad at sino pa ang kulang.
+- Partikular na masakit na problema ang pag-trace ng mga Official Receipt na galing sa Treasury
+  laban sa aktwal na bayad sa clinic — ang OR at ang record ng bayad ay magkahiwalay na sistema.
+- Walang tamang tracking ng vaccination (sino na ang bakunado, kailan ang next dose) at walang
+  analytics na pwedeng gamitin sa pagpa-plano ng clinic.
+
+Ang research gap:
+- Ang mga umiiral na system ay pira-piraso — kung may registration, walang integration sa
+  payment; kung may payment, wala sa vaccination; at iba pa. Walang IISA at mahalagang bagay:
+  isang QR na mag-uugnay sa lahat ng rekord ng isang alaga (registration + vaccination + bayad
+  + clinical).
+- Kaya ang kailangan: isang iisang web-based system na pinag-isa lahat — para sa clinic mismo
+  ng Cabuyao.
+
+Para sa panel (posibleng tanong + sagot):
+- "Ano ang pangunahing problema na sinosolve n'yo?" → Ang pag-fragment ng records. Isa lang
+  ang sistema; ang QR ang nagbubuklod sa buong kasaysayan ng alaga.
+- "Bakit web-based imbes na desktop?" → Kasi kailangan accessible kahit saan, at para may
+  real-time na pag-access ang Admin, Staff, Veterinarian, at Pet Owner.
+
+Tip sa pagsasalita: Huwag ka munang sabihin ang solusyon dito. Sige, panindigan mo na ang
+problema ay seryoso — tapos ang susunod na slide ang magsasabi kung ano ang gagawin natin.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 3 — OBJECTIVES
+============================
+(Explanation)
+
+Narito ang "ano ang nilalayon nating gawin." Tatlong antas: General Objective, tapos tatlong
+specific objectives (SOP, sa totoo lang — bawat objective ay mayroong nasusukat na resulta).
+
+Sasabihin:
+- GENERAL: Gumawa at ipatupad ng ISANG integrated web-based system para sa City Veterinary
+  Animal Clinic ng Cabuyao — ito ang buong titulo ng study.
+- OBJECTIVE 1 — Develop and implement: ang mismong sistema na may:
+  - role-based access para sa apat na grupo (Admin, Staff, Veterinarian, Pet Owner),
+  - registration ng owner at pet, may kakaibang QR code bawat alaga, at digital pet booklet,
+  - vaccination monitoring at multi-step consultation workflow na may reseta ng gamot,
+  - pagsubaybay sa Official Receipts ng Treasury at offline draft registration (kahit walang
+    internet, pwede muna itala).
+- OBJECTIVE 2 — Centralized online system: isang pinag-isang database na nag-uugnay sa lahat
+  — owner, pet, payment, vaccination, clinical, at medicine records. Pati na ang role-specific
+  dashboards, QR scanning, search/filter, analytics, at activity audit.
+- OBJECTIVE 3 — Evaluation: sinusukat natin ang kalidad ng system gamit ang ISO/IEC 25010
+  Software Quality Model. End users ang sumusukat ng Functional Suitability, Performance
+  Efficiency, at Usability; mga IT experts naman ang Reliability at Security.
+
+Para sa panel:
+- "Bakit ISO/IEC 25010?" → Ito ANG pambansang/internasyonal na pamantayan sa pagsukat ng
+  kalidad ng software. Mas credible kaysa basta-palag na "okay lang naman."
+- "Paano mo nalaman na naabot mo ang objective?" → Nasusukat: Objective 1 sa testing
+  (17/17 unit, 8/8 integration) at Objective 3 sa questionnaire.
+
+Tip: Ipagkapantay ang tatlong objectives sa mga susunod na slides — Slide 8 = Obj 1, Slide 9 =
+Obj 2, Slides 10–11 = Obj 3. Sabihin mong susunod ang ebidensya ng bawat isa.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 4 — SCOPE AND LIMITATIONS
+============================
+(Explanation)
+
+Ito ang "hanggang dito lang kami" — para malinaw sa panel na alam natin ang hangganan ng
+pag-aaral at hindi tayo nagpapanggap na ginagawa natin ang lahat.
+
+Sasabihin (Scope — ano ang kasama):
+- Focus lang sa City Veterinary Animal Clinic ng Cabuyao — isang institusyon.
+- Kasama: role-based access (Admin, Staff, Vet, Pet Owner), registration ng owner+pet na may QR
+  at digital booklet, vaccination monitoring, clinical at medicine records, payment monitoring
+  gamit ang Official Receipts, analytics at reporting, notifications, outreach, activity audit,
+  at offline drafts.
+
+Sasabihin (Limitations — ano ang HINDI kasama, at bakit):
+- Ang resulta ay HINDI pwedeng i-generalize sa ibang clinic o institusyon.
+- Web-based lang; walang native Android o iOS app.
+- Walang pharmacy/inventory management, lab testing, confinement, o surgery management — hindi
+  iyon ang kasalukuyang proseso ng clinic.
+- Walang full appointment scheduling; at ang offline drafts ay naka-save lang sa device (no live
+  sync kapag offline).
+- Walang direktang integration sa Treasury — ang OR ay nire-record manually sa system.
+
+Para sa panel:
+- "Bakit isang clinic lang?" → Para masubukan nang malalim at tama. Ang pag-generalize ay
+  iniiwan natin sa future studies (makikita rin sa Slide 12 recommendations).
+
+Tip: Huwag mong i-defend ang limitations na parang ikinahihiya. Okrayin mo sila bilang
+"deliberate choices" at i-address sa recommendations — pinapakita nito na responsible ang
+scope.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 5 — METHODOLOGY
+============================
+(Explanation)
+
+Ito ang "paano natin ito isinagawa." Pinag-isa natin ang dalawang disenyo: Developmental
+Research (pagbuo ng produkto mismo) at Agile Scrum (para sa development process), at Mix-method
+(kwalitibo + kwantitatibo).
+
+Sasabihin:
+- Gumamit tayo ng developmental research design — ibig sabihin, ang produkto mismo (ang
+  software) ang produkto ng pananaliksik. Deploy ito sa Agile Scrum para may working increment
+  sa bawat sprint.
+- DALAWANG PHASE:
+  1. Pre-development (QUALITATIVE): interview, consultation, at observation sa clinic — para
+     malaman ang totoong workflow at problema bago tayo nag-code.
+  2. Development: Agile Scrum sa paulit-ulit na sprints; bawat sprint ay may nagagawang
+     gumaganang bahagi (working increment).
+  3. Post-development (QUANTITATIVE): ISO/IEC 25010 evaluation gamit ang questionnaires na
+     may five-point Likert scale.
+- QA sa development: 17/17 passed ang unit testing, 8/8 passed ang integration testing.
+- RESPONDENTS: 55 na purposely chosen — 50 end users (staff + pet owners) at 5 IT experts.
+  (Ito ang pie/bar chart sa kanan.)
+
+Para sa panel:
+- "Bakit Agile Scrum at hindi Waterfall?" → Dahil nagbabago ang requirements habang ginagawa —
+  ang scrum ay nagbibigay ng maagang feedback at adjustment bawat sprint.
+- "Paano ka pumili ng respondents?" → Purposive: 50 na gumagamit ng system (staff at owner) at
+  5 IT expert na may sapat na technical background, alinsunod sa ISO/IEC 25010 requirements.
+- "Ano ang 55?" → 50 end users para sa Functional Suitability, Performance Efficiency,
+  Usability; 5 IT experts para sa Reliability at Security.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 6 — EVIDENCE OF METHODOLOGY (Agile Scrum execution)
+============================
+(Explanation)
+
+Ito ang PROOF na sinunod n'yo talaga ang Scrum — hindi lang sinabi sa papel. Ipinapakita nito
+ang 7 sprints at ang Scrum events.
+
+Sasabihin (isahang-hang na daloy ng sprints):
+- SPRINT 0 — Requirements: interviews, consultations, observation, at document analysis; gawa
+  ng user stories at product backlog.
+- SPRINT 1 — Login at foundation: account management, role-based login, at pag-setup ng stack
+  (React frontend, Node.js backend, MySQL na na-migrate sa Supabase/PostgreSQL).
+- SPRINT 2 — Registration at QR: OWNER at PET registration; kakaibang QR per pet at digital
+  pet booklet.
+- SPRINT 3 — Vaccination at payments: pag-record at pagmonitor ng vaccination history; payment
+  monitoring gamit ang Treasury Official Receipts.
+- SPRINT 4 — Clinical at medicine: multi-step consultation workflow at prescription ng gamot
+  na may auto-computed dosage.
+- SPRINT 5 — Analytics at admin: analytics dashboards at reporting; activity audit, product
+  catalog, at announcements.
+- SPRINT 6 — Testing at UAT: unit at integration testing; tapos ISO/IEC 25010 evaluation ng
+  end users at IT experts.
+
+SCRUM EVENTS (na ginawa namin bawat sprint):
+- Sprint planning (gumawa ng scope/backlog para sa sprint)
+- Daily scrum (maikling daily standup meeting)
+- Sprint review kasama ang stakeholders (ipakita ang nagawang increment)
+- Sprint retrospective (surin kung ano ang na-improve sa process)
+
+Para sa panel:
+- "Ano ang evidence na agile kayo talaga?" → Per-sprint working increment + ang apat na scrum
+  events + adjustment of requirements (e.g., na-add ang offline draft nang malaman ang totoong
+  kalagayan ng internet sa clinic).
+- Straightforward lang ito — wag kumalat; sapat na ang pangalan ng bawat sprint at kung ano ang
+  na-deliver dito.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 7 — EVIDENCE OF METHODOLOGY (Working outputs per sprint)
+============================
+(Explanation)
+
+Visual proof: ang mga screenshot ng aktwal na system na tumatakbo — hindi design concept kundi
+gumagana nang rehistro. Ito ang sasagot sa "show us something real."
+
+Sasabihin (ituro ang bawat screenshot):
+- Sprint 1 → Role-based login at portal (pinapakita na iba-iba ang view batay sa papel: Admin,
+  Staff, Vet, Owner).
+- Sprint 2 → Owner at pet registration form (kumpleto sa validation), at ang UNIQUE QR CODE na
+  binubuo para sa bawat alaga.
+- Sprint 3 → Vaccination monitoring (record ng doses, dates, next dose).
+- Sprint 4 → Payment monitoring (OR tracking — sino bayad, sino kulang).
+- Sprint 5 → Data analytics at reporting (charts/figures para sa management).
+
+Para sa panel:
+- Maikli lang ang sasabihin per screenshot — pangalan ng sprint + isang sentence kung ano ang
+  pinapakita. Huwag masyadong mag-detail; kung magtatanong ang panel doon mas sasarat.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 8 — OBJECTIVE 1 RESULTS/DISCUSSION/CONCLUSION
+============================
+(Explanation)
+
+Dito mo patutunayan na naabot natin ang Obiective 1 (develop and implement). Format na
+RESULTS → DISCUSSION → CONCLUSION. Ito ang pattern ng susunod na slides — panindigan.
+
+Sasabihin:
+- RESULTS (4 na malalaking numero):
+  - 17/17 functions ang pumasa sa unit testing sa 7 modules.
+  - 8/8 integration scenarios ang pumasa.
+  - 4 roles ang may role-based access: Admin, Staff, Veterinarian, Pet Owner.
+  - 7 modules ang na-implement (registration, QR, vaccination, payments, records,
+    analytics, atbp.).
+- DISCUSSION: "May mga minor defects na nakita — halimbawa, hindi kumpleto ang validation
+  messages at may minor formatting inconsistencies. Inayos namin yan WITHIN each sprint at ni-re-
+  test, at 100% ang pagbalik ng resulta."
+- CONCLUSION: "Ang sistema ay na-design at na-implement at gumana — pati na bilang IISA na
+  integrated platform, hindi lang basta magkahiwalay na bahagi."
+
+Para sa panel:
+- "Anong tests?" → Unit test (bawat function/molecule) at integration test (kung gumagawa ang
+  mga module BILANG ISANG sistema).
+- "Bakit offender na may hindi 17/17 first try?" → Normal process ng agile — hindi iyon failure.
+  Ang importanteng point: na-fix SA LOOB ng sprint at naging 100% bago matapos.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 9 — OBJECTIVE 2 RESULTS
+============================
+(Explanation)
+
+Patunay na naabot natin ang Obiective 2 (centralized online system). Mas malawak ito —
+pinapakita ang 7 major capabilities at ang integration test.
+
+Sasabihin:
+- RESULTS — ang SMI modules na na-implement:
+  1. User management at authentication
+  2. Pet registration (owner at pet)
+  3. QR code generation at traceability
+  4. Vaccination management
+  5. Payment at payment receipt monitoring
+  6. Clinical at medicine records
+  7. Data analytics at reporting
+  (Tandaan: Ito ang list sa kaliwa; ang chart sa kanan ay karagdagang data — halimbawa,
+  count/statistics ng records o paghahati ng functionality. Sabihin kung ano ang pinapakita
+  ng chart.)
+- DISCUSSION: "Lahat ng 8 integration scenarios ay pumasa — ang data ay dumadaloy nang tama
+  across authentication, registration, QR, vaccination, notifications, consultation-to-payment,
+  PDF booklet generation, analytics, at offline draft submission." Ito ang punto: hindi lang
+  hiwa-hiwalay na modules — nag-uusap sila.
+- CONCLUSION: "Na-implement ang centralized online system na may unified database, QR scanning,
+  search at filter, analytics, at activity auditing."
+
+Para sa panel:
+- "Paano mo na-prove na CENTRALIZED talaga?" → Ang integration testing: magkaibang modules ang
+  nagpapasa ng data sa isa't isa (hal. galing consultation → payment → OR, o registration →
+  QR → booklet) at gumana nang walang break.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 10 — OBJECTIVE 3: END USER EVALUATION (ISO/IEC 25010)
+============================
+(Explanation)
+
+Ngayon patunay na MATINO ang sistema ayon sa mga TOTOONG gumagamit nito: 50 end users
+(clinic staff at pet owners), five-point Likert scale.
+
+Sasabihin:
+- RESULTS (weighted mean):
+  - GRAND weighted mean = 4.25 → "Strongly Agree" (napaka-acceptable para sa end users).
+  - PINAKAMATAAS na characteristic: Performance Efficiency = 4.28 (Strongly Agree) — ibig
+    sabihin mabilis at mahusay ang sistema sa totoong paggamit.
+  - 12 sa 18 indicators ang nakakuha ng Strongly Agree.
+- DISCUSSION: "Ang pinakamababang items ay vaccination history recording (4.04) at pet
+  information presentation (4.10). Pero ito ay HINDI core defects ng system — signal ito na
+  kailangan ng training/orientation ng staff at veterinarians sa paggamit ng vaccination
+  module." (Ito mismo ang ilalagay sa recommendations sa Slide 12.)
+- CONCLUSION: "Ang end users ay Strongly Agree na ang sistema ay acceptable at nagagamit sa
+  registration, identification, vaccination, at payment processes ng clinic."
+
+Para sa panel:
+- "4.25 lang? Di ba dapat 5?" → Ang 4.25 sa 5-point Likert ay nasa rank na "Strongly Agree"
+  na. Sa evaluation research, ang 4.20 pataas ay itinuturing na mahusay na resulta — at ang
+  mga mababang item ay meron tayong RASON at AKSYON (training), hindi basta palusot.
+- "Ano ang five-point scale?" → 1 = Strongly Disagree ... 5 = Strongly Agree; ang weighted
+  mean ay ang average na kinuwestiyon sa lahat ng respondents per indicator.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 11 — OBJECTIVE 3: IT EXPERT EVALUATION (ISO/IEC 25010:2023)
+============================
+(Explanation)
+
+Doble ang patunay: dalawang grupo ang nag-evaluate — end users (Slide 10: 4.25) at ngayon ang
+numero ng technical side (5 IT experts: 4.95). Higit na mataas kasi technical slog.
+
+Sasabihin:
+- RESULTS (n = 5, weighted mean):
+  - OVERALL weighted mean = 4.95 → Strongly Agree (napakataas mula sa technical evaluators).
+  - PINAKAMATAAS: Usability = 5.00 (perpektong marka sa pagka-easy gamitin).
+  - 22 sa 30 indicators ang nakakuha ng PERFECT 5.00.
+- DISCUSSION: "Ang lahat ng quality characteristics ay Strongly Agree per expert. Ang
+  PINAKAMABABA ay Performance Efficiency sa 4.87 — pero Strongly Agree pa rin ito."
+- CONCLUSION: "Napaka-acceptable ng sistema para sa technical evaluators (4.95) at para sa
+  end users (4.25). Sa dalawang grupong ito, naabot ang general objective ng pag-aaral."
+
+Para sa panel:
+- "Bakit 4.95 sa experts pero 4.25 sa end users?" → Normal: ang end users ay sumusukat sa
+  pang-araw-araw na workflow (kaya mas madalas silang makakita ng minor items tulad ng
+  vaccination recording), habang ang experts ay tumitingin sa technical quality (reliability,
+  security). Ang samples ay magkaiba rin (50 vs 5).
+- "Paano ninyo ni-apply ang ISO 25010:2023?" → Ginamit ang questionnaires na nakabase sa
+  characteristics ng ISO standard — end users: Functional Suitability, Performance Efficiency,
+  Usability; experts: Reliability at Security (may overlap).
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 12 — RECOMMENDATIONS
+============================
+(Explanation)
+
+Ito ang "ano ang susunod base sa natuklasan natin." Bawat finding (galing sa evaluation) ay
+may katapat na recommendation. Hindi pwedeng maraming agad kung walang base.
+
+Sasabihin (5 pairs):
+1. FINDING: Pinakamababang end-user item ang vaccination history recording (4.04).
+   → REKOMENDASYON: Palakasin ang vaccination module; magbigay ng TRAINING at orientation sa
+     staff at veterinarians.
+2. FINDING: Web-only access; offline drafts ay device-local.
+   → REKOMENDASYON: Gumawa ng native mobile application at real-time sync across devices.
+3. FINDING: Manual ang pag-record ng Official Receipts.
+   → REKOMENDASYON: Integrate ng online payment gateway; mag-notify sa owners ng due vaccines
+     at follow-ups via email o SMS.
+4. FINDING: Walang medicine inventory at stock management; walang custom reports.
+   → REKOMENDASYON: Magdagdag ng medicine inventory at custom report generation na may
+     multiple export formats.
+5. FINDING: Isang clinic lang at isang research period ang nasaklaw.
+   → REKOMENDASYON: Future studies — ibang clinics, long-term effects, at maintainability at
+     portability assessment.
+
+Closing line: "Patuloy na gamitin ang sistema bilang araw-araw na suporta sa clinic — may
+regular na backups, audits, at contingency plan."
+
+Para sa panel:
+- "Saan nanggaling ang mga recommendation na ito?" → Diretso galing sa RESULTS — ang bawat
+  finding ay may nagpapatunay na numero o natuklasan (hal. 4.04 vaccination recording o ang
+  mga limitations sa Slide 4). Hindi basta-suggestion.
+- "Priority mo alin?" → Ito ay iuugnay sa pinakamababang score (vaccination training) at
+  pinaka-nakakaapekto sa daily operations (payment gateway).
+
+════════════════════════════════════════════════════════════════════
+
+MGA PAALALA SA PAG-DEFEND (lahat ng slides):
+- Gumamit ng format na PROBLEMA → SOLUSYON → EVIDENCE → SAYTO-SAYA: Slide 2 (problema/gap)
+  → Slide 3 (layunin) → Slides 5–7 (paano ginawa) → Slides 8–11 (patunay na nagawa) → Slide 12
+  (ano ang susunod).
+- Ang mga numero na dapat tandaan: 17/17 unit, 8/8 integration, N=55 respondents
+  (50 + 5), end-user 4.25 (Strongly Agree), expert 4.95 (Strongly Agree),
+  Usability 5.00, mababang item: 4.04 vaccination.
+- Kapag nagtanong ang panel ng "paano mo nalaman?" → lagi kang may numero o screenshot na
+  ituturo.
+- Huwag mong sabihin sa Slide 2 kung ano na ang solusyon — hayaan mong maipakita sa mga
+  susunod na slides; mas magandang daloy ang defense.

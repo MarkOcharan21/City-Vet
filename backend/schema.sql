@@ -356,7 +356,7 @@ CREATE TABLE `owner_locations` (
   `latitude` decimal(10,7) NOT NULL,
   `longitude` decimal(10,7) NOT NULL,
   `accuracy_meters` decimal(10,2) DEFAULT NULL,
-  `source` enum('seed','gps','geocode') NOT NULL DEFAULT 'seed',
+  `source` enum('seed','gps','geocode','manual') NOT NULL DEFAULT 'seed',
   `query_address` varchar(500) DEFAULT NULL,
   `status` enum('active','inactive') NOT NULL DEFAULT 'active',
   `recorded_at` timestamp NOT NULL DEFAULT current_timestamp(),

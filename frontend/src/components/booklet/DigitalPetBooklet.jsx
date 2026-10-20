@@ -124,6 +124,7 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
     "vaccination-record": b.vaccinations.length,
     "medical-history": b.consultations.length,
     medications: b.prescriptions.length,
+    "medicine-stamps": b.medicineDispatches.length,
     "preventive-care": b.preventiveCare.length,
     procedures: b.procedures.length,
   };
@@ -358,6 +359,40 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
           </div>
         ) : (
           <EmptyState icon={<Stamp size={26} />} title="No official transactions recorded yet" note="Digital stamps appear automatically after each verified veterinary transaction." />
+        )}
+      </BookletSection>
+      </div>
+
+      {/* 05 · MEDICINE STAMPS */}
+      <div className="booklet-tab-panel" role="tabpanel" hidden={activeTab !== "medicine-stamps"}>
+      <BookletSection id="medicine-stamps" number={5} icon={<Pill size={20} />} title="Medicine Stamps" subtitle="Dispensed medications with batch & expiry" count={b.medicineDispatches.length}>
+        {b.medicineDispatches.length ? (
+          <div className="stamp-list">
+            {b.medicineDispatches.map((d, i) => (
+              <div className="stamp-row" key={i}>
+                <div className="stamp-row__seal">
+                  <div className="stamp-row__seal-icon" style={{ background: d.stamp_color }} />
+                  <div className="stamp-seal-img" role="img" aria-label="Medicine stamp" />
+                </div>
+                <div className="stamp-row__body">
+                  <div className="stamp-row__top">
+                    <div className="stamp-row__medicine">{d.medicine_name}</div>
+                    <span className="status-pill status-pill--ok">Batch: {d.batch_number}</span>
+                  </div>
+                  <div className="stamp-row__meta">
+                    <Clock size={13} /> <span>{fmt(d.dispensed_date)}</span>
+                    {d.expiry_date && (
+                      <span>•</span>
+                      <span>Exp: {fmt(d.expiry_date)}</span>
+                    )}
+                  </div>
+                  <div className="stamp-row__footnote">System-generated medicine stamp</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState icon={<Pill size={26} />} title="No medications dispensed yet" note="Medicine stamps appear after dispensing." />
         )}
       </BookletSection>
       </div>

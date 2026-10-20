@@ -47,6 +47,11 @@ async function recordOwnerLocation(
  * Never throws: geocoding failures are swallowed so registration/profile saves
  * never fail because the map could not resolve an address.
  */
+// Persisted pin provenance. The DB `source` column is constrained to these
+// values, so any unknown/missing pin_source falls back to 'gps' (the caller is
+// sending explicit coordinates either way).
+const ALLOWED_PIN_SOURCES = new Set(['gps', 'manual', 'geocode']);
+
 async function syncOwnerLocation(ownerId, ownerData, gps) {
   if (!ownerId) return null;
   ownerData = { address: '', barangay: '', subdivision: '', block: '', lot: '', ...(ownerData || {}) };
@@ -55,11 +60,13 @@ async function syncOwnerLocation(ownerId, ownerData, gps) {
     const lat = Number(gps.latitude);
     const lon = Number(gps.longitude);
     if (Number.isFinite(lat) && Number.isFinite(lon)) {
+      const requested = typeof gps.source === 'string' ? gps.source : '';
+      const source = ALLOWED_PIN_SOURCES.has(requested) ? requested : 'gps';
       return recordOwnerLocation(ownerId, {
         latitude: lat,
         longitude: lon,
         accuracy_meters: gps.accuracy_meters == null ? null : Number(gps.accuracy_meters),
-        source: 'gps',
+        source,
       });
     }
   }

@@ -196,25 +196,18 @@ async function scanQrToken(req, res) {
     const [prescriptions] = await db.query(
     `
     SELECT
-
     p.id,
-
     p.consultation_id,
-
     p.prescribed_date,
-
     m.medicine_name,
-
     pi.quantity,
-
     pi.dosage,
-
     pi.frequency,
-
     pi.duration,
-
     pi.instructions,
-
+    pi.batch_number,
+    pi.expiry_date AS item_expiry_date,
+    pi.dispensed_date,
     ${vetNameExpr('prescribed_by')}
 
     FROM prescriptions p

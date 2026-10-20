@@ -1,0 +1,85 @@
+Role Classification?
+
+Admin Portal
+
+
+User Directory Page
+
+User Account Setup:
+
+1. Full name, Email, auto-generate ID, select role if staff or veterinarian, Create account
+
+remove temporary password?
+
+
+Staff/Veterinarian
+
+
+2. notify sa email to verify account (dapat depende sa selected role ni admin yung laman ng email), redirect sa page ng login para sa staff, enter ID, setup password (may indicator kung gano ka secure ang password weak, strong, etc katulad dun sa pet owner account registration), after that proceed sa dashboard. 
+
+or
+
+Email
+   ↓
+[Set Up Account]
+   ↓
+Secure one-time setup token
+   ↓
+Create Password
+   ↓
+Account Activated
+   ↓
+Login
+
+Then after setup:
+
+Staff/Vet → Login → Enter ID + Password
+
+
+ID Examples:
+
+For Staff ID: STF-2026-0001
+
+For Veterinarian ID: VET-2026-0001
+
+
+                    ADMIN
+                      │
+                Create User
+                      │
+            ┌─────────┴──────────┐
+            │                 		     │
+          STAFF           	VETERINARIAN
+            │                   		 │
+       STF-2026-XXXX       	VET-2026-XXXX
+            │                            │
+            └─────────┬──────────┘
+                      │
+               Email Verification
+                      │
+                Password Setup
+                      │
+                   ACTIVE
+                      │
+                   LOGIN
+                      │
+             Role-Based Dashboard
+
+
+Gusto ko lang na ma-classify yung staff at veterinary.
+
+
+Function						Staff	Veterinarian
+Pet Registration					✓	✓
+View Pet Records					✓	✓
+Vaccination Records					✓	✓
+Encode Vaccination					✓	✓
+Clinical/Consultation Records			View/Encode*	✓
+Medicine Records				View/Encode*	✓
+Digital Pet Booklet					✓	✓
+Payment Monitoring					✓	✓
+Admin/User Management					✗	✗
+
+
+User Directory filter for roles
+

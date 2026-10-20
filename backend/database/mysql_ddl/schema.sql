@@ -200,6 +200,7 @@ CREATE TABLE `medicines` (
   `default_frequency` varchar(100) DEFAULT NULL,
   `default_duration` varchar(100) DEFAULT NULL,
   `default_instructions` varchar(255) DEFAULT NULL,
+  `expiry_date` date DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -331,7 +332,7 @@ CREATE TABLE `owner_locations` (
   `latitude` decimal(10,7) NOT NULL,
   `longitude` decimal(10,7) NOT NULL,
   `accuracy_meters` decimal(10,2) DEFAULT NULL,
-  `source` enum('seed','gps','geocode') NOT NULL DEFAULT 'seed',
+  `source` enum('seed','gps','geocode','manual') NOT NULL DEFAULT 'seed',
   `query_address` varchar(500) DEFAULT NULL,
   `status` enum('active','inactive') NOT NULL DEFAULT 'active',
   `recorded_at` timestamp NOT NULL DEFAULT current_timestamp(),
@@ -527,6 +528,9 @@ CREATE TABLE `prescription_items` (
   `frequency` varchar(100) DEFAULT NULL,
   `duration` varchar(100) DEFAULT NULL,
   `instructions` varchar(255) DEFAULT NULL,
+  `batch_number` varchar(50) DEFAULT NULL,
+  `expiry_date` date DEFAULT NULL,
+  `dispensed_date` date DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `prescription_id` (`prescription_id`),
   KEY `medicine_id` (`medicine_id`)

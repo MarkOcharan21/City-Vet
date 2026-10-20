@@ -1,0 +1,376 @@
+════════════════════════════════════════════════════════════════════
+CITY VET — CAPSTONE DEFENSE SLIDE-BY-SLIDE EXPLANATION (ENGLISH)
+Slides 2–12
+Web-Based QR-Enabled Pet Registration, Vaccination and Traceability
+Management System with Payment Monitoring and Data Analytics
+City Veterinary Animal Clinic, Cabuyao City, Laguna
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 2 — RATIONALE
+============================
+(Explanation)
+
+This is the "why we did this" slide — the problem and the research gap that our system
+addresses. This is where you establish that the clinic faces a REAL, DEMONSTRABLE problem,
+not an invented one.
+
+What to say:
+- The City Veterinary Animal Clinic of Cabuyao serves a large number of pet owners, yet its
+  records are still largely manual — paper-based and handwritten.
+- Because records are manual: processes are slow, data is prone to delays and inconsistencies,
+  and it is difficult to access or retrieve information.
+- A particularly painful problem is matching Treasury-issued Official Receipts against actual
+  payments made at the clinic — the OR and the payment record exist in separate worlds.
+- There is no proper vaccination tracking (who has been vaccinated, when the next dose is due)
+  and no analytics that the clinic can use for planning.
+
+The research gap:
+- Existing systems are fragmented — one handles registration but not payments, another handles
+  payments but not vaccinations, and so on. What is missing is a single, meaningful thing: one
+  QR code that links together every record of one pet's registration, vaccination, payment,
+  and clinical history.
+- What is needed: one integrated web-based system built specifically for the City Veterinary
+  Animal Clinic in Cabuyao.
+
+For the panel (likely questions + answers):
+- "What is the core problem you are solving?" → Fragmented records. One system; the QR binds
+  the pet's entire history together.
+- "Why web-based instead of desktop?" → Accessibility anywhere, and real-time access shared by
+  Admin, Staff, Veterinarian, and Pet Owner.
+
+Delivery tip: Do not reveal the solution here. Stand firmly on the severity of the problem;
+the next slides will present what we did about it.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 3 — OBJECTIVES
+============================
+(Explanation)
+
+This is the "what we set out to do." Three levels: a General Objective, and then three specific
+objectives — each one linked to a measurable result.
+
+What to say:
+- GENERAL: To implement and document one integrated web-based system for the City Veterinary
+  Animal Clinic of Cabuyao — this is the full title of the study.
+- OBJECTIVE 1 — Develop and implement the actual system:
+  - role-based access for four groups (Admin, Staff, Veterinarian, Pet Owner),
+  - owner and pet registration, a unique QR code per pet, and a digital pet booklet,
+  - vaccination monitoring and a multi-step consultation workflow with medicine prescription,
+  - Treasury-issued Official Receipt monitoring and offline draft registration (records can be
+    captured even without internet).
+- OBJECTIVE 2 — Centralized online system: one unified database linking owner, pet, payment,
+  vaccination, clinical, and medicine records — plus role-specific dashboards, QR scanning,
+  search and filter, analytics, and activity auditing.
+- OBJECTIVE 3 — Evaluation: measure system quality using the ISO/IEC 25010 Software Quality
+  Model. End users rate Functional Suitability, Performance Efficiency, and Usability; IT
+  experts rate Reliability and Security.
+
+For the panel:
+- "Why ISO/IEC 25010?" → It is the recognized international standard for measuring software
+  quality. More credible than a subjective "it seems fine."
+- "How do you know you met each objective?" → Each one is measurable: Objective 1 via testing
+  (17/17 unit, 8/8 integration) and Objective 3 via the questionnaires.
+
+Delivery tip: Map the three objectives to the later slides — Slide 8 = Obj 1, Slide 9 = Obj 2,
+Slides 10–11 = Obj 3. Tell the panel the evidence for each one is coming up.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 4 — SCOPE AND LIMITATIONS
+============================
+(Explanation)
+
+This is the "this far, and no further" slide — it shows the panel that we know the boundaries
+of the study and are not claiming to do everything.
+
+Scope (what is included):
+- Limited to the City Veterinary Animal Clinic of Cabuyao only — a single institution.
+- Included: role-based access (Admin, Staff, Veterinarian, Pet Owner), owner and pet
+  registration with QR generation and a digital pet booklet, vaccination monitoring, clinical
+  and medicine records, payment monitoring via Official Receipts, analytics and reporting,
+  notifications, outreach, activity audit, and offline drafts.
+
+Limitations (what is NOT included, and why):
+- Results cannot be generalized to other clinics or institutions.
+- Web-based only; no native Android or iOS application.
+- No pharmacy/inventory management, lab testing, confinement, or surgery management — these are
+  not part of the clinic's current process.
+- No full appointment scheduling; offline drafts are saved only on the device (no live sync
+  while offline).
+- No direct Treasury integration; Official Receipts are recorded manually in the system.
+
+For the panel:
+- "Why only one clinic?" → To test the system deeply and properly. Generalization is left to
+  future studies (also addressed in the Slide 12 recommendations).
+
+Delivery tip: Do not defend the limitations as if they were shortcomings. Frame them as
+deliberate scope decisions and point out they are addressed in the recommendations — this
+shows responsible scoping.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 5 — METHODOLOGY
+============================
+(Explanation)
+
+This is the "how we did the study." It combines two designs — Developmental Research (the
+deliverable IS a product) and Agile Scrum (for the development process) — using a mixed-method
+approach (qualitative + quantitative).
+
+What to say:
+- We used a developmental research design — the software itself is the output of the research,
+  built using Agile Scrum so that every sprint produces a working increment.
+- TWO PHASES:
+  1. Pre-development (QUALITATIVE): interviews, consultations, and observation at the clinic —
+     to learn the real workflow and problems before writing any code.
+  2. Development: Agile Scrum in iterative sprints, each sprint delivering a working increment.
+  3. Post-development (QUANTITATIVE): ISO/IEC 25010 evaluation using questionnaires on a
+     five-point Likert scale.
+- QA during development: 17 of 17 unit tests passed; 8 of 8 integration tests passed.
+- RESPONDENTS: 55 purposely selected — 50 end users (staff + pet owners) and 5 IT experts.
+  (This is the chart on the right.)
+
+For the panel:
+- "Why Agile Scrum and not Waterfall?" → Requirements evolve while building; Scrum gives early
+  feedback and allows adjustments every sprint.
+- "How did you choose respondents?" → Purposive sampling: 50 actual users of the system (staff
+  and pet owners) and 5 IT experts with sufficient technical background, aligned with ISO/IEC
+  25010 requirements.
+- "What are the 55?" → 50 end users rating Functional Suitability, Performance Efficiency, and
+  Usability; 5 IT experts rating Reliability and Security.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 6 — EVIDENCE OF METHODOLOGY (Agile Scrum execution)
+============================
+(Explanation)
+
+This slide is PROOF that you actually followed Scrum — not just a claim on paper. It shows the
+seven sprints and the Scrum events.
+
+What to say (flow through the sprints):
+- SPRINT 0 — Requirements: interviews, consultations, observation, and document analysis;
+  creation of user stories and the product backlog.
+- SPRINT 1 — Login and foundation: account management, role-based login, and stack setup
+  (React frontend, Node.js backend, MySQL migrated to Supabase/PostgreSQL).
+- SPRINT 2 — Registration and QR: OWNER and PET registration; a unique QR code per pet and the
+  digital pet booklet.
+- SPRINT 3 — Vaccination and payments: recording and monitoring vaccination history; payment
+  monitoring with Treasury Official Receipts.
+- SPRINT 4 — Clinical and medicine: multi-step consultation workflow and medicine prescription
+  with auto-computed dosage.
+- SPRINT 5 — Analytics and admin: analytics dashboards and reporting; activity audit, product
+  catalog, and announcements.
+- SPRINT 6 — Testing and UAT: unit and integration testing, followed by the ISO/IEC 25010
+  evaluation by end users and IT experts.
+
+SCRUM EVENTS (practiced every sprint):
+- Sprint planning (define the sprint scope/backlog)
+- Daily scrum (short daily stand-up meeting)
+- Sprint review with stakeholders (demo the increment)
+- Sprint retrospective (review and improve the process)
+
+For the panel:
+- "What evidence shows you were truly agile?" → A working increment per sprint plus the four
+  Scrum events plus requirements adjustment (e.g., the offline draft feature was added after
+  learning the clinic's real internet situation).
+- Keep this slide crisp — naming each sprint and its deliverable is enough.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 7 — EVIDENCE OF METHODOLOGY (Working outputs per sprint)
+============================
+(Explanation)
+
+Visual proof: screenshots of the actual working system — not design concepts but a functioning
+registration/vaccination/payment flow. This answers the panel's "show us something real."
+
+What to say (point to each screenshot):
+- Sprint 1 → Role-based login and portal (each role sees a different view: Admin, Staff, Vet,
+  Owner).
+- Sprint 2 → Owner and pet registration form (with validation), and the UNIQUE QR CODE
+  generated for each pet.
+- Sprint 3 → Vaccination monitoring (record of doses, dates, next due).
+- Sprint 4 → Payment monitoring (OR tracking — who has paid, who has not).
+- Sprint 5 → Data analytics and reporting (charts/figures for management).
+
+For the panel:
+- Give one short line per screenshot — sprint name plus one sentence on what it shows. Do not
+  over-explain; go deeper only if the panel asks.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 8 — OBJECTIVE 1: RESULTS / DISCUSSION / CONCLUSION
+============================
+(Explanation)
+
+Here you prove Objective 1 was met (develop and implement). Format: RESULTS → DISCUSSION →
+CONCLUSION. This is the pattern for the remaining slides — stick to it.
+
+What to say:
+- RESULTS (four big numbers):
+  - 17/17 functions passed unit testing across 7 modules.
+  - 8/8 integration scenarios passed.
+  - 4 roles with role-based access: Admin, Staff, Veterinarian, Pet Owner.
+  - 7 modules implemented (registration, QR, vaccination, payments, records, analytics, etc.).
+- DISCUSSION: "Minor defects were found — for example, incomplete validation messages and minor
+  formatting inconsistencies. We fixed them WITHIN each sprint and re-tested; the affected
+  functions passed at 100%."
+- CONCLUSION: "The system was successfully designed and implemented — it works both as
+  individual modules and as ONE integrated platform."
+
+For the panel:
+- "What tests?" → Unit tests (each function in isolation) and integration tests (modules
+  working TOGETHER as one system).
+- "Why did something fail before 17/17?" → That is normal in Agile — not a failure. The key
+  point: issues were fixed WITHIN the sprint and reached 100% before the sprint ended.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 9 — OBJECTIVE 2: RESULTS
+============================
+(Explanation)
+
+Proof that Objective 2 (centralized online system) was met. This covers the seven major
+capabilities plus the integration test.
+
+What to say:
+- RESULTS — the seven implemented modules:
+  1. User management and authentication
+  2. Pet registration (owner and pet)
+  3. QR code generation and traceability
+  4. Vaccination management
+  5. Payment and payment receipt monitoring
+  6. Clinical and medicine records
+  7. Data analytics and reporting
+  (The list is on the left; the chart on the right shows supporting data — e.g., record counts
+  or feature distribution. State what the chart actually displays.)
+- DISCUSSION: "All 8 integration scenarios passed — data flows correctly across authentication,
+  registration, QR, vaccination, notifications, consultation-to-payment, PDF booklet generation,
+  analytics, and offline draft submission." This is the point: not isolated modules but modules
+  that talk to each other.
+- CONCLUSION: "The centralized online system was successfully implemented, with a unified
+  database, QR scanning, search and filter, analytics, and activity auditing."
+
+For the panel:
+- "Why do you say it is truly CENTRALIZED?" → The integration tests: different modules pass
+  data to one another (e.g., consultation → payment → OR, or registration → QR → booklet) and
+  worked without breaking.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 10 — OBJECTIVE 3: END USER EVALUATION (ISO/IEC 25010)
+============================
+(Explanation)
+
+Now the proof that the system is good according to its REAL USERS: 50 end users (clinic staff
+and pet owners), five-point Likert scale.
+
+What to say:
+- RESULTS (weighted mean):
+  - GRAND weighted mean = 4.25 → "Strongly Agree" (highly acceptable to end users).
+  - HIGHEST characteristic: Performance Efficiency = 4.28 (Strongly Agree) — the system is fast
+    and efficient in actual use.
+  - 12 of the 18 indicators scored Strongly Agree.
+- DISCUSSION: "The lowest items were vaccination history recording (4.04) and pet information
+  presentation (4.10). But these are NOT core system defects — they signal a need for training
+  and orientation so staff and veterinarians can use the vaccination module properly." (This
+  becomes a recommendation on Slide 12.)
+- CONCLUSION: "End users strongly agreed that the system is acceptable and that it serves the
+  clinic's registration, identification, vaccination, and payment processes."
+
+For the panel:
+- "Only 4.25? Should it not be 5?" → 4.25 on a five-point Likert scale falls within the
+  "Strongly Agree" band. In evaluation research, 4.20 and above is already a strong result —
+  and our lower items have a REASON and an ACTION (training), not just an excuse.
+- "What is the five-point scale?" → 1 = Strongly Disagree ... 5 = Strongly Agree; the weighted
+  mean is the average score across all respondents per indicator.
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 11 — OBJECTIVE 3: IT EXPERT EVALUATION (ISO/IEC 25010:2023)
+============================
+(Explanation)
+
+Double evidence: two groups evaluated the system — end users (Slide 10: 4.25) and now the
+technical side (5 IT experts: 4.95). The expert score is higher because they rate the technical
+quality.
+
+What to say:
+- RESULTS (n = 5, weighted mean):
+  - OVERALL weighted mean = 4.95 → Strongly Agree (very high from technical evaluators).
+  - HIGHEST: Usability = 5.00 (a perfect score for ease of use).
+  - 22 of the 30 indicators scored a perfect 5.00.
+- DISCUSSION: "Experts rated every quality characteristic as Strongly Agree. The LOWEST was
+  Performance Efficiency at 4.87 — still Strongly Agree."
+- CONCLUSION: "The system is highly acceptable to technical evaluators (4.95) and to end users
+  (4.25). With both groups, the general objective of the study was met."
+
+For the panel:
+- "Why 4.95 from experts but 4.25 from end users?" → Normal: end users judge day-to-day
+  workflow (so they notice smaller items like vaccination recording), while experts judge
+  technical quality (reliability, security). The samples also differ (50 vs 5).
+- "How did you apply ISO/IEC 25010:2023?" → Questionnaires built around the standard's quality
+  characteristics — end users: Functional Suitability, Performance Efficiency, Usability;
+  experts: Reliability and Security (with some overlap).
+
+════════════════════════════════════════════════════════════════════
+
+============================
+SLIDE 12 — RECOMMENDATIONS
+============================
+(Explanation)
+
+This is the "what comes next based on our findings." Each FINDING (from the evaluation) has a
+matching RECOMMENDATION — nothing is recommended without a basis.
+
+What to say (five pairs):
+1. FINDING: Vaccination history recording was the lowest-rated end-user item (4.04).
+   → RECOMMENDATION: Strengthen the vaccination module; provide TRAINING and orientation for
+     staff and veterinarians.
+2. FINDING: Web-only access; offline drafts are device-local.
+   → RECOMMENDATION: Develop a native mobile application and real-time synchronization across
+     devices.
+3. FINDING: Payments rely on manual Official Receipt recording.
+   → RECOMMENDATION: Integrate an online payment gateway; notify owners of due vaccines and
+     follow-ups via email or SMS.
+4. FINDING: No medicine inventory, stock management, or custom reports yet.
+   → RECOMMENDATION: Add medicine inventory and custom report generation with multiple export
+     formats.
+5. FINDING: The study covered one clinic and one research period.
+   → RECOMMENDATION: Future studies — other clinics, long-term effects, and maintainability and
+     portability assessment.
+
+Closing line: "Keep the system as daily support to the clinic — with regular backups, audits,
+and a contingency plan."
+
+For the panel:
+- "Where did these recommendations come from?" → Directly from the RESULTS — every finding has
+  supporting evidence (e.g., the 4.04 vaccination score or the limitations in Slide 4). They
+  are not arbitrary suggestions.
+- "Which is your priority?" → Link it to the lowest score (vaccination training) and to the
+  biggest daily-operations impact (payment gateway).
+
+════════════════════════════════════════════════════════════════════
+
+GENERAL DEFENSE REMINDERS (all slides):
+- Use the flow PROBLEM → SOLUTION → EVIDENCE → NEXT STEPS: Slide 2 (problem/gap) → Slide 3
+  (objectives) → Slides 5–7 (how it was built) → Slides 8–11 (proof it works) → Slide 12 (what
+  comes next).
+- Numbers to memorize: 17/17 unit, 8/8 integration, N=55 respondents (50 + 5), end-user 4.25
+  (Strongly Agree), expert 4.95 (Strongly Agree), Usability 5.00, lowest item 4.04
+  (vaccination).
+- Whenever the panel asks "how do you know?" → always have a number or screenshot to point to.
+- Do not reveal the solution on Slide 2 — let it unfold across the deck; it makes for a
+  stronger defense.

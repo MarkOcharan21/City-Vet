@@ -1765,6 +1765,22 @@ body:has(.clinic-access-page)::before {
   opacity: 0.65;
 }
 
+.auth-confirm-pin {
+  margin-top: 0.55rem;
+  border-style: solid;
+  border-color: var(--color-primary);
+  background: rgba(200, 16, 46, 0.05);
+}
+
+.auth-confirm-pin:disabled {
+  cursor: wait;
+}
+
+.auth-confirm-done {
+  color: var(--color-success, #1a7f37);
+  font-weight: 600;
+}
+
 .auth-gps-error {
   margin: 0.4rem 0 0;
   font-size: 0.82rem;
@@ -12079,6 +12095,18 @@ body:has(.clinic-access-page)::before {
 .settings-gps-btn:disabled {
   cursor: wait;
   opacity: 0.65;
+}
+
+.settings-confirm-pin {
+  margin-top: 0.55rem;
+  border-style: solid;
+  border-color: var(--color-primary);
+  background: rgba(200, 16, 46, 0.05);
+}
+
+.settings-confirm-done {
+  color: var(--color-success, #1a7f37);
+  font-weight: 600;
 }
 
 .settings-field-hint {

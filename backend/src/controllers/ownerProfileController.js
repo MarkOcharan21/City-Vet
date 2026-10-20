@@ -63,6 +63,7 @@ async function updateOwnerProfile(req, res) {
     gps_lat,
     gps_lng,
     gps_accuracy,
+    pin_source,
   } = req.body;
 
   // Validate
@@ -148,7 +149,9 @@ async function updateOwnerProfile(req, res) {
     await syncOwnerLocation(
       ownerId,
       { address, barangay, subdivision, block, lot },
-      gps_lat && gps_lng ? { latitude: gps_lat, longitude: gps_lng, accuracy_meters: gps_accuracy } : null,
+      gps_lat && gps_lng
+        ? { latitude: gps_lat, longitude: gps_lng, accuracy_meters: gps_accuracy, source: pin_source }
+        : null,
     );
 
     res.json({ success: true, message: 'Profile updated successfully.' });

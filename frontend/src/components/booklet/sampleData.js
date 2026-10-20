@@ -7,8 +7,34 @@ export const AVATAR_PLACEHOLDER =
 export const QR_PLACEHOLDER =
   "data:image/svg+xml," +
   encodeURIComponent(
-    "<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><rect width='240' height='240' fill='#ffffff'/><rect x='12' y='12' width='56' height='56' fill='#111827'/><rect x='172' y='12' width='56' height='56' fill='#111827'/><rect x='12' y='172' width='56' height='56' fill='#111827'/><path d='M84 12h16M116 12h16M148 12h16M84 52h16M148 52h16M84 100h8M104 92v16M116 100h8M136 100h8M156 92v16M84 128h16M148 128h16M84 148h16M148 148h16M84 172h16M104 172h16M84 196h16M104 196h16M148 172h16M148 196h16M172 92v16M196 92v16M176 128h16M196 148v16M172 196v16M196 196h12' stroke='#111827' stroke-width='8'/></svg>",
+    "<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><rect width='240' height='240' fill='#ffffff'/><rect x='12' y='12' width='56' height='56' fill='#111827'/><rect x='172' y='12' width='56' height='56' fill='#111827'/><rect x='12' y='172' width='56' height='56' fill='#111827'/><path d='M84 12h16M116 12h16M148 12h16M84 52h16M148 52h16M84 100h8M104 92v16M116 100h8M136 100h8M156 92v16M176 128h16M196 148v16M172 92v16M196 196h12' stroke='#111827' stroke-width='8'/></svg>",
   );
+
+function assignStampColorFromCategory(medicineName) {
+  const categoryMap = {
+    amoxicillin: 'antibiotic',
+    ampicillin: 'antibiotic',
+    doxycycline: 'antibiotic',
+    metronidazole: 'antibiotic',
+    metacam: 'anti_inflammatory',
+    carprofen: 'anti_inflammatory',
+    Rimadyl: 'anti_inflammatory',
+    prednisone: 'anti_inflammatory',
+    fenbendazole: 'antiparasitic',
+    pyrantel: 'antiparasitic',
+    ivermectin: 'antiparasitic',
+    tramadol: 'pain',
+    gabapentin: 'pain',
+    carprofen: 'pain',
+    rimadyl: 'pain',
+    general: 'general',
+  };
+  const lower = (medicineName || '').toLowerCase();
+  for (const [key, value] of Object.entries(categoryMap)) {
+    if (lower.includes(key)) return value;
+  }
+  return 'general';
+}
 
 function pickPet(pet) {
   const base = pet || {};
@@ -72,6 +98,19 @@ export function enrichBooklet(data, mode, canSeeAll = false) {
   const onFileNumber = (pet.emergency_contact_number || "").trim();
   const emergencyIsOwner = authorized && !onFileName && !onFileNumber;
 
+  const medicineDispatches = (Array.isArray(data?.prescriptions) ? data.prescriptions : [])
+    .filter((p) => p.medicine_name)
+    .map((p) => {
+      const stampColor = p.stamp_color || assignStampColorFromCategory(p.medicine_name);
+      return {
+        medicine_name: p.medicine_name,
+        batch_number: p.batch_number || `MED-${p.id}-unknown`,
+        expiry_date: p.expiry_date || p.item_expiry_date || null,
+        dispensed_date: p.dispensed_date || null,
+        stamp_color: stampColor,
+      };
+    });
+
   return {
     authorized,
     unpaid,
@@ -79,6 +118,7 @@ export function enrichBooklet(data, mode, canSeeAll = false) {
     vaccinations,
     consultations,
     prescriptions,
+    medicineDispatches,
     payments,
     preventiveCare: Array.isArray(data?.preventiveCare) ? data.preventiveCare : [],
     procedures: Array.isArray(data?.procedures) ? data.procedures : [],
