@@ -14,7 +14,7 @@ async function getMedicineList(req, res) {
     const [rows] = await db.query(
       `SELECT m.id, m.medicine_name, m.description, m.category,
               m.default_dosage, m.default_frequency, m.default_duration, m.default_instructions,
-              cp.price AS price
+              m.stamp_color, cp.price AS price
        FROM medicines m
        LEFT JOIN catalog_products cp ON cp.medicine_id = m.id
        ORDER BY m.medicine_name`

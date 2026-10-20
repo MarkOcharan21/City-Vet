@@ -201,6 +201,7 @@ CREATE TABLE `medicines` (
   `default_duration` varchar(100) DEFAULT NULL,
   `default_instructions` varchar(255) DEFAULT NULL,
   `expiry_date` date DEFAULT NULL,
+  `stamp_color` varchar(7) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 

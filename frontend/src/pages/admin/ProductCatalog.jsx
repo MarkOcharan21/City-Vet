@@ -87,6 +87,7 @@ const EMPTY_FORM = {
   subcategory: '',
   price: '',
   active: true,
+  stamp_color: '',
 };
 
 function formatPeso(value) {
@@ -182,6 +183,7 @@ export default function ProductCatalog() {
       subcategory: p.subcategory || '',
       price: p.price,
       active: p.active,
+      stamp_color: p.stamp_color || '',
     });
     setFieldErrors({});
     setFormError('');
@@ -219,6 +221,7 @@ export default function ProductCatalog() {
       subcategory: form.subcategory.trim() || null,
       price: Number.parseFloat(form.price),
       active: form.active,
+      stamp_color: form.stamp_color,
     };
 
     setSaving(true);
@@ -347,7 +350,7 @@ export default function ProductCatalog() {
           <table className="data-table catalog-sticky-table" style={{ overflow: 'visible', borderRadius: '0' }}>
             <thead className="catalog-sticky-thead">
               <tr>
-                <th>Product</th><th>Category</th><th>Species</th><th>Unit / Subcategory</th><th>Price</th><th>Status</th><th>Action</th>
+                <th>Product</th><th>Category</th><th>Species</th><th>Unit / Subcategory</th><th>Price</th><th>Status</th><th>Action</th><th>Stamp Color</th>
               </tr>
             </thead>
             <tbody>
@@ -382,7 +385,7 @@ export default function ProductCatalog() {
                     <td>
                       <StatusBadge status={p.active ? 'Active' : 'Inactive'} />
                     </td>
-                    <td className="catalog-actions" style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', justifyContent: 'center', flexWrap: 'nowrap' }}>
+<td className="catalog-actions" style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', justifyContent: 'center', flexWrap: 'nowrap' }}>
                       <button className="btn-icon-action" onClick={() => openEdit(p)} title="Edit" style={{ padding: '0.35rem' }}>
                         <Pencil size={16} />
                       </button>
@@ -398,6 +401,20 @@ export default function ProductCatalog() {
                       <button className="btn-icon-action btn-icon-action--danger" onClick={() => setPendingDelete(p)} title="Delete" style={{ padding: '0.35rem' }}>
                         <Trash2 size={16} />
                       </button>
+                    </td>
+                    <td style={{ padding: '0.5rem', color: 'var(--cvo-ink)' }}>
+                      {p.stamp_color ? (
+                        <div style={{
+                          width: '30px', height: '20px', background: p.stamp_color, border: '1px solid #ccc', borderRadius: '4px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--cvo-ink)' }}>
+                            {p.stamp_color}
+                          </span>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--cvo-muted)' }}>auto</span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -484,7 +501,7 @@ export default function ProductCatalog() {
                       ))}
                     </select>
                   </div>
-                  <div className="field-group">
+<div className="field-group">
                     <label htmlFor="cat-subcategory">Subcategory (optional)</label>
                     <select id="cat-subcategory" name="subcategory" value={form.subcategory} onChange={handleChange}>
                       <option value="">None</option>
@@ -494,7 +511,27 @@ export default function ProductCatalog() {
                     </select>
                   </div>
                 </div>
-
+                <div className="vaccination-form-row">
+                  <div className="field-group">
+                    <label htmlFor="cat-stamp-color">Stamp Color (optional)</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input
+                        id="cat-stamp-color"
+                        name="stamp_color"
+                        type="color"
+                        value={form.stamp_color || '#6B7280'}
+                        onChange={handleChange}
+                        style={{ width: '80px', height: '28px', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: '0.78rem', color: 'var(--cvo-ink)' }}>
+                        #{form.stamp_color || 'auto-assign'}
+                      </span>
+                    </div>
+                    <p className="vaccination-calc-helper">
+                      Auto-assign from category if left empty. Use hex color (e.g., #DC2626) for custom stamp color.
+                    </p>
+                  </div>
+                </div>
                 <div className="field-group catalog-active-toggle">
                   <label className="catalog-checkbox">
                     <input
