@@ -381,10 +381,12 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                   </div>
                   <div className="stamp-row__meta">
                     <Clock size={13} /> <span>{fmt(d.dispensed_date)}</span>
-                    {d.expiry_date && (
-                      <span>•</span>
-                      <span>Exp: {fmt(d.expiry_date)}</span>
-                    )}
+                    {d.expiry_date ? (
+                      <React.Fragment>
+                        <span>•</span>
+                        <span>Exp: {fmt(d.expiry_date)}</span>
+                      </React.Fragment>
+                    ) : null}
                   </div>
                   <div className="stamp-row__footnote">System-generated medicine stamp</div>
                 </div>
