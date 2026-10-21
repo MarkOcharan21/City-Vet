@@ -33,6 +33,8 @@ import PrintReportButton from "../../components/staff/PrintReportButton";
 import StatusBadge from "../../components/StatusBadge";
 import { hasValue, formatDate, formatAge } from "../../utils/petDisplay";
 import PetHealthNotesModal from "../../components/PetHealthNotesModal";
+import MedicineStamp from "../../components/MedicineStamp";
+import { getMedicineStampColor } from "../../utils/medicineStamp";
 
 const DEFAULT_CONSULTATION_PRODUCT_NAME = "Consultation Fee";
 
@@ -123,17 +125,19 @@ export default function ClinicalRecords() {
   async function loadPetRecords(petId) {
     setLoadingRecords(true);
     try {
-      const [clinicalRes, vaccineRes] = await Promise.all([
+      const [clinicalRes, vaccineRes, medicineRes] = await Promise.all([
         api.get(`/clinical?pet_id=${petId}`),
-        api.get(`/vaccinations/pet/${petId}`)
+        api.get(`/vaccinations/pet/${petId}`),
+        api.get(`/medicines/pet/${petId}`)
       ]);
       setPetRecords({
         clinical: clinicalRes.data.records || [],
-        vaccinations: vaccineRes.data.history || []
+        vaccinations: vaccineRes.data.history || [],
+        medicines: medicineRes.data.records || []
       });
     } catch (error) {
       toast.error("Failed to load pet records");
-      setPetRecords({ clinical: [], vaccinations: [] });
+      setPetRecords({ clinical: [], vaccinations: [], medicines: [] });
     } finally {
       setLoadingRecords(false);
     }
@@ -1182,6 +1186,55 @@ export default function ClinicalRecords() {
                     <strong>{selectedPet?.owner_name}</strong>
                   </div>
                 </div>
+
+                <section style={{ marginBottom: "1.5rem" }}>
+                  <h4 style={{ display: "flex", alignItems: "center", gap: "0.5rem", margin: "0 0 0.75rem" }}>
+                    <Pill size={16} />
+                    Recent Medicine Stamps
+                  </h4>
+                  {petRecords?.medicines?.length ? (
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))",
+                      gap: "0.75rem",
+                    }}>
+                      {petRecords.medicines.slice(0, 5).map((medicine) => (
+                        <div key={medicine.id} style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                          minWidth: 0,
+                          padding: "0.75rem",
+                          background: "#fff",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "8px",
+                        }}>
+                          <MedicineStamp
+                            color={medicine.stamp_color || getMedicineStampColor({
+                              category: medicine.category,
+                              medicineName: medicine.medicine_name,
+                            })}
+                            medicineName={medicine.medicine_name}
+                            batchNumber={medicine.batch_number}
+                            expiryDate={medicine.medicine_expiry_date}
+                            size={140}
+                          />
+                          <div style={{ minWidth: 0, fontSize: "0.8rem", color: "#4b5563" }}>
+                            <div style={{ fontWeight: 600, color: "#111827", marginBottom: "0.25rem" }}>
+                              {medicine.medicine_name}
+                            </div>
+                            <div>Dispensed: {formatDate(medicine.dispensed_date || medicine.prescribed_date)}</div>
+                            {medicine.dosage && <div>Dosage: {medicine.dosage}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: "0.875rem", color: "#6b7280" }}>
+                      No medicine stamps recorded for this pet yet.
+                    </p>
+                  )}
+                </section>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
                   {petRecords?.clinical?.length > 0 && (

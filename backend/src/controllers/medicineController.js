@@ -103,6 +103,51 @@ async function getAllMedicineRecords(req, res) {
   }
 }
 
+// GET /api/medicines/pet/:petId (Staff/Vet/Admin — recent medicine stamps)
+async function getPetMedicineRecords(req, res) {
+  const petId = Number(req.params.petId);
+  if (!Number.isInteger(petId) || petId < 1) {
+    return res.status(400).json({ success: false, message: 'A valid pet ID is required.' });
+  }
+
+  try {
+    const [rows] = await db.query(
+      `SELECT pi.id,
+              pi.batch_number,
+              pi.dispensed_date,
+              pi.dosage,
+              pi.quantity,
+              pr.prescribed_date,
+              m.medicine_name,
+              m.category,
+              COALESCE(pi.expiry_date,
+                (SELECT cp.expiry_date FROM catalog_products cp
+                 WHERE cp.medicine_id = m.id AND cp.expiry_date IS NOT NULL
+                 ORDER BY cp.id LIMIT 1),
+                m.expiry_date
+              ) AS medicine_expiry_date,
+              COALESCE(
+                (SELECT cp.stamp_color FROM catalog_products cp
+                 WHERE cp.medicine_id = m.id AND cp.stamp_color IS NOT NULL
+                 ORDER BY cp.id LIMIT 1),
+                m.stamp_color
+              ) AS stamp_color
+       FROM prescription_items pi
+       JOIN medicines m ON pi.medicine_id = m.id
+       JOIN prescriptions pr ON pi.prescription_id = pr.id
+       JOIN consultation_records cr ON pr.consultation_id = cr.id
+       WHERE cr.pet_id = ?
+       ORDER BY COALESCE(pi.dispensed_date, pr.prescribed_date) DESC, pi.id DESC
+       LIMIT 10`,
+      [petId]
+    );
+    res.json({ success: true, records: rows });
+  } catch (error) {
+    console.error('Get pet medicine records error:', error);
+    res.status(500).json({ success: false, message: 'Could not load recent medicine records.', error: error.message });
+  }
+}
+
 // POST /api/medicines/prescriptions  (Vet creates a prescription with items)
 // Body: { consultation_id | pet_id, items: [{ medicine_id, quantity, dosage, frequency, duration, instructions }] }
 async function addPrescription(req, res) {
@@ -168,4 +213,10 @@ async function addPrescription(req, res) {
   }
 }
 
-module.exports = { getMedicineList, getMyMedicineRecords, getAllMedicineRecords, addPrescription };
+module.exports = {
+  getMedicineList,
+  getMyMedicineRecords,
+  getAllMedicineRecords,
+  getPetMedicineRecords,
+  addPrescription,
+};
