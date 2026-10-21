@@ -76,6 +76,7 @@ const { ensureSubdivisionLots } = require("./src/db/ensureSubdivisionLots");
 const { ensureOwnerLocationSource } = require("./src/db/ensureOwnerLocationSource");
 const { ensurePrescriptionInventoryColumns } = require("./src/db/ensurePrescriptionInventoryColumns");
 const { ensureMedicineStampColumns } = require("./src/db/ensureMedicineStampColumns");
+const { ensureConsultationService } = require("./src/db/ensureConsultationService");
 
 const {
     startAnnouncementScheduler,
@@ -357,6 +358,8 @@ async function startSchedulers() {
     await ensureConsultationPaymentSchema();
     await ensureOutreachTables();
   }
+
+  await ensureConsultationService();
 
   // Runs on both engines: the live PostgreSQL/Supabase database has no separate
   // migration runner, so DDL that must exist on every deploy lives here.

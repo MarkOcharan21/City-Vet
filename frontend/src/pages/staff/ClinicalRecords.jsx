@@ -36,7 +36,7 @@ import PetHealthNotesModal from "../../components/PetHealthNotesModal";
 import MedicineStamp from "../../components/MedicineStamp";
 import { getMedicineStampColor } from "../../utils/medicineStamp";
 
-const DEFAULT_CONSULTATION_PRODUCT_NAME = "Consultation Fee";
+const DEFAULT_CONSULTATION_PRODUCT_NAME = "Consultation Service";
 
 function todayValue() {
   const date = new Date();
