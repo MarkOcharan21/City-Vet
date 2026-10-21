@@ -1164,51 +1164,63 @@ export default function ClinicalRecords() {
       )}
 
       {recordsModalOpen && (
-        <div className="receipt-modal-overlay" onClick={() => setRecordsModalOpen(false)}>
-          <div className="receipt-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "1000px", maxHeight: "85vh" }}>
-            <div className="receipt-modal-head">
-              <h3>Pet Records</h3>
+        <div className="receipt-modal-overlay vet-records-overlay" onClick={() => setRecordsModalOpen(false)}>
+          <div
+            className="receipt-modal vet-records-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="vet-records-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="receipt-modal-head vet-records-head">
+              <div className="vet-records-heading">
+                <span className="vet-records-heading-icon"><ClipboardList size={20} /></span>
+                <div>
+                  <h3 id="vet-records-title">Pet Records</h3>
+                  <p>Review this pet's recent clinical and care history.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="vet-records-close"
+                onClick={() => setRecordsModalOpen(false)}
+                aria-label="Close pet records"
+              >
+                <X size={20} />
+              </button>
             </div>
 
             {loadingRecords ? (
-              <div className="empty-state-cell">
+              <div className="empty-state-cell vet-records-loading">
                 <LoadingSpinner text="Loading records..." fullPage={false} />
               </div>
             ) : (
-              <div className="receipt-modal-body" style={{ maxHeight: "calc(85vh - 140px)", overflowY: "auto" }}>
-                <div className="receipt-meta" style={{ marginBottom: "1.5rem" }}>
-                  <div>
-                    <span>Patient</span>
-                    <strong>{selectedPet?.name} · {selectedPet?.pet_code}</strong>
+              <div className="receipt-modal-body vet-records-body">
+                <div className="vet-records-patient">
+                  <div className="vet-records-patient-item">
+                    <span className="vet-records-label">Patient</span>
+                    <strong>{selectedPet?.name || "Pet"}{selectedPet?.pet_code ? ` · ${selectedPet.pet_code}` : ""}</strong>
                   </div>
-                  <div>
-                    <span>Owner</span>
-                    <strong>{selectedPet?.owner_name}</strong>
+                  <div className="vet-records-patient-item">
+                    <span className="vet-records-label">Owner</span>
+                    <strong>{selectedPet?.owner_name || "Not available"}</strong>
                   </div>
                 </div>
 
-                <section style={{ marginBottom: "1.5rem" }}>
-                  <h4 style={{ display: "flex", alignItems: "center", gap: "0.5rem", margin: "0 0 0.75rem" }}>
-                    <Pill size={16} />
-                    Recent Medicine Stamps
-                  </h4>
+                <section className="vet-records-section vet-records-medicines">
+                  <div className="vet-records-section-heading">
+                    <div className="vet-records-section-title">
+                      <Pill size={18} />
+                      <h4>Recent Medicine Stamps</h4>
+                    </div>
+                    {petRecords?.medicines?.length > 0 && (
+                      <span className="vet-records-count">{petRecords.medicines.length}</span>
+                    )}
+                  </div>
                   {petRecords?.medicines?.length ? (
-                    <div style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))",
-                      gap: "0.75rem",
-                    }}>
+                    <div className="vet-records-medicine-list">
                       {petRecords.medicines.slice(0, 5).map((medicine) => (
-                        <div key={medicine.id} style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.75rem",
-                          minWidth: 0,
-                          padding: "0.75rem",
-                          background: "#fff",
-                          border: "1px solid #e5e7eb",
-                          borderRadius: "8px",
-                        }}>
+                        <div key={medicine.id} className="vet-records-medicine-card">
                           <MedicineStamp
                             color={medicine.stamp_color || getMedicineStampColor({
                               category: medicine.category,
@@ -1219,118 +1231,91 @@ export default function ClinicalRecords() {
                             expiryDate={medicine.medicine_expiry_date}
                             size={140}
                           />
-                          <div style={{ minWidth: 0, fontSize: "0.8rem", color: "#4b5563" }}>
-                            <div style={{ fontWeight: 600, color: "#111827", marginBottom: "0.25rem" }}>
+                          <div className="vet-records-medicine-details">
+                            <div className="vet-records-medicine-name">
                               {medicine.medicine_name}
                             </div>
-                            <div>Dispensed: {formatDate(medicine.dispensed_date || medicine.prescribed_date)}</div>
-                            {medicine.dosage && <div>Dosage: {medicine.dosage}</div>}
+                            <div><span>Dispensed</span>{formatDate(medicine.dispensed_date || medicine.prescribed_date)}</div>
+                            {medicine.dosage && <div><span>Dosage</span>{medicine.dosage}</div>}
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p style={{ margin: 0, fontSize: "0.875rem", color: "#6b7280" }}>
-                      No medicine stamps recorded for this pet yet.
-                    </p>
+                    <p className="vet-records-empty">No medicine stamps recorded for this pet yet.</p>
                   )}
                 </section>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
-                  {petRecords?.clinical?.length > 0 && (
-                    <div className="receipt-prescription" style={{ marginBottom: 0 }}>
-                      <h4 style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
-                        <FileText size={16} />
-                        Recent Consultations
-                      </h4>
-                      <div style={{
-                        maxHeight: "400px",
-                        overflowY: "auto",
-                        padding: "0.5rem",
-                        backgroundColor: "#f9fafb",
-                        borderRadius: "8px",
-                        border: "1px solid #e5e7eb"
-                      }}>
-                        {petRecords.clinical
+                <div className="vet-records-history-grid">
+                  <section className="vet-records-section">
+                    <div className="vet-records-section-heading">
+                      <div className="vet-records-section-title">
+                        <FileText size={18} />
+                        <h4>Recent Consultations</h4>
+                      </div>
+                      {petRecords?.clinical?.length > 0 && (
+                        <span className="vet-records-count">{petRecords.clinical.length}</span>
+                      )}
+                    </div>
+                    {petRecords?.clinical?.length ? (
+                      <div className="vet-records-history-list">
+                        {[...petRecords.clinical]
                           .sort((a, b) => new Date(b.consultation_date) - new Date(a.consultation_date))
                           .slice(0, 5)
                           .map((record) => (
-                          <div key={record.id} style={{
-                            padding: "1rem",
-                            backgroundColor: "#ffffff",
-                            borderRadius: "6px",
-                            marginBottom: "0.75rem",
-                            border: "1px solid #e5e7eb",
-                            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)"
-                          }}>
-                            <div style={{ fontWeight: "600", marginBottom: "0.5rem", color: "#111827" }}>
-                              {formatDate(record.consultation_date)}
-                            </div>
-                            <div style={{ fontSize: "0.875rem", color: "#4b5563", marginBottom: "0.5rem", lineHeight: "1.5" }}>
-                              <strong style={{ color: "#111827" }}>Diagnosis:</strong> {record.diagnosis || "Not recorded"}
-                            </div>
-                            {record.treatment_plan && (
-                              <div style={{ fontSize: "0.875rem", color: "#4b5563", lineHeight: "1.5" }}>
-                                <strong style={{ color: "#111827" }}>Treatment:</strong> {record.treatment_plan}
+                            <article key={record.id} className="vet-records-history-card">
+                              <div className="vet-records-date">
+                                <Calendar size={15} />
+                                <strong>{formatDate(record.consultation_date)}</strong>
                               </div>
-                            )}
-                          </div>
-                        ))}
+                              <p><strong>Diagnosis</strong>{record.diagnosis || "Not recorded"}</p>
+                              {record.treatment_plan && (
+                                <p><strong>Treatment</strong>{record.treatment_plan}</p>
+                              )}
+                            </article>
+                          ))}
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <p className="vet-records-empty">No consultations recorded for this pet yet.</p>
+                    )}
+                  </section>
 
-                  {petRecords?.vaccinations?.length > 0 && (
-                    <div className="receipt-prescription" style={{ marginBottom: 0 }}>
-                      <h4 style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
-                        <Pill size={16} />
-                        Vaccination History
-                      </h4>
-                      <div style={{
-                        maxHeight: "400px",
-                        overflowY: "auto",
-                        padding: "0.5rem",
-                        backgroundColor: "#f9fafb",
-                        borderRadius: "8px",
-                        border: "1px solid #e5e7eb"
-                      }}>
-                        {petRecords.vaccinations
+                  <section className="vet-records-section">
+                    <div className="vet-records-section-heading">
+                      <div className="vet-records-section-title">
+                        <Pill size={18} />
+                        <h4>Vaccination History</h4>
+                      </div>
+                      {petRecords?.vaccinations?.length > 0 && (
+                        <span className="vet-records-count">{petRecords.vaccinations.length}</span>
+                      )}
+                    </div>
+                    {petRecords?.vaccinations?.length ? (
+                      <div className="vet-records-history-list">
+                        {[...petRecords.vaccinations]
                           .sort((a, b) => new Date(b.vaccination_date) - new Date(a.vaccination_date))
                           .slice(0, 5)
                           .map((vaccine) => (
-                          <div key={vaccine.id} style={{
-                            padding: "1rem",
-                            backgroundColor: "#ffffff",
-                            borderRadius: "6px",
-                            marginBottom: "0.75rem",
-                            border: "1px solid #e5e7eb",
-                            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)"
-                          }}>
-                            <div style={{ fontWeight: "600", marginBottom: "0.5rem", color: "#111827" }}>
-                              {vaccine.vaccine_name}
-                            </div>
-                            <div style={{ fontSize: "0.875rem", color: "#4b5563" }}>
-                              <strong style={{ color: "#111827" }}>Date:</strong> {formatDate(vaccine.vaccination_date)}
-                            </div>
-                          </div>
-                        ))}
+                            <article key={vaccine.id} className="vet-records-history-card">
+                              <div className="vet-records-vaccine-name">{vaccine.vaccine_name}</div>
+                              <div className="vet-records-date">
+                                <Calendar size={15} />
+                                <span>{formatDate(vaccine.vaccination_date)}</span>
+                              </div>
+                            </article>
+                          ))}
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <p className="vet-records-empty">No vaccinations recorded for this pet yet.</p>
+                    )}
+                  </section>
                 </div>
-
-                {(!petRecords?.clinical?.length && !petRecords?.vaccinations?.length) && (
-                  <div className="empty-state-cell" style={{ padding: "3rem", textAlign: "center" }}>
-                    <ClipboardList size={48} style={{ color: "#9ca3af", marginBottom: "1rem" }} />
-                    <p style={{ color: "#6b7280", fontSize: "1rem" }}>No records found for this pet.</p>
-                  </div>
-                )}
               </div>
             )}
 
-            <div className="receipt-modal-foot">
+            <div className="receipt-modal-foot vet-records-foot">
               <div className="receipt-modal-actions">
-                <button type="button" className="btn-primary" onClick={() => setRecordsModalOpen(false)}>
+                <button type="button" className="btn-secondary" onClick={() => setRecordsModalOpen(false)}>
                   Close
                 </button>
               </div>

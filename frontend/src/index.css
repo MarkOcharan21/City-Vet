@@ -15422,6 +15422,335 @@ body {
     width: 100%;
   }
 }
+
+.vet-records-modal {
+  width: min(100%, 68rem);
+  max-width: 68rem;
+  max-height: min(88vh, 54rem);
+}
+
+.vet-records-head {
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.4rem;
+}
+
+.vet-records-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.vet-records-heading-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 12px;
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
+}
+
+.receipt-modal-head .vet-records-heading h3 {
+  margin: 0 0 0.2rem;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+}
+
+.receipt-modal-head .vet-records-heading p {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.vet-records-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.35rem;
+  height: 2.35rem;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-card);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.vet-records-close:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
+}
+
+.vet-records-body {
+  gap: 1.15rem;
+  padding: 1.25rem 1.4rem;
+}
+
+.vet-records-loading {
+  min-height: 16rem;
+}
+
+.vet-records-patient {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-bg);
+}
+
+.vet-records-patient-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.vet-records-label {
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.vet-records-patient-item strong {
+  color: var(--color-ink);
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.vet-records-section {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-card);
+}
+
+.vet-records-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.vet-records-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  color: var(--color-primary);
+}
+
+.vet-records-section-title svg {
+  flex: 0 0 auto;
+}
+
+.vet-records-section-title h4 {
+  margin: 0;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.vet-records-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.55rem;
+  height: 1.55rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
+  font-size: 0.73rem;
+  font-weight: 800;
+}
+
+.vet-records-medicine-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr));
+  gap: 0.75rem;
+}
+
+.vet-records-medicine-card {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-bg);
+}
+
+.vet-records-medicine-card > [role="img"] {
+  flex: 0 1 140px !important;
+}
+
+.vet-records-medicine-details {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.vet-records-medicine-details > div:not(.vet-records-medicine-name) {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.vet-records-medicine-details span {
+  color: var(--color-text-muted);
+  font-size: 0.67rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.vet-records-medicine-name,
+.vet-records-vaccine-name {
+  color: var(--color-ink);
+  font-size: 0.85rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.vet-records-history-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+.vet-records-history-list {
+  display: grid;
+  gap: 0.65rem;
+  max-height: 22rem;
+  padding-right: 0.2rem;
+  overflow-y: auto;
+}
+
+.vet-records-history-card {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 11px;
+  background: var(--color-bg);
+}
+
+.vet-records-date {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.vet-records-date svg {
+  flex: 0 0 auto;
+  color: var(--color-primary);
+}
+
+.vet-records-date strong {
+  color: var(--color-ink);
+}
+
+.vet-records-history-card p {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.35rem;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.vet-records-history-card p strong {
+  color: var(--color-ink);
+}
+
+.vet-records-vaccine-name {
+  font-size: 0.88rem;
+}
+
+.vet-records-empty {
+  margin: 0;
+  padding: 1rem;
+  border-radius: 10px;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.vet-records-foot {
+  padding: 0.8rem 1.4rem;
+}
+
+.vet-records-foot .receipt-modal-actions .btn-secondary {
+  min-width: 6.5rem;
+}
+
+@media (max-width: 700px) {
+  .vet-records-modal {
+    max-height: 92vh;
+  }
+
+  .vet-records-head,
+  .vet-records-body {
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .vet-records-history-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vet-records-medicine-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .vet-records-patient {
+    grid-template-columns: 1fr;
+  }
+
+  .vet-records-medicine-card {
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 0.6rem;
+  }
+
+  .vet-records-medicine-card > [role="img"] {
+    flex-basis: 120px !important;
+  }
+
+  .vet-records-medicine-details {
+    font-size: 0.72rem;
+  }
+
+  .vet-records-history-card p {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+}
+
 /* The success colours are fixed light-mode values above, so give the dark theme
    its own set instead of leaving a white-on-white banner. */
 [data-theme="dark"] .receipt-modal-icon {
