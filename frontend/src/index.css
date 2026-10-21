@@ -6330,6 +6330,9 @@ body:has(.clinic-access-page)::before {
   color: var(--color-text-muted);
   font-size: 0.95rem;
 }
+.report-tabs + .analytics-period-label {
+  margin-top: 0.85rem;
+}
 .analytics-period-label strong {
   color: var(--color-ink);
 }
