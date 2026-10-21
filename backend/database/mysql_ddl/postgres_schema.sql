@@ -179,6 +179,7 @@ CREATE TABLE "medicines" (
   "default_frequency" varchar(100) COLLATE "ci",
   "default_duration" varchar(100) COLLATE "ci",
   "default_instructions" varchar(255) COLLATE "ci",
+  "expiry_date" date,
   PRIMARY KEY ("id")
 );
 
@@ -453,6 +454,9 @@ CREATE TABLE "prescription_items" (
   "frequency" varchar(100) COLLATE "ci",
   "duration" varchar(100) COLLATE "ci",
   "instructions" varchar(255) COLLATE "ci",
+  "batch_number" varchar(50) COLLATE "ci",
+  "expiry_date" date,
+  "dispensed_date" date,
   PRIMARY KEY ("id")
 );
 

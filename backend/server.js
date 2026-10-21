@@ -74,6 +74,7 @@ const { ensureAdminRecoveryKeys } = require("./src/db/ensureAdminRecovery");
 const { ensureAdminAccessCode } = require("./src/db/ensureAdminAccessCode");
 const { ensureSubdivisionLots } = require("./src/db/ensureSubdivisionLots");
 const { ensureOwnerLocationSource } = require("./src/db/ensureOwnerLocationSource");
+const { ensurePrescriptionInventoryColumns } = require("./src/db/ensurePrescriptionInventoryColumns");
 
 const {
     startAnnouncementScheduler,
@@ -360,6 +361,7 @@ async function startSchedulers() {
   // migration runner, so DDL that must exist on every deploy lives here.
   await ensureSubdivisionLots();
   await ensureOwnerLocationSource();
+  await ensurePrescriptionInventoryColumns();
 
   startNotificationScheduler();
   startAnnouncementScheduler();
