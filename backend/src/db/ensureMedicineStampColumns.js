@@ -9,6 +9,9 @@ async function ensureMedicineStampColumns() {
       await db.query(
         "ALTER TABLE catalog_products ADD COLUMN IF NOT EXISTS stamp_color varchar(7)"
       );
+      await db.query(
+        "ALTER TABLE catalog_products ADD COLUMN IF NOT EXISTS expiry_date date"
+      );
     } else {
       const [medicineColumns] = await db.query("SHOW COLUMNS FROM medicines");
       if (!medicineColumns.some((column) => column.Field === "stamp_color")) {
@@ -21,6 +24,11 @@ async function ensureMedicineStampColumns() {
       if (!catalogColumns.some((column) => column.Field === "stamp_color")) {
         await db.query(
           "ALTER TABLE catalog_products ADD COLUMN stamp_color VARCHAR(7) DEFAULT NULL"
+        );
+      }
+      if (!catalogColumns.some((column) => column.Field === "expiry_date")) {
+        await db.query(
+          "ALTER TABLE catalog_products ADD COLUMN expiry_date DATE DEFAULT NULL"
         );
       }
     }

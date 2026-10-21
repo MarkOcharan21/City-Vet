@@ -90,6 +90,7 @@ const EMPTY_FORM = {
   price: '',
   active: true,
   stamp_color: '',
+  expiry_date: '',
 };
 
 function formatPeso(value) {
@@ -198,6 +199,7 @@ export default function ProductCatalog() {
       price: p.price,
       active: p.active,
       stamp_color: p.stamp_color || '',
+      expiry_date: p.expiry_date ? String(p.expiry_date).slice(0, 10) : '',
     });
     setFieldErrors({});
     setFormError('');
@@ -236,6 +238,7 @@ export default function ProductCatalog() {
       price: Number.parseFloat(form.price),
       active: form.active,
       stamp_color: form.stamp_color,
+      expiry_date: form.expiry_date || null,
     };
 
     setSaving(true);
@@ -629,6 +632,21 @@ export default function ProductCatalog() {
                     </div>
                     <p className="vaccination-calc-helper">
                                   Category color is used unless you choose a custom stamp color.
+                    </p>
+                  </div>
+                </div>
+                <div className="vaccination-form-row">
+                  <div className="field-group">
+                    <label htmlFor="cat-expiry-date">Expiry Date (optional)</label>
+                    <input
+                      id="cat-expiry-date"
+                      name="expiry_date"
+                      type="date"
+                      value={form.expiry_date}
+                      onChange={handleChange}
+                    />
+                    <p className="vaccination-calc-helper">
+                      Enter the actual expiry date printed on the product or batch. Leave blank if unknown.
                     </p>
                   </div>
                 </div>

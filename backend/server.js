@@ -1458,6 +1458,7 @@ async function ensureCatalogTable() {
         subcategory VARCHAR(150) DEFAULT NULL,
         price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
         stamp_color VARCHAR(7) DEFAULT NULL,
+        expiry_date DATE DEFAULT NULL,
         active TINYINT(1) NOT NULL DEFAULT 1,
         sort_order INT NOT NULL DEFAULT 0,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

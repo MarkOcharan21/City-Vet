@@ -60,7 +60,10 @@ async function insertPrescription(connection, consultationId, items) {
               m.stamp_color,
               (SELECT cp.stamp_color FROM catalog_products cp
                WHERE cp.medicine_id = m.id AND cp.stamp_color IS NOT NULL
-               ORDER BY cp.id LIMIT 1) AS catalog_stamp_color
+               ORDER BY cp.id LIMIT 1) AS catalog_stamp_color,
+              (SELECT cp.expiry_date FROM catalog_products cp
+               WHERE cp.medicine_id = m.id AND cp.expiry_date IS NOT NULL
+               ORDER BY cp.id LIMIT 1) AS catalog_expiry_date
        FROM medicines m WHERE m.id = ?`,
       [medicineId]
     );
@@ -89,7 +92,7 @@ async function insertPrescription(connection, consultationId, items) {
         item.duration || null,
         item.instructions || null,
         batchNumber,
-        medicine?.[0]?.expiry_date || null,
+        medicine?.[0]?.catalog_expiry_date || medicine?.[0]?.expiry_date || null,
         new Date().toISOString().slice(0, 10),
       ]
     );

@@ -211,7 +211,13 @@ async function scanQrToken(req, res) {
     pi.duration,
     pi.instructions,
     pi.batch_number,
-    pi.expiry_date AS item_expiry_date,
+    COALESCE(
+      pi.expiry_date,
+      (SELECT cp.expiry_date FROM catalog_products cp
+       WHERE cp.medicine_id = m.id AND cp.expiry_date IS NOT NULL
+       ORDER BY cp.id LIMIT 1),
+      m.expiry_date
+    ) AS item_expiry_date,
     pi.dispensed_date,
     ${vetNameExpr('prescribed_by')}
 

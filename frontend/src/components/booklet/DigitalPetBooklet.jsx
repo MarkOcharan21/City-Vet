@@ -507,8 +507,8 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                         medicineName={p.medicine_name}
                         batchNumber={p.batch_number}
                         expiryDate={
-                          p.expiry_date || p.item_expiry_date
-                            ? fmt(p.expiry_date || p.item_expiry_date)
+                          p.expiry_date || p.item_expiry_date || p.medicine_expiry_date
+                            ? fmt(p.expiry_date || p.item_expiry_date || p.medicine_expiry_date)
                             : null
                         }
                       />

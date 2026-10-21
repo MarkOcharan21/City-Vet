@@ -23,13 +23,24 @@ function parseStampColor(value) {
   return /^#[0-9a-fA-F]{6}$/.test(color) ? color : false;
 }
 
+function parseExpiryDate(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const date = String(value).trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return false;
+  const parsed = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return parsed.toISOString().slice(0, 10) === date ? date : false;
+}
+
 // GET /api/catalog  (Staff/Vet/Admin — the quick-pick menu grouped by category)
 async function listCatalog(req, res) {
   try {
     const [rows] = await db.query(
       `SELECT
         id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id, stamp_color,
-        (SELECT m.expiry_date FROM medicines m WHERE m.id = catalog_products.medicine_id) AS expiry_date
+        COALESCE(catalog_products.expiry_date,
+          (SELECT m.expiry_date FROM medicines m WHERE m.id = catalog_products.medicine_id)
+        ) AS expiry_date
        FROM catalog_products
        WHERE active = 1
        ORDER BY category ASC, sort_order ASC, product_name ASC`
@@ -71,7 +82,9 @@ async function listCatalogAdmin(req, res) {
     const [rows] = await db.query(
       `SELECT
         id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id, stamp_color,
-        (SELECT m.expiry_date FROM medicines m WHERE m.id = catalog_products.medicine_id) AS expiry_date
+        COALESCE(catalog_products.expiry_date,
+          (SELECT m.expiry_date FROM medicines m WHERE m.id = catalog_products.medicine_id)
+        ) AS expiry_date
        FROM catalog_products
        ORDER BY category ASC, sort_order ASC, product_name ASC`
     );
@@ -109,6 +122,7 @@ async function listCatalogAdmin(req, res) {
 async function createCatalogItem(req, res) {
   const { category, product_name, species, unit, subcategory, price, active } = req.body;
   const stampColor = parseStampColor(req.body.stamp_color);
+  const expiryDate = parseExpiryDate(req.body.expiry_date);
   const name = String(product_name || "").trim();
   const cat = String(category || "").trim();
 
@@ -120,6 +134,9 @@ async function createCatalogItem(req, res) {
   }
   if (stampColor === false) {
     return res.status(400).json({ success: false, message: "Stamp color must be a 6-digit hex color." });
+  }
+  if (expiryDate === false) {
+    return res.status(400).json({ success: false, message: "Expiry date must be a valid YYYY-MM-DD date." });
   }
   const amount = Number.parseFloat(price);
   if (Number.isNaN(amount) || amount < 0) {
@@ -134,9 +151,9 @@ async function createCatalogItem(req, res) {
     );
     const [result] = await db.query(
       `INSERT INTO catalog_products
-        (category, product_name, species, unit, subcategory, price, active, sort_order, stamp_color)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [cat, name, species || "General", unit || null, subcategory || null, amount.toFixed(2), isActive ? 1 : 0, maxSort + 1, stampColor]
+        (category, product_name, species, unit, subcategory, price, active, sort_order, stamp_color, expiry_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [cat, name, species || "General", unit || null, subcategory || null, amount.toFixed(2), isActive ? 1 : 0, maxSort + 1, stampColor, expiryDate]
     );
 
     res.json({ success: true, message: `Catalog item "${name}" added.`, id: result.insertId });
@@ -145,7 +162,7 @@ async function createCatalogItem(req, res) {
       action: "CREATE",
       entity_type: "catalog",
       entity_id: result.insertId,
-      new_value: { category: cat, product_name: name, price: amount.toFixed(2), stamp_color: stampColor },
+      new_value: { category: cat, product_name: name, price: amount.toFixed(2), stamp_color: stampColor, expiry_date: expiryDate },
       description: `Added catalog product "${name}" (${cat}) — ₱${amount.toFixed(2)}`,
     });
   } catch (error) {
@@ -159,6 +176,7 @@ async function updateCatalogItem(req, res) {
   const { id } = req.params;
   const { category, product_name, species, unit, subcategory, price, active, sort_order } = req.body;
   const stampColor = parseStampColor(req.body.stamp_color);
+  const expiryDate = parseExpiryDate(req.body.expiry_date);
 
   try {
     const [[existing]] = await db.query("SELECT * FROM catalog_products WHERE id = ?", [id]);
@@ -181,6 +199,9 @@ async function updateCatalogItem(req, res) {
     if (stampColor === false) {
       return res.status(400).json({ success: false, message: "Stamp color must be a 6-digit hex color." });
     }
+    if (expiryDate === false) {
+      return res.status(400).json({ success: false, message: "Expiry date must be a valid YYYY-MM-DD date." });
+    }
     if (Number.isNaN(amount) || amount < 0) {
       return res.status(400).json({ success: false, message: "A valid price is required." });
     }
@@ -193,7 +214,7 @@ async function updateCatalogItem(req, res) {
     await db.query(
       `UPDATE catalog_products SET
         category = ?, product_name = ?, species = ?, unit = ?, subcategory = ?,
-        price = ?, active = ?, sort_order = ?, stamp_color = ?
+        price = ?, active = ?, sort_order = ?, stamp_color = ?, expiry_date = ?
        WHERE id = ?`,
       [
         cat,
@@ -205,6 +226,7 @@ async function updateCatalogItem(req, res) {
         isActive ? 1 : 0,
         sort_order !== undefined ? Number(sort_order) || 0 : existing.sort_order,
         req.body.stamp_color !== undefined ? stampColor : existing.stamp_color,
+        req.body.expiry_date !== undefined ? expiryDate : existing.expiry_date,
         id,
       ]
     );
@@ -215,8 +237,8 @@ async function updateCatalogItem(req, res) {
       action: "UPDATE",
       entity_type: "catalog",
       entity_id: id,
-      old_value: { product_name: existing.product_name, price: existing.price, active: existing.active, stamp_color: existing.stamp_color },
-      new_value: { category: cat, product_name: name, price: amount.toFixed(2), active: isActive, stamp_color: req.body.stamp_color !== undefined ? stampColor : existing.stamp_color },
+      old_value: { product_name: existing.product_name, price: existing.price, active: existing.active, stamp_color: existing.stamp_color, expiry_date: existing.expiry_date },
+      new_value: { category: cat, product_name: name, price: amount.toFixed(2), active: isActive, stamp_color: req.body.stamp_color !== undefined ? stampColor : existing.stamp_color, expiry_date: req.body.expiry_date !== undefined ? expiryDate : existing.expiry_date },
       description: `Updated catalog product "${name}"`,
     });
   } catch (error) {
