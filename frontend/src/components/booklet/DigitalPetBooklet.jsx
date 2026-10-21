@@ -511,6 +511,7 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                             ? fmt(p.expiry_date || p.item_expiry_date || p.medicine_expiry_date)
                             : null
                         }
+                        size={120}
                       />
                     </td>
                   </tr>
