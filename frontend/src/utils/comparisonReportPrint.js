@@ -1,0 +1,183 @@
+import {
+  getPrintFooter,
+  getPrintHeader,
+  getSectionHeader,
+  openPrintDocument,
+} from './printReport';
+
+function esc(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function num(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toLocaleString('en-US') : '—';
+}
+
+function pct(value) {
+  if (value === null || value === undefined) return '—';
+  const n = Number(value);
+  return Number.isFinite(n) ? `${n.toFixed(1)}%` : '—';
+}
+
+function delta(value) {
+  if (value === null || value === undefined) return '—';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n.toLocaleString('en-US')}`;
+}
+
+function peso(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `₱${n.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—';
+}
+
+/** "May 1, 2026 – Oct 31, 2026" — the full window, not just its first day. */
+function fmtRange(range) {
+  if (!range?.from || !range?.to) return null;
+  const start = new Date(`${range.from}T00:00:00`);
+  const end = new Date(`${range.to}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return `${range.from} – ${range.to}`;
+  }
+  const options = { year: 'numeric', month: 'short', day: 'numeric' };
+  return `${start.toLocaleDateString('en-US', options)} – ${end.toLocaleDateString('en-US', options)}`;
+}
+
+function rowsFor(items, emptyMessage, columns = 2) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return `<tr><td colspan="${columns}"><em>${esc(emptyMessage)}</em></td></tr>`;
+  }
+  return items
+    .map((row) => `<tr>${row.map((cell) => `<td>${esc(cell)}</td>`).join('')}</tr>`)
+    .join('');
+}
+
+function tableBlock(sectionNumber, title, columns, items, emptyMessage) {
+  const headerCells = columns.map((col) => `<th>${esc(col)}</th>`).join('');
+  return `
+    ${getSectionHeader(sectionNumber, title)}
+    <table class="staff-report-table">
+      <thead><tr>${headerCells}</tr></thead>
+      <tbody>${rowsFor(items, emptyMessage, columns.length)}</tbody>
+    </table>
+  `;
+}
+
+const GRANULARITY_LABELS = {
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
+};
+
+const COMPARE_LABELS = {
+  previous: 'Previous Period',
+  previousYear: 'Same Period Last Year',
+};
+
+/**
+ * Period comparison report (daily / weekly / monthly / yearly).
+ *
+ * @param {object} data the /analytics/vaccination-trends payload
+ * @param {{title?: string, period?: string, generatedAt?: Date}} options
+ */
+export function buildComparisonReportBody(data, {
+  title = 'Vaccination Period Comparison Report',
+  period = '',
+  generatedAt = new Date(),
+} = {}) {
+  const dateStr = new Date(generatedAt).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  const totals = data?.totals || {};
+  const current = totals.current || {};
+  const baseline = totals.baseline || {};
+  const granularity = GRANULARITY_LABELS[data?.granularity] || data?.granularity || '';
+  const compareLabel = COMPARE_LABELS[data?.compare] || data?.compare || '';
+  const currentWindow = fmtRange(data?.current) || data?.current?.label || period;
+  const baselineWindow = fmtRange(data?.baseline) || data?.baseline?.label || '';
+
+  return `
+    ${getPrintHeader('', dateStr)}
+    <h2 class="report-title report-title--center">${esc(title)}</h2>
+    <p class="report-meta report-meta--center">
+      ${esc(granularity)} comparison · baseline: ${esc(compareLabel)}<br />
+      ${esc(currentWindow)}${baselineWindow ? ` compared with ${esc(baselineWindow)}` : ''}
+    </p>
+
+    ${tableBlock(
+      1,
+      'COMPARISON SUMMARY',
+      ['Metric', 'Current Period', 'Baseline', 'Change', '% Change'],
+      [
+        ['Doses administered', num(current.doses), num(baseline.doses), delta(totals.doses?.delta), pct(totals.doses?.pctChange)],
+        ['Unique pets', num(current.pets), num(baseline.pets), delta(totals.pets?.delta), pct(totals.pets?.pctChange)],
+        ['Unique owners', num(current.owners), num(baseline.owners), delta(totals.owners?.delta), pct(totals.owners?.pctChange)],
+        ['Follow-ups on time', num(current.onTime), num(baseline.onTime), '—', '—'],
+        ['On-time rate', pct(current.onTimeRate), pct(baseline.onTimeRate), delta(totals.onTimeRate?.delta), pct(totals.onTimeRate?.pctChange)],
+        ['Revenue collected', peso(current.revenue), peso(baseline.revenue), peso(totals.revenue?.delta), pct(totals.revenue?.pctChange)],
+      ],
+      'No comparison data available.'
+    )}
+
+    ${tableBlock(
+      2,
+      'PERIOD-BY-PERIOD COMPARISON',
+      ['Period', 'Baseline Period', 'Doses (Current)', 'Doses (Baseline)', 'Change', '% Change', 'On-Time Rate (Current)', 'On-Time Rate (Baseline)'],
+      (data?.series || []).map((s) => [
+        s.label,
+        s.baselineLabel,
+        num(s.current?.doses ?? 0),
+        s.baseline ? num(s.baseline.doses) : 'No data',
+        delta(s.delta),
+        pct(s.pctChange),
+        s.current ? pct(s.current.onTimeRate) : '—',
+        s.baseline ? pct(s.baseline.onTimeRate) : '—',
+      ]),
+      'No comparison rows available.'
+    )}
+
+    ${tableBlock(
+      3,
+      'YEARLY VACCINATION REPORT',
+      ['Year', 'Doses', 'Unique Pets', 'Unique Owners', 'On Time', 'On-Time Rate', 'Revenue', 'Change vs Previous Year'],
+      (data?.yearly || []).map((y) => [
+        y.year,
+        num(y.doses),
+        num(y.pets),
+        num(y.owners),
+        num(y.onTime),
+        pct(y.onTimeRate),
+        peso(y.revenue),
+        y.pctChange === null || y.pctChange === undefined
+          ? '—'
+          : `${delta(y.delta)} (${pct(y.pctChange)})`,
+      ]),
+      'No yearly data available.'
+    )}
+
+    ${getPrintFooter()}
+  `;
+}
+
+export function printComparisonReport(data, options) {
+  const reportTitle = options?.title || 'Vaccination Period Comparison Report';
+  const period = options?.period || '';
+  return openPrintDocument({
+    title: period ? `${reportTitle} - ${period}` : reportTitle,
+    bodyHtml: buildComparisonReportBody(data, { title: reportTitle, period }),
+  });
+}

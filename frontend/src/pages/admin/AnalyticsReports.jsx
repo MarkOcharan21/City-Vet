@@ -1,36 +1,26 @@
 import { useEffect, useState } from "react";
 import api from "../../services/api";
 
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  ArcElement,
-  BarElement,
-  Tooltip,
-  Legend,
-} from "chart.js";
-
 import { Bar, Pie, Doughnut } from "react-chartjs-2";
 
-import { Printer, Calendar } from "lucide-react";
+import { Printer } from "lucide-react";
 import toast from "react-hot-toast";
 import SummaryCard from "../../components/SummaryCard";
-import AdminReportModal from "../../components/admin/AdminReportModal";
 import GlobalLoadingOverlay from "../../components/GlobalLoadingOverlay";
-import ChartDataLabels from "chartjs-plugin-datalabels";
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  ArcElement,
-  BarElement,
-  Tooltip,
-  Legend,
-  ChartDataLabels
-);
+import AdminReportModal from "../../components/admin/AdminReportModal";
+import CompliancePanel from "../../components/analytics/CompliancePanel";
+import ComparisonPanel from "../../components/analytics/ComparisonPanel";
+import ReportsPanel from "../../components/analytics/ReportsPanel";
+import "../../components/analytics/chartSetup";
 
 const CHART_PALETTE = ["#c8102e", "#c6a15b", "#1e7a46", "#b8860b", "#7a0c1e"];
+
+const TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "compliance", label: "Vaccine Compliance" },
+  { key: "comparison", label: "Period Comparison" },
+  { key: "reports", label: "Reports" },
+];
 
 const FILTER_OPTIONS = [
   { key: "today", label: "Today" },
@@ -70,7 +60,7 @@ const barChartOptions = {
     y: {
       beginAtZero: true,
       ticks: { stepSize: 1, font: { family: "Inter" } },
-      grid: { color: "rgba(36, 20, 22, 0.06)" },
+      grid: { color: 'rgba(36, 20, 22, 0.06)' },
       suggestedMax: (context) => {
         const max = Math.max(...(context.chart.data.datasets[0]?.data || [0]));
         return max * 1.25;
@@ -131,7 +121,7 @@ const horizontalBarChartOptions = {
     x: {
       beginAtZero: true,
       ticks: { stepSize: 1, font: { family: "Inter" } },
-      grid: { color: "rgba(36, 20, 22, 0.06)" },
+      grid: { color: 'rgba(36, 20, 22, 0.06)' },
       suggestedMax: (context) => {
         const max = Math.max(...(context.chart.data.datasets[0]?.data || [0]));
         return max * 1.25;
@@ -184,7 +174,7 @@ const revenueBarChartOptions = {
         font: { family: "Inter" },
         callback: (value) => `₱${Number(value).toLocaleString()}`,
       },
-      grid: { color: "rgba(36, 20, 22, 0.06)" },
+      grid: { color: 'rgba(36, 20, 22, 0.06)' },
       suggestedMax: (context) => {
         const max = Math.max(...(context.chart.data.datasets[0]?.data || [0]));
         return max * 1.25;
@@ -201,6 +191,7 @@ function hasChartData(items, valueKey = "total") {
 }
 
 export default function AnalyticsReports() {
+  const [tab, setTab] = useState("overview");
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -216,6 +207,8 @@ export default function AnalyticsReports() {
     "All Time";
 
   useEffect(() => {
+    if (tab !== "overview") return;
+
     setLoading(true);
     setError(null);
     setDashboard(null);
@@ -236,6 +229,7 @@ export default function AnalyticsReports() {
           registrations: res.data.registrations ?? [],
           petsBySex: res.data.petsBySex ?? [],
           vaccinationStatus: res.data.vaccinationStatus ?? [],
+          paymentRevenue: res.data.paymentRevenue ?? [],
         });
       })
       .catch((err) => {
@@ -248,7 +242,7 @@ export default function AnalyticsReports() {
       .finally(() => {
         setLoading(false);
       });
-  }, [filter, from, to, retryCount]);
+  }, [tab, filter, from, to, retryCount]);
 
   return (
     <div className="page">
@@ -256,256 +250,304 @@ export default function AnalyticsReports() {
         <div>
           <h1>Analytics & Reports</h1>
           <p className="page-intro">
-            Review clinic metrics, export dashboard reports, and monitor recent
-            activity across registrations, vaccinations, and QR records.
+            Review clinic metrics, measure vaccine follow-up compliance, compare
+            periods, and export printable reports.
           </p>
         </div>
       </div>
 
-      <p className="analytics-period-label">
-        Showing data for: <strong>{filterLabel}</strong>
-      </p>
-
-      <div className="analytics-print-row">
-        <button type="button" onClick={() => setPrintOpen(true)} className="btn-primary">
-          <Printer size={16} /> Print Report
-        </button>
-      </div>
-
-      <AdminReportModal open={printOpen} onClose={() => setPrintOpen(false)} />
-
-      <div className="analytics-filter-row" role="group" aria-label="Analytics time period">
-        {FILTER_OPTIONS.map((option) => (
+      <div className="report-tabs" role="tablist" aria-label="Analytics sections">
+        {TABS.map((entry) => (
           <button
-            key={option.key}
+            key={entry.key}
             type="button"
-            aria-pressed={filter === option.key}
-            onClick={() => setFilter(option.key)}
-            className={`analytics-filter-btn${filter === option.key ? " is-active" : ""}`}
+            role="tab"
+            aria-selected={tab === entry.key}
+            className={`report-tab${tab === entry.key ? " is-active" : ""}`}
+            onClick={() => setTab(entry.key)}
           >
-            {option.label}
+            {entry.label}
           </button>
         ))}
-        <div style={{ marginLeft: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <label style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>Custom Range:</label>
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            style={{ width: '140px', padding: '0.4rem 0.75rem' }}
-            title="From date"
-          />
-          <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>to</span>
-          <input
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            style={{ width: '140px', padding: '0.4rem 0.75rem' }}
-            title="To date"
-          />
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => { setFrom(''); setTo(''); }}
-            style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}
-            disabled={!from && !to}
-          >
-            Clear
-          </button>
-        </div>
       </div>
 
-      {loading && <GlobalLoadingOverlay visible={true} message="Loading analytics data..." />}
-
-      {!loading && error && (
-        <div className="analytics-error-state">
-          <p>{error}</p>
-          <button type="button" className="btn-secondary" onClick={() => setRetryCount((c) => c + 1)}>
-            Retry
-          </button>
-        </div>
-      )}
-
-      {!loading && !error && dashboard && (
+      {tab === "overview" && (
         <>
-          <div className="summary-row">
-            <SummaryCard label="Verified Pets" value={dashboard?.summary?.totalPets ?? '—'} />
-            <SummaryCard
-              label="Vaccinated Pets"
-              value={dashboard?.summary?.vaccinatedPets ?? '—'}
-              color="#1e7a46"
-            />
-            <SummaryCard
-              label="Lost Pets"
-              value={dashboard?.summary?.lostPets ?? '—'}
-              color="#c8102e"
-            />
-            <SummaryCard
-              label="Generated QR"
-              value={dashboard?.summary?.totalQr ?? '—'}
-              color="#c6a15b"
-            />
-          </div>
-
-          <h2>Analytics Graphs</h2>
-          <p className="page-intro">
-            Visual breakdown of registrations, demographics, vaccination activity,
-            and QR records for the selected period.
+          <p className="analytics-period-label">
+            Showing data for: <strong>{filterLabel}</strong>
           </p>
 
-          <section className="analytics-chart-section">
-            <div className="chart-grid analytics-chart-1col">
-              <ChartCard title="Pets by Species" isEmpty={!hasChartData(dashboard?.species)}>
-                <Bar
-                  options={barChartOptions}
-                  data={{
-                    labels: dashboard?.species.map((x) => x.species) || [],
-                    datasets: [
-                      {
-                        label: "Pets",
-                        data: dashboard?.species.map((x) => x.total) || [],
-                        backgroundColor: "#c8102e",
-                        borderRadius: 6,
-                      },
-                    ],
-                  }}
-                />
-              </ChartCard>
-
-              <ChartCard title="Pet Sex Distribution" isEmpty={!hasChartData(dashboard?.petsBySex)}>
-                <Doughnut
-                  options={circularChartOptions}
-                  data={{
-                    labels: dashboard?.petsBySex.map((x) => x.sex || "Unknown") || [],
-                    datasets: [
-                      {
-                        data: dashboard?.petsBySex.map((x) => x.total) || [],
-                        backgroundColor: ["#c8102e", "#c6a15b", "#7a0c1e"],
-                        borderWidth: 0,
-                      },
-                    ],
-                  }}
-                />
-              </ChartCard>
-
-              <ChartCard title="Registration Status" isEmpty={!hasChartData(dashboard?.registrationStatus)}>
-                <Pie
-                  options={circularChartOptions}
-                  data={{
-                    labels: dashboard?.registrationStatus.map((x) => x.status) || [],
-                    datasets: [
-                      {
-                        data: dashboard?.registrationStatus.map((x) => x.total) || [],
-                        backgroundColor: CHART_PALETTE,
-                        borderWidth: 0,
-                      },
-                    ],
-                  }}
-                />
-              </ChartCard>
-
-              <ChartCard title="Monthly Pet Registrations" isEmpty={!hasChartData(dashboard?.registrations)}>
-                <Bar
-                  options={barChartOptions}
-                  data={{
-                    labels: dashboard?.registrations.map((x) => x.month) || [],
-                    datasets: [
-                      {
-                        label: "Registrations",
-                        data: dashboard?.registrations.map((x) => x.total) || [],
-                        backgroundColor: "#7a0c1e",
-                        borderRadius: 6,
-                      },
-                    ],
-                  }}
-                />
-              </ChartCard>
-            </div>
-
-            <div className="chart-grid analytics-chart-1col">
-              <ChartCard
-                title="Top Barangays Registration Cabuyao"
-                tall
-                isEmpty={!hasChartData(dashboard?.barangays)}
+          <div className="analytics-filter-row" role="group" aria-label="Analytics time period">
+            {FILTER_OPTIONS.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                aria-pressed={filter === option.key}
+                onClick={() => setFilter(option.key)}
+                className={`analytics-filter-btn${filter === option.key ? " is-active" : ""}`}
               >
-                <Bar
-                  options={horizontalBarChartOptions}
-                  data={{
-                    labels: dashboard?.barangays.map((x) => x.barangay) || [],
-                    datasets: [
-                      {
-                        label: "Pets",
-                        data: dashboard?.barangays.map((x) => x.total) || [],
-                        backgroundColor: "#c6a15b",
-                        borderRadius: 6,
-                      },
-                    ],
-                  }}
-                />
-              </ChartCard>
+                {option.label}
+              </button>
+            ))}
+            <div className="analytics-inline-field">
+              <label htmlFor="overview-from">Custom Range</label>
+              <input
+                id="overview-from"
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                title="From date"
+              />
+              <span className="analytics-inline-separator">to</span>
+              <input
+                id="overview-to"
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                title="To date"
+              />
+              <button
+                type="button"
+                className="btn-secondary analytics-filter-action"
+                onClick={() => {
+                  setFrom("");
+                  setTo("");
+                }}
+                disabled={!from && !to}
+              >
+                Clear
+              </button>
             </div>
-          </section>
+          </div>
 
-          <section className="analytics-chart-section">
-            <h3 className="analytics-chart-section-title">Vaccination & Health</h3>
-            <p className="analytics-chart-section-desc">
-              Monitor vaccination volume, compliance status, and QR issuance across
-              registered pets.
-            </p>
+          {loading && <GlobalLoadingOverlay visible={true} message="Loading analytics data..." />}
 
-            <div className="chart-grid analytics-chart-1col">
-              <ChartCard title="Vaccinations Per Month" isEmpty={!hasChartData(dashboard?.vaccinations)}>
-                <Bar
-                  options={barChartOptions}
-                  data={{
-                    labels: dashboard?.vaccinations.map((x) => x.month) || [],
-                    datasets: [
-                      {
-                        label: "Vaccinations",
-                        data: dashboard?.vaccinations.map((x) => x.total) || [],
-                        backgroundColor: "#1e7a46",
-                        borderRadius: 6,
-                      },
-                    ],
-                  }}
-                />
-              </ChartCard>
-
-              <ChartCard title="Vaccination Compliance" isEmpty={!hasChartData(dashboard?.vaccinationStatus)}>
-                <Doughnut
-                  options={circularChartOptions}
-                  data={{
-                    labels: dashboard?.vaccinationStatus.map((x) => x.status) || [],
-                    datasets: [
-                      {
-                        data: dashboard?.vaccinationStatus.map((x) => x.total) || [],
-                        backgroundColor: ["#c8102e", "#b8860b", "#1e7a46", "#6b6062"],
-                        borderWidth: 0,
-                      },
-                    ],
-                  }}
-                />
-              </ChartCard>
-
-              <ChartCard title="QR Statistics" isEmpty={!hasChartData(dashboard?.qrStats)}>
-                <Doughnut
-                  options={circularChartOptions}
-                  data={{
-                    labels: dashboard?.qrStats.map((x) => x.status) || [],
-                    datasets: [
-                      {
-                        data: dashboard?.qrStats.map((x) => x.total) || [],
-                        backgroundColor: CHART_PALETTE,
-                        borderWidth: 0,
-                      },
-                    ],
-                  }}
-                />
-              </ChartCard>
+          {!loading && error && (
+            <div className="analytics-error-state">
+              <p>{error}</p>
+              <button type="button" className="btn-secondary" onClick={() => setRetryCount((c) => c + 1)}>
+                Retry
+              </button>
             </div>
-          </section>
+          )}
+
+          {!loading && !error && dashboard && (
+            <>
+              <div className="summary-row">
+                <SummaryCard label="Verified Pets" value={dashboard?.summary?.totalPets ?? '—'} />
+                <SummaryCard
+                  label="Vaccinated Pets"
+                  value={dashboard?.summary?.vaccinatedPets ?? '—'}
+                  color="#1e7a46"
+                />
+                <SummaryCard
+                  label="Lost Pets"
+                  value={dashboard?.summary?.lostPets ?? '—'}
+                  color="#c8102e"
+                />
+                <SummaryCard
+                  label="Generated QR"
+                  value={dashboard?.summary?.totalQr ?? '—'}
+                  color="#c6a15b"
+                />
+              </div>
+
+              <h2>Analytics Graphs</h2>
+              <p className="page-intro">
+                Visual breakdown of registrations, demographics, vaccination activity,
+                and QR records for the selected period.
+              </p>
+
+              <section className="analytics-chart-section">
+                <div className="chart-grid chart-grid--1col">
+                  <ChartCard title="Pets by Species" isEmpty={!hasChartData(dashboard?.species)}>
+                    <Bar
+                      options={barChartOptions}
+                      data={{
+                        labels: dashboard?.species.map((x) => x.species) || [],
+                        datasets: [
+                          {
+                            label: "Pets",
+                            data: dashboard?.species.map((x) => x.total) || [],
+                            backgroundColor: "#c8102e",
+                            borderRadius: 6,
+                          },
+                        ],
+                      }}
+                    />
+                  </ChartCard>
+
+                  <ChartCard title="Pet Sex Distribution" isEmpty={!hasChartData(dashboard?.petsBySex)}>
+                    <Doughnut
+                      options={circularChartOptions}
+                      data={{
+                        labels: dashboard?.petsBySex.map((x) => x.sex || "Unknown") || [],
+                        datasets: [
+                          {
+                            data: dashboard?.petsBySex.map((x) => x.total) || [],
+                            backgroundColor: ["#c8102e", "#c6a15b", "#7a0c1e"],
+                            borderWidth: 0,
+                          },
+                        ],
+                      }}
+                    />
+                  </ChartCard>
+
+                  <ChartCard title="Registration Status" isEmpty={!hasChartData(dashboard?.registrationStatus)}>
+                    <Pie
+                      options={circularChartOptions}
+                      data={{
+                        labels: dashboard?.registrationStatus.map((x) => x.status) || [],
+                        datasets: [
+                          {
+                            data: dashboard?.registrationStatus.map((x) => x.total) || [],
+                            backgroundColor: CHART_PALETTE,
+                            borderWidth: 0,
+                          },
+                        ],
+                      }}
+                    />
+                  </ChartCard>
+
+                  <ChartCard title="Monthly Pet Registrations" isEmpty={!hasChartData(dashboard?.registrations)}>
+                    <Bar
+                      options={barChartOptions}
+                      data={{
+                        labels: dashboard?.registrations.map((x) => x.month) || [],
+                        datasets: [
+                          {
+                            label: "Registrations",
+                            data: dashboard?.registrations.map((x) => x.total) || [],
+                            backgroundColor: "#7a0c1e",
+                            borderRadius: 6,
+                          },
+                        ],
+                      }}
+                    />
+                  </ChartCard>
+                </div>
+
+                <div className="chart-grid chart-grid--1col">
+                  <ChartCard
+                    title="Top Barangays Registration Cabuyao"
+                    tall
+                    isEmpty={!hasChartData(dashboard?.barangays)}
+                  >
+                    <Bar
+                      options={horizontalBarChartOptions}
+                      data={{
+                        labels: dashboard?.barangays.map((x) => x.barangay) || [],
+                        datasets: [
+                          {
+                            label: "Pets",
+                            data: dashboard?.barangays.map((x) => x.total) || [],
+                            backgroundColor: "#c6a15b",
+                            borderRadius: 6,
+                          },
+                        ],
+                      }}
+                    />
+                  </ChartCard>
+                </div>
+              </section>
+
+              <section className="analytics-chart-section">
+                <h3 className="analytics-chart-section-title">Vaccination & Health</h3>
+                <p className="analytics-chart-section-desc">
+                  Monitor vaccination volume, compliance status, and QR issuance across
+                  registered pets.
+                </p>
+
+                <div className="chart-grid chart-grid--1col">
+                  <ChartCard title="Vaccinations Per Month" isEmpty={!hasChartData(dashboard?.vaccinations)}>
+                    <Bar
+                      options={barChartOptions}
+                      data={{
+                        labels: dashboard?.vaccinations.map((x) => x.month) || [],
+                        datasets: [
+                          {
+                            label: "Vaccinations",
+                            data: dashboard?.vaccinations.map((x) => x.total) || [],
+                            backgroundColor: "#1e7a46",
+                            borderRadius: 6,
+                          },
+                        ],
+                      }}
+                    />
+                  </ChartCard>
+
+                  <ChartCard
+                    title="Revenue Collected Per Month"
+                    isEmpty={!hasChartData(dashboard?.paymentRevenue)}
+                  >
+                    <Bar
+                      options={revenueBarChartOptions}
+                      data={{
+                        labels: dashboard?.paymentRevenue.map((x) => x.month) || [],
+                        datasets: [
+                          {
+                            label: "Revenue",
+                            data: dashboard?.paymentRevenue.map((x) => x.total) || [],
+                            backgroundColor: "#c6a15b",
+                            borderRadius: 6,
+                          },
+                        ],
+                      }}
+                    />
+                  </ChartCard>
+
+                  <ChartCard title="Vaccination Compliance" isEmpty={!hasChartData(dashboard?.vaccinationStatus)}>
+                    <Doughnut
+                      options={circularChartOptions}
+                      data={{
+                        labels: dashboard?.vaccinationStatus.map((x) => x.status) || [],
+                        datasets: [
+                          {
+                            data: dashboard?.vaccinationStatus.map((x) => x.total) || [],
+                            backgroundColor: ["#c8102e", "#b8860b", "#1e7a46", "#6b6062"],
+                            borderWidth: 0,
+                          },
+                        ],
+                      }}
+                    />
+                  </ChartCard>
+
+                  <ChartCard title="QR Statistics" isEmpty={!hasChartData(dashboard?.qrStats)}>
+                    <Doughnut
+                      options={circularChartOptions}
+                      data={{
+                        labels: dashboard?.qrStats.map((x) => x.status) || [],
+                        datasets: [
+                          {
+                            data: dashboard?.qrStats.map((x) => x.total) || [],
+                            backgroundColor: CHART_PALETTE,
+                            borderWidth: 0,
+                          },
+                        ],
+                      }}
+                    />
+                  </ChartCard>
+                </div>
+              </section>
+
+              <div className="analytics-print-row">
+                <button type="button" className="btn-primary" onClick={() => setPrintOpen(true)}>
+                  <Printer size={16} /> Print Report
+                </button>
+                <button type="button" className="btn-secondary" onClick={() => setTab("reports")}>
+                  Open Reports
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
+
+      {tab === "compliance" && <CompliancePanel />}
+      {tab === "comparison" && <ComparisonPanel />}
+      {tab === "reports" && <ReportsPanel />}
+
+      <AdminReportModal open={printOpen} onClose={() => setPrintOpen(false)} />
     </div>
   );
 }

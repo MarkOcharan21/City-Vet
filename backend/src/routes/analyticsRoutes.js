@@ -15,6 +15,45 @@ const {
     geocodeAddress
 } = require("../controllers/analyticsController");
 
+const {
+    getVaccineCompliance,
+    getReturnRate,
+    getVaccinationTrends
+} = require("../controllers/complianceController");
+
+router.get(
+    "/vaccine-compliance",
+    auth,
+    requireRole([
+        "Admin",
+        "Staff",
+        "Veterinarian"
+    ]),
+    getVaccineCompliance
+);
+
+router.get(
+    "/return-rate",
+    auth,
+    requireRole([
+        "Admin",
+        "Staff",
+        "Veterinarian"
+    ]),
+    getReturnRate
+);
+
+router.get(
+    "/vaccination-trends",
+    auth,
+    requireRole([
+        "Admin",
+        "Staff",
+        "Veterinarian"
+    ]),
+    getVaccinationTrends
+);
+
 router.get(
     "/dashboard",
     auth,

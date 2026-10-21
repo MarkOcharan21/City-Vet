@@ -1,6 +1,6 @@
 ﻿const db = require("../config/db");
 const { vetNameExpr } = require("../utils/vetNameFormat");
-const { dateFormat, mondayIndex } = require("../config/sql");
+const { mondayIndex, toInt } = require("../config/sql");
 const { geocodeOwnerLocation } = require("../utils/geocode");
 
 const BARANGAY_LIST = [
@@ -90,6 +90,43 @@ function rangeLabel(from, to) {
     return `Up to ${fmt(to)}`;
 }
 
+const MONTH_LABELS = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+];
+
+/**
+ * Turn the { year, month_num, total } rows of the month-bucketed queries into
+ * the { month, total } shape the charts and the printed report expect.
+ *
+ * The SQL groups by EXTRACT(YEAR) / EXTRACT(MONTH) and orders by both, so the
+ * buckets are chronological by construction. The readable label is built here
+ * rather than in SQL: formatting a month name inside the database makes the
+ * grouping depend on the server locale, and a label like "Oct 2026" cannot be
+ * ordered reliably by string comparison.
+ */
+function withMonthLabels(rows) {
+    return (rows || []).map((row) => {
+        const year = Number(row.year);
+        const month = Number(row.month_num);
+        const label = MONTH_LABELS[month - 1];
+        return {
+            month: label ? `${label} ${year}` : String(row.year),
+            total: Number(row.total) || 0
+        };
+    });
+}
+
+/**
+ * The date a ledger row belongs to: the service date, else the day it was
+ * recorded. `pets` also has a `created_at`, so the alias has to be applied
+ * whenever the query joins another table.
+ */
+function ledgerDateExpr(prefix = "") {
+    const p = prefix ? `${prefix}.` : "";
+    return `COALESCE(${p}consultation_date, DATE(${p}created_at))`;
+}
+
 async function getDashboardAnalytics(req, res) {
     try {
         const filter = normalizeFilter(req.query.filter);
@@ -102,10 +139,12 @@ async function getDashboardAnalytics(req, res) {
         const petDate = condition("p.created_at");
         const petDateSimple = condition("pets.created_at");
         const vaccDate = condition("date_administered");
-        const paymentDate = condition("py.created_at");
-        const paymentSummaryDate = condition("payments.created_at");
         const qrDate = condition("issue_date");
         const lostDate = condition("COALESCE(lost_date, created_at)");
+        // The live ledger is `payment_monitoring`; the `payments` table is the
+        // legacy one the seed scripts fill and nothing writes to at runtime.
+        const ledgerDate = condition(ledgerDateExpr());
+        const ledgerDateAliased = condition(ledgerDateExpr("py"));
 
         const [[totalPets]] = await db.query(`
             SELECT COUNT(*) AS total
@@ -191,19 +230,20 @@ async function getDashboardAnalytics(req, res) {
             SELECT
                 payment_status,
                 COUNT(*) AS total
-            FROM payments
-            WHERE ${paymentSummaryDate}
+            FROM payment_monitoring
+            WHERE ${ledgerDate}
             GROUP BY payment_status
         `);
 
         const [vaccinations] = await db.query(`
             SELECT
-                ${dateFormat("date_administered", "month")} AS month,
+                ${toInt("EXTRACT(YEAR FROM date_administered)")} AS year,
+                ${toInt("EXTRACT(MONTH FROM date_administered)")} AS month_num,
                 COUNT(*) AS total
             FROM vaccination_records
             WHERE ${vaccDate}
-            GROUP BY 1
-            ORDER BY MIN(date_administered)
+            GROUP BY 1, 2
+            ORDER BY 1, 2
         `);
 
         const [qrStats] = await db.query(`
@@ -242,12 +282,13 @@ async function getDashboardAnalytics(req, res) {
 
         const [registrations] = await db.query(`
             SELECT
-                ${dateFormat("created_at", "month")} AS month,
+                ${toInt("EXTRACT(YEAR FROM created_at)")} AS year,
+                ${toInt("EXTRACT(MONTH FROM created_at)")} AS month_num,
                 COUNT(*) AS total
             FROM pets
             WHERE ${petDateSimple}
-            GROUP BY 1
-            ORDER BY MIN(created_at)
+            GROUP BY 1, 2
+            ORDER BY 1, 2
         `);
 
         const [vaccinationStatus] = await db.query(`
@@ -289,13 +330,14 @@ async function getDashboardAnalytics(req, res) {
 
         const [paymentRevenue] = await db.query(`
             SELECT
-                ${dateFormat("created_at", "month")} AS month,
-                COALESCE(SUM(amount), 0) AS total
-            FROM payments
+                ${toInt(`EXTRACT(YEAR FROM ${ledgerDateExpr()})`)} AS year,
+                ${toInt(`EXTRACT(MONTH FROM ${ledgerDateExpr()})`)} AS month_num,
+                COALESCE(SUM(total_amount), 0) AS total
+            FROM payment_monitoring
             WHERE payment_status = 'Paid'
-            AND ${paymentSummaryDate}
-            GROUP BY 1
-            ORDER BY MIN(created_at)
+            AND ${ledgerDate}
+            GROUP BY 1, 2
+            ORDER BY 1, 2
         `);
 
         const [recentPets] = await db.query(`
@@ -326,12 +368,12 @@ async function getDashboardAnalytics(req, res) {
         const [recentPayments] = await db.query(`
             SELECT
                 p.name AS pet_name,
-                py.amount,
+                py.total_amount AS amount,
                 py.payment_status,
                 py.created_at
-            FROM payments py
+            FROM payment_monitoring py
             JOIN pets p ON py.pet_id = p.id
-            WHERE ${paymentDate}
+            WHERE ${ledgerDateAliased}
             ORDER BY py.created_at DESC
             LIMIT 5
         `);
@@ -376,13 +418,13 @@ async function getDashboardAnalytics(req, res) {
             catsBySex,
             petsBySex,
             payments,
-            vaccinations,
+            vaccinations: withMonthLabels(vaccinations),
             qrStats,
             barangays,
             registrationStatus,
-            registrations,
+            registrations: withMonthLabels(registrations),
             vaccinationStatus,
-            paymentRevenue,
+            paymentRevenue: withMonthLabels(paymentRevenue),
             recentPets,
             recentVaccinations,
             recentPayments,

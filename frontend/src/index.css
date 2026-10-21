@@ -6487,6 +6487,266 @@ body:has(.clinic-access-page)::before {
   background: rgba(200, 16, 46, 0.14);
   color: var(--color-primary);
 }
+
+/* ===== Analytics & Reports tabs ===== */
+.analytics-panel {
+  margin-top: 1.5rem;
+}
+
+.analytics-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.analytics-toggle-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 0.15rem;
+}
+
+.analytics-inline-field {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.analytics-inline-field label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.analytics-inline-field input,
+.analytics-inline-field select {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-card);
+  color: var(--color-ink);
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.analytics-inline-field input:focus,
+.analytics-inline-field select:focus {
+  outline: 2px solid rgba(200, 16, 46, 0.25);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.analytics-inline-separator {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.analytics-filter-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.82rem;
+}
+
+/* ===== Compliance funnel ===== */
+.compliance-funnel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--color-card);
+  border-radius: 12px;
+  box-shadow: 0 14px 30px rgba(36, 20, 22, 0.05);
+}
+
+.compliance-funnel-step {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 3fr auto;
+  align-items: center;
+  gap: 1rem;
+}
+
+.compliance-funnel-label {
+  font-size: 0.88rem;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.compliance-funnel-track {
+  background: var(--color-bg);
+  border-radius: 999px;
+  height: 14px;
+  overflow: hidden;
+}
+
+.compliance-funnel-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-dark));
+  transition: width 0.35s ease;
+}
+
+.compliance-funnel-value {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--color-ink);
+  min-width: 3rem;
+  text-align: right;
+}
+
+/* ===== Delta badges ===== */
+.analytics-delta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.analytics-delta-row-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.analytics-delta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.analytics-delta-badge em {
+  font-style: normal;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.analytics-delta-badge--up {
+  background: rgba(30, 122, 70, 0.12);
+  color: #1e7a46;
+  border-color: rgba(30, 122, 70, 0.22);
+}
+
+.analytics-delta-badge--down {
+  background: rgba(200, 16, 46, 0.1);
+  color: #c8102e;
+  border-color: rgba(200, 16, 46, 0.2);
+}
+
+.analytics-delta-badge--flat {
+  background: rgba(36, 20, 22, 0.06);
+  color: var(--color-text-muted);
+  border-color: rgba(36, 20, 22, 0.08);
+}
+
+/* ===== Outcome status chips ===== */
+.analytics-status-chip {
+  display: inline-block;
+  padding: 0.22rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+  background: rgba(36, 20, 22, 0.06);
+  color: var(--color-text-muted);
+}
+
+.analytics-status-chip--on-time {
+  background: rgba(30, 122, 70, 0.12);
+  color: #1e7a46;
+}
+
+.analytics-status-chip--late {
+  background: rgba(184, 134, 11, 0.14);
+  color: #8a6508;
+}
+
+.analytics-status-chip--lapsed {
+  background: rgba(200, 16, 46, 0.1);
+  color: #c8102e;
+}
+
+.analytics-status-chip--no-return {
+  background: rgba(36, 20, 22, 0.08);
+  color: #6b6062;
+}
+
+/* ===== Report catalogue ===== */
+.report-catalogue {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.report-catalogue-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  text-align: left;
+  padding: 1.15rem 1.25rem;
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-card);
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  font-family: inherit;
+}
+
+.report-catalogue-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(200, 16, 46, 0.3);
+  box-shadow: 0 12px 26px rgba(36, 20, 22, 0.07);
+}
+
+.report-catalogue-card.is-active {
+  border-left-color: var(--color-primary);
+  background: rgba(200, 16, 46, 0.05);
+}
+
+.report-catalogue-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: rgba(198, 161, 91, 0.16);
+  color: var(--color-primary-dark);
+}
+
+.report-catalogue-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.report-catalogue-title {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.report-catalogue-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
 .report-chip {
   display: inline-block;
   padding: 0.22rem 0.65rem;
@@ -6546,6 +6806,8 @@ body:has(.clinic-access-page)::before {
 @media (max-width: 900px) {
   .stat-strip, .service-grid, .portal-grid { grid-template-columns: 1fr 1fr; }
   .chart-grid, .chart-grid--triple { grid-template-columns: 1fr; }
+  .compliance-funnel-step { grid-template-columns: 1fr; gap: 0.35rem; }
+  .compliance-funnel-value { text-align: left; }
 }
 @media (max-width: 640px) {
   .auth-page, .login-page, .portal-layout, .page-split { flex-direction: column; }
