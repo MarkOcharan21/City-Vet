@@ -178,19 +178,34 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
           ${styles}
           <style>
             @page { size: A4 portrait; margin: 10mm; }
-            html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #fff !important;
+              width: auto !important;
+              max-width: none !important;
+            }
             body * { visibility: visible !important; }
+            /* The app watermark is a fixed overlay and would print on top of
+               every page of the booklet. */
+            body::after { display: none !important; }
             .booklet-sheet {
-              width: 190mm !important;
+              width: 100% !important;
               max-width: 190mm !important;
               margin: 0 auto !important;
               padding: 0 !important;
               background: #fff !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
             .booklet-toolbar { display: none !important; }
             .booklet-nav, .booklet-tabs, .booklet-pet-selector { display: none !important; }
             .booklet-tab-panel { display: block !important; }
             .booklet-cover, .booklet-section { break-inside: avoid; page-break-inside: avoid; }
+            /* the cover is the booklet's title page, so it keeps a page to itself */
+            .booklet-cover { break-after: page !important; page-break-after: always !important; }
+            .booklet-section tr, .booklet-section li { break-inside: avoid; page-break-inside: avoid; }
+            .booklet-section p, .booklet-section li { orphans: 3; widows: 3; }
           </style>
         </head>
         <body>${booklet.outerHTML}</body>

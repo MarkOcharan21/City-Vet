@@ -1326,10 +1326,14 @@
 /* ---------- print ---------- */
 @media print {
   @page { size: A4 portrait; margin: 10mm; }
+  /* The printable area of A4 with 10mm margins is 190mm wide.  Forcing the
+     wrappers to 210mm pushed 20mm of the booklet past the right page edge, so
+     Chrome shrank the whole document to fit and the booklet printed small and
+     shifted to the right.  The wrappers now take the printable width. */
   *:has(.booklet-sheet) {
-    width: 210mm !important;
+    width: auto !important;
     min-width: 0 !important;
-    max-width: 210mm !important;
+    max-width: none !important;
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
@@ -1338,36 +1342,52 @@
     margin: 0 !important;
   }
   body:has(.booklet-sheet) {
-    width: 210mm !important;
+    width: auto !important;
     min-width: 0 !important;
-    max-width: 210mm !important;
+    max-width: none !important;
     overflow: visible !important;
   }
   body { background: #fff !important; }
+  /* The app-level watermark (body::after) is a fixed overlay that would print
+     on top of every page of the booklet, so it is hidden for the booklet. */
+  body:has(.booklet-sheet)::after { display: none !important; }
   body:has(.booklet-sheet) * { visibility: hidden !important; }
   body:has(.booklet-sheet) .booklet-sheet,
   body:has(.booklet-sheet) .booklet-sheet * { visibility: visible !important; }
   .booklet-sheet {
     position: static !important;
     left: auto; top: auto;
-    width: 190mm !important;
+    width: 100% !important;
     max-width: 190mm !important;
     padding: 0 !important;
     margin: 0 auto;
     background: #fff !important;
     box-shadow: none;
+    /* keep the section headers, badges and stamps in colour */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   .booklet-modal-overlay,
   .booklet-modal-sheet {
     position: static !important;
     display: block !important;
     width: 100% !important;
+    max-width: none !important;
+    flex: none !important;
     max-height: none !important;
     overflow: visible !important;
     background: #fff !important;
     border: none !important;
     box-shadow: none !important;
     animation: none !important;
+  }
+  /* The portal page is a flex row (the QR list and the booklet modal are
+     siblings), so the modal used to shrink to half the page width while
+     printing.  Stack it instead so the booklet gets the whole sheet. */
+  .page:has(.booklet-sheet),
+  .portal-content:has(.booklet-sheet),
+  .portal-layout:has(.booklet-sheet) {
+    display: block !important;
   }
   .portal-layout:has(.booklet-sheet) { display: block !important; }
   .portal-layout:has(.booklet-sheet) .sidebar,
@@ -1387,7 +1407,23 @@
   .booklet-cover {
     break-inside: avoid;
     page-break-inside: avoid;
+    /* the cover is the booklet's title page, so it keeps a page to itself */
+    break-after: page;
+    page-break-after: always;
     box-shadow: none;
+  }
+  /* keep table rows and list items from being cut in half by a page break */
+  .booklet-section tr,
+  .booklet-section li,
+  .booklet-section .booklet-kv,
+  .booklet-section .booklet-empty {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .booklet-section p,
+  .booklet-section li {
+    orphans: 3;
+    widows: 3;
   }
   /* Stamp PNG: force the mask and gradient to print */
   .stamp-seal-img {
