@@ -68,3 +68,33 @@ test('registerPetForOwner does not generate QR before approval', async () => {
     resetStubs();
   }
 });
+
+test('registerPetForOwner rejects pets younger than three months before database access', async () => {
+  const todayInManila = new Date(Date.now() + 8 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  db.query = async () => {
+    throw new Error('Database should not be queried for an invalid registration.');
+  };
+
+  delete require.cache[require.resolve('../src/services/petRegistrationService.js')];
+  const { RegistrationError, registerPetForOwner } = require('../src/services/petRegistrationService.js');
+
+  try {
+    await assert.rejects(
+      registerPetForOwner(1, {
+        name: 'Milo',
+        species_id: 1,
+        sex: 'Male',
+        birthdate: todayInManila,
+      }),
+      (error) => {
+        assert.ok(error instanceof RegistrationError);
+        assert.equal(error.message, 'Pets must be more than 3 months old to register.');
+        return true;
+      },
+    );
+  } finally {
+    resetStubs();
+  }
+});

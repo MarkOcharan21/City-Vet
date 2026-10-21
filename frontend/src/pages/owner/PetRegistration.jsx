@@ -242,7 +242,9 @@ export default function PetRegistration() {
     setError('');
     setFieldErrors({});
 
-    const validation = validatePetRegistration(form);
+    const validation = validatePetRegistration(form, {
+      requireMinimumAge: !editingPetId,
+    });
     if (!validation.valid) {
       setFieldErrors(validation.errors);
       setError(validation.message);
@@ -695,7 +697,9 @@ export default function PetRegistration() {
                   value={form.birthdate}
                   onChange={handleChange}
                   max={new Date().toISOString().split('T')[0]}
+                  aria-invalid={Boolean(fieldErrors.birthdate)}
                 />
+                <FieldError message={fieldErrors.birthdate} />
                 {form.birthdate && (
                   <p style={{
                     margin: '0.35rem 0 0',

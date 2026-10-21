@@ -123,6 +123,35 @@ export function isDateNotFuture(value) {
   return date <= today;
 }
 
+export function isPetOlderThanThreeMonths(birthdate, today = new Date()) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthdate || '')) return false;
+
+  const birth = new Date(`${birthdate}T00:00:00.000Z`);
+  if (Number.isNaN(birth.getTime()) || birth.toISOString().slice(0, 10) !== birthdate) {
+    return false;
+  }
+
+  const todayString = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-');
+  const targetMonthIndex = birth.getUTCFullYear() * 12 + birth.getUTCMonth() + 3;
+  const targetYear = Math.floor(targetMonthIndex / 12);
+  const targetMonth = targetMonthIndex % 12;
+  const targetDay = Math.min(
+    birth.getUTCDate(),
+    new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate(),
+  );
+  const threeMonthDate = [
+    targetYear,
+    String(targetMonth + 1).padStart(2, '0'),
+    String(targetDay).padStart(2, '0'),
+  ].join('-');
+
+  return todayString > threeMonthDate;
+}
+
 export function isDateOnOrAfter(startDate, endDate) {
   if (!startDate || !endDate) return true;
   return new Date(endDate) >= new Date(startDate);
@@ -207,7 +236,7 @@ export function getPetColorError(color) {
   return null;
 }
 
-export function validatePetRegistration(data) {
+export function validatePetRegistration(data, { requireMinimumAge = false } = {}) {
   const errors = {};
   const nameError = getPetNameError(data.name);
   if (nameError) errors.name = nameError;
@@ -219,6 +248,13 @@ export function validatePetRegistration(data) {
   }
   if (data.birthdate && !isDateNotFuture(data.birthdate)) {
     errors.birthdate = 'Birthdate cannot be in the future.';
+  } else if (requireMinimumAge && !data.birthdate) {
+    errors.birthdate = 'Birthdate is required to verify your pet is more than 3 months old.';
+  } else if (
+    requireMinimumAge
+    && !isPetOlderThanThreeMonths(data.birthdate)
+  ) {
+    errors.birthdate = 'Pets must be more than 3 months old to register.';
   }
   return buildResult(errors);
 }

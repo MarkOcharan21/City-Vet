@@ -134,6 +134,30 @@ function isDateNotFuture(value) {
   return date <= today;
 }
 
+function isPetOlderThanThreeMonths(birthdate, today = manilaTodayString()) {
+  if (typeof birthdate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) {
+    return false;
+  }
+
+  const birth = new Date(`${birthdate}T00:00:00.000Z`);
+  if (Number.isNaN(birth.getTime()) || birth.toISOString().slice(0, 10) !== birthdate) {
+    return false;
+  }
+
+  const [todayYear, todayMonth, todayDay] = today.split("-").map(Number);
+  const todayDate = `${todayYear}-${String(todayMonth).padStart(2, "0")}-${String(todayDay).padStart(2, "0")}`;
+  const targetMonthIndex = birth.getUTCFullYear() * 12 + birth.getUTCMonth() + 3;
+  const targetYear = Math.floor(targetMonthIndex / 12);
+  const targetMonth = targetMonthIndex % 12;
+  const targetDay = Math.min(
+    birth.getUTCDate(),
+    new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate(),
+  );
+  const threeMonthDate = `${targetYear}-${String(targetMonth + 1).padStart(2, "0")}-${String(targetDay).padStart(2, "0")}`;
+
+  return todayDate > threeMonthDate;
+}
+
 function isDateOnOrAfter(startDate, endDate) {
   if (!startDate || !endDate) return true;
   return new Date(endDate) >= new Date(startDate);
@@ -239,7 +263,7 @@ function getPetColorError(color) {
   return null;
 }
 
-function validatePetRegistration(data) {
+function validatePetRegistration(data, { requireMinimumAge = false } = {}) {
   const errors = {};
   const species_id = data.species_id;
   const breed_id = data.breed_id;
@@ -255,6 +279,11 @@ function validatePetRegistration(data) {
   if (breed_id === 'other' && !breed_other) errors.breed_other = 'Please specify your pet\'s breed.';
   if (sex && !PET_SEX_VALUES.includes(sex)) errors.sex = 'Select a valid sex.';
   if (birthdate && !isDateNotFuture(birthdate)) errors.birthdate = 'Birthdate cannot be in the future.';
+  else if (requireMinimumAge && !birthdate) {
+    errors.birthdate = 'Birthdate is required to verify your pet is more than 3 months old.';
+  } else if (requireMinimumAge && !isPetOlderThanThreeMonths(birthdate)) {
+    errors.birthdate = 'Pets must be more than 3 months old to register.';
+  }
 
   return { valid: Object.keys(errors).length === 0, errors, message: 'Please correct the highlighted fields.' };
 }
@@ -392,6 +421,7 @@ module.exports = {
   validateAccountSetup,
   getPetNameError,
   getPetColorError,
+  isPetOlderThanThreeMonths,
   validatePetRegistration,
   validateClinicalRecord,
   validateVaccinationRecord,

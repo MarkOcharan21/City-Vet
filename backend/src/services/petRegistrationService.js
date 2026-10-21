@@ -29,10 +29,13 @@ async function registerPetForOwner(userId, formData) {
     breed_other,
     sex,
     birthdate,
-  });
+  }, { requireMinimumAge: true });
 
   if (!validation.valid) {
-    throw new RegistrationError(400, validation.message);
+    throw new RegistrationError(
+      400,
+      validation.errors.birthdate || validation.message,
+    );
   }
 
   if (sex && !PET_SEX_VALUES.includes(sex)) {
