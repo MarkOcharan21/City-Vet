@@ -5,13 +5,36 @@ $ErrorActionPreference = "Continue"
 
 $Root    = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Backend = Join-Path $Root "backend"
+$Frontend = Join-Path $Root "frontend"
 $LogFile = Join-Path $Root "auto-deploy.log"
 $PublicUrl = $null
+
+# Optional: set $env:VERCEL_TOKEN to a token of the account that OWNS the "city-vet"
+# project. If the local `vercel` CLI login belongs to a different account the project
+# settings cannot be read -> `vercel env rm/add` hangs and `vercel --prod` fails
+# instantly, so the live site silently keeps serving the old build.
+$VercelToken = $env:VERCEL_TOKEN
+$VercelArgs  = @()
+if ($VercelToken) { $VercelArgs = @("--token", $VercelToken) }
 
 function Log($m) {
   $ts = Get-Date -Format "HH:mm:ss"
   Write-Host "[$ts] $m"
   Add-Content -Path $LogFile -Value "[$ts] $m"
+}
+
+function Invoke-Vercel {
+  param([string[]]$VArgs)
+  $all = @($VercelArgs) + $VArgs
+  Push-Location $Frontend
+  try {
+    $out = & vercel @all 2>&1
+    $code = $LASTEXITCODE
+  } finally {
+    Pop-Location
+  }
+  $out | ForEach-Object { Log "vercel: $_" }
+  return $code
 }
 
 Log "==== City Vet Auto Deploy started ===="
@@ -84,16 +107,27 @@ Start-Sleep -Seconds 10
 # 6) Update Vercel env
 Log "Updating Vercel env VITE_API_URL..."
 $apiUrl = "$PublicUrl/api"
-vercel env rm VITE_API_URL production --yes 2>$null
-vercel env rm VITE_API_URL preview --yes 2>$null
-vercel env rm VITE_API_URL development --yes 2>$null
-cmd /c ("echo|set /p=`"" + $apiUrl + "`"|vercel env add VITE_API_URL production")
-cmd /c ("echo|set /p=`"" + $apiUrl + "`"|vercel env add VITE_API_URL preview")
-cmd /c ("echo|set /p=`"" + $apiUrl + "`"|vercel env add VITE_API_URL development")
+foreach ($target in @("production", "preview", "development")) {
+  $code = Invoke-Vercel @("env", "rm", "VITE_API_URL", $target, "--yes")
+  if ($code -ne 0) { Log "WARN: could not remove VITE_API_URL for $target (exit $code)" }
+}
+Push-Location $Frontend
+try {
+  foreach ($target in @("production", "preview", "development")) {
+    $envArgs = @($VercelArgs) + @("env", "add", "VITE_API_URL", $target)
+    $apiUrl | & vercel @envArgs 2>&1 | ForEach-Object { Log "vercel env add ($target): $_" }
+    if ($LASTEXITCODE -ne 0) { Log "FAIL: env add $target exit $LASTEXITCODE" }
+  }
+} finally { Pop-Location }
 
 # 7) Deploy to Vercel
 Log "Deploying to Vercel..."
-vercel --prod --yes --archive=tgz
+$deployCode = Invoke-Vercel @("--prod", "--yes", "--archive=tgz")
+if ($deployCode -ne 0) {
+  Log "FAIL: vercel deploy failed (exit $deployCode). Live site was NOT updated."
+  exit 1
+}
+Log "Vercel deploy OK"
 
 # 8) Regenerate QR codes
 Log "Regenerating QR codes..."
