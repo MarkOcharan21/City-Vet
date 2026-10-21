@@ -3,10 +3,27 @@ export default function MedicineStamp({
   medicineName,
   batchNumber,
   expiryDate,
-  size = 132,
+  batchLabel = "Set when dispensed",
+  expiryLabel = "Not recorded",
+  size = 168,
 }) {
+  const displayExpiry = expiryDate
+    ? (() => {
+        const dateOnly = String(expiryDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
+        const date = dateOnly
+          ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+          : new Date(expiryDate);
+        return Number.isNaN(date.getTime())
+          ? String(expiryDate)
+          : date.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            });
+      })()
+    : expiryLabel;
   const label = medicineName
-    ? `Medicine label for ${medicineName}, batch ${batchNumber || "not recorded"}, expires ${expiryDate || "not recorded"}`
+    ? `Medicine label for ${medicineName}, batch ${batchNumber || batchLabel}, expires ${displayExpiry}`
     : "Medicine label";
 
   return (
@@ -15,8 +32,9 @@ export default function MedicineStamp({
       aria-label={label}
       title={label}
       style={{
-        width: size,
-        minWidth: size,
+        width: `min(${size}px, 100%)`,
+        minWidth: 0,
+        maxWidth: size,
         display: "inline-flex",
         flexDirection: "column",
         flex: "none",
@@ -32,15 +50,14 @@ export default function MedicineStamp({
       <span
         style={{
           width: "100%",
-          padding: "5px 7px",
-          overflow: "hidden",
+          padding: "7px 9px",
           background: color,
           color: "#fff",
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: 800,
-          textOverflow: "ellipsis",
           textTransform: "uppercase",
-          whiteSpace: "nowrap",
+          overflowWrap: "anywhere",
+          wordBreak: "normal",
         }}
       >
         {medicineName || "Medicine"}
@@ -48,21 +65,18 @@ export default function MedicineStamp({
       <span
         style={{
           display: "grid",
-          gridTemplateColumns: "35px minmax(0, 1fr)",
-          gap: "3px 5px",
-          padding: "5px 7px",
+          gridTemplateColumns: "40px minmax(0, 1fr)",
+          gap: "5px 7px",
+          padding: "7px 9px",
           color: "#172b3b",
-          fontSize: 9,
+          fontSize: 10,
+          overflowWrap: "anywhere",
         }}
       >
         <strong>Batch</strong>
-        <span style={{ overflowWrap: "anywhere" }}>
-          {batchNumber || "—"}
-        </span>
+        <span>{batchNumber || batchLabel}</span>
         <strong>Exp.</strong>
-        <span style={{ overflowWrap: "anywhere" }}>
-          {expiryDate || "—"}
-        </span>
+        <span>{displayExpiry}</span>
       </span>
     </span>
   );

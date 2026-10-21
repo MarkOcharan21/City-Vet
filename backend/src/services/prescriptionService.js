@@ -8,15 +8,38 @@ const { createNotification } = require('./notificationService');
  * prescription commit or roll back together. Callers with no transaction to
  * join can pass the `db` pool directly.
  */
-function assignStampColor(category) {
-  const palette = {
-    antibiotic: '#DC2626',
-    anti_inflammatory: '#D97706',
-    antiparasitic: '#059669',
-    pain: '#7C3AED',
-    general: '#6B7280',
-  };
-  return palette[category] || palette.general;
+function assignStampColor(medicineName) {
+  const name = String(medicineName || 'medicine').trim().toLowerCase();
+  let hash = 0;
+  for (let index = 0; index < name.length; index += 1) {
+    hash = (hash * 31 + name.charCodeAt(index)) >>> 0;
+  }
+
+  const hue = hash % 360;
+  const saturation = 68;
+  const lightness = 36;
+  const chroma = (1 - Math.abs((2 * lightness) / 100 - 1)) * (saturation / 100);
+  const hueSection = hue / 60;
+  const secondComponent = chroma * (1 - Math.abs((hueSection % 2) - 1));
+  const channels =
+    hueSection < 1
+      ? [chroma, secondComponent, 0]
+      : hueSection < 2
+        ? [secondComponent, chroma, 0]
+        : hueSection < 3
+          ? [0, chroma, secondComponent]
+          : hueSection < 4
+            ? [0, secondComponent, chroma]
+            : hueSection < 5
+              ? [secondComponent, 0, chroma]
+              : [chroma, 0, secondComponent];
+  const match = lightness / 100 - chroma / 2;
+  const toHex = (channel) =>
+    Math.round((channel + match) * 255)
+      .toString(16)
+      .padStart(2, '0');
+
+  return `#${channels.map(toHex).join('')}`;
 }
 
 async function insertPrescription(connection, consultationId, items) {
@@ -34,20 +57,18 @@ async function insertPrescription(connection, consultationId, items) {
     const medicineId = Number(item.medicine_id);
     const [medicine] = await connection.query(
       `SELECT m.medicine_name, m.category, m.expiry_date,
-              COALESCE(
-                (SELECT cp.stamp_color FROM catalog_products cp
-                 WHERE cp.medicine_id = m.id AND cp.stamp_color IS NOT NULL
-                 ORDER BY cp.id LIMIT 1),
-                m.stamp_color
-              ) AS stamp_color
+              m.stamp_color,
+              (SELECT cp.stamp_color FROM catalog_products cp
+               WHERE cp.medicine_id = m.id AND cp.stamp_color IS NOT NULL
+               ORDER BY cp.id LIMIT 1) AS catalog_stamp_color
        FROM medicines m WHERE m.id = ?`,
       [medicineId]
     );
     const stampColor =
-      medicine?.[0]?.stamp_color || assignStampColor(medicine?.[0]?.category || 'general');
-    if (medicine?.[0] && !medicine[0].stamp_color) {
+      medicine?.[0]?.catalog_stamp_color || assignStampColor(medicine?.[0]?.medicine_name);
+    if (medicine?.[0] && medicine[0].stamp_color !== stampColor) {
       await connection.query(
-        'UPDATE medicines SET stamp_color = ? WHERE id = ? AND stamp_color IS NULL',
+        'UPDATE medicines SET stamp_color = ? WHERE id = ?',
         [stampColor, medicineId]
       );
     }

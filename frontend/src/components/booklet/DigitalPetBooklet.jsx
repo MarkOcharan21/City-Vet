@@ -376,7 +376,7 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                   color={d.stamp_color}
                   medicineName={d.medicine_name}
                   batchNumber={d.batch_number}
-                  expiryDate={fmt(d.expiry_date)}
+                  expiryDate={d.expiry_date ? fmt(d.expiry_date) : null}
                 />
                 <div className="stamp-row__body">
                   <div className="stamp-row__top">
@@ -506,7 +506,11 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                         })}
                         medicineName={p.medicine_name}
                         batchNumber={p.batch_number}
-                        expiryDate={fmt(p.expiry_date || p.item_expiry_date)}
+                        expiryDate={
+                          p.expiry_date || p.item_expiry_date
+                            ? fmt(p.expiry_date || p.item_expiry_date)
+                            : null
+                        }
                       />
                     </td>
                   </tr>

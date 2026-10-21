@@ -36,7 +36,7 @@ async function getMyMedicineRecords(req, res) {
   try {
     const [rows] = await db.query(
       `SELECT pi.*, m.medicine_name, m.category,
-              COALESCE((SELECT cp.stamp_color FROM catalog_products cp WHERE cp.medicine_id = m.id AND cp.stamp_color IS NOT NULL ORDER BY cp.id LIMIT 1), m.stamp_color) AS stamp_color,
+              (SELECT cp.stamp_color FROM catalog_products cp WHERE cp.medicine_id = m.id AND cp.stamp_color IS NOT NULL ORDER BY cp.id LIMIT 1) AS stamp_color,
               pr.prescribed_date, p.id AS pet_id, p.name AS pet_name, ${vetNameExpr('vet_name')}
        FROM prescription_items pi
        JOIN medicines m ON pi.medicine_id = m.id
@@ -73,7 +73,7 @@ async function getAllMedicineRecords(req, res) {
               pr.prescribed_date,
               m.medicine_name,
               m.category,
-              COALESCE((SELECT cp.stamp_color FROM catalog_products cp WHERE cp.medicine_id = m.id AND cp.stamp_color IS NOT NULL ORDER BY cp.id LIMIT 1), m.stamp_color) AS stamp_color,
+              (SELECT cp.stamp_color FROM catalog_products cp WHERE cp.medicine_id = m.id AND cp.stamp_color IS NOT NULL ORDER BY cp.id LIMIT 1) AS stamp_color,
               p.name AS pet_name,
               p.pet_code,
               po.full_name AS owner_name,

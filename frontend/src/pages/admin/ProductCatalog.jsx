@@ -409,10 +409,12 @@ export default function ProductCatalog() {
                         <MedicineStamp
                           color={p.stamp_color || getMedicineStampColor({
                             productCategory: p.category,
-                            medicineName: p.name,
+                            medicineName: `${p.name} ${p.species || ''}`,
                           })}
                           medicineName={p.name}
-                          size={132}
+                          batchLabel="Set when dispensed"
+                          expiryLabel="Check package"
+                          expiryDate={p.expiry_date}
                         />
                       ) : (
                         <span className="cell-muted">—</span>
