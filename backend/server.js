@@ -75,6 +75,7 @@ const { ensureAdminAccessCode } = require("./src/db/ensureAdminAccessCode");
 const { ensureSubdivisionLots } = require("./src/db/ensureSubdivisionLots");
 const { ensureOwnerLocationSource } = require("./src/db/ensureOwnerLocationSource");
 const { ensurePrescriptionInventoryColumns } = require("./src/db/ensurePrescriptionInventoryColumns");
+const { ensureMedicineStampColumns } = require("./src/db/ensureMedicineStampColumns");
 
 const {
     startAnnouncementScheduler,
@@ -362,6 +363,7 @@ async function startSchedulers() {
   await ensureSubdivisionLots();
   await ensureOwnerLocationSource();
   await ensurePrescriptionInventoryColumns();
+  await ensureMedicineStampColumns();
 
   startNotificationScheduler();
   startAnnouncementScheduler();
@@ -1455,6 +1457,7 @@ async function ensureCatalogTable() {
         unit VARCHAR(60) DEFAULT NULL,
         subcategory VARCHAR(150) DEFAULT NULL,
         price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        stamp_color VARCHAR(7) DEFAULT NULL,
         active TINYINT(1) NOT NULL DEFAULT 1,
         sort_order INT NOT NULL DEFAULT 0,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -200,6 +200,13 @@ async function scanQrToken(req, res) {
     p.consultation_id,
     p.prescribed_date,
     m.medicine_name,
+    m.category,
+    COALESCE(
+      (SELECT cp.stamp_color FROM catalog_products cp
+       WHERE cp.medicine_id = m.id AND cp.stamp_color IS NOT NULL
+       ORDER BY cp.id LIMIT 1),
+      m.stamp_color
+    ) AS stamp_color,
     pi.quantity,
     pi.dosage,
     pi.frequency,

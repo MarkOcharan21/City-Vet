@@ -32,6 +32,8 @@ import { fmt, computeAge } from "./bookletUtils";
 import { useAuth } from "../../context/AuthContext";
 import { resolveMediaUrl } from "../../utils/mediaUrl";
 import stampPng from "../../assets/Digital_Stamp_city_vet.png";
+import MedicineStamp from "../MedicineStamp";
+import { getMedicineStampColor } from "../../utils/medicineStamp";
 import "./booklet.css";
 
 function parseDurationDays(duration) {
@@ -487,6 +489,7 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                   <th>End</th>
                   <th>Instructions</th>
                   <th>Prescribed By</th>
+                  <th>Medicine Stamp</th>
                 </tr>
               </thead>
               <tbody>
@@ -499,17 +502,15 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                     <td data-label="End">{endDate(p.prescribed_date, p.duration)}</td>
                     <td data-label="Instructions">{p.instructions || "—"}</td>
                     <td data-label="Prescribed By">{p.prescribed_by || "—"}</td>
-                    <td data-label="Stamp Color" style={{ color: 'var(--cvo-ink)', fontSize: '0.7rem', fontWeight: 700 }}>
-                      {p.stamp_color ? (
-                        <div style={{
-                          width: '30px', height: '20px', background: p.stamp_color, border: '1px solid #ccc', borderRadius: '4px',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          <span style={{ color: 'var(--cvo-ink)' }}>{p.stamp_color}</span>
-                        </div>
-                      ) : (
-                        <span style={{ color: 'var(--cvo-muted)' }}>auto</span>
-                      )}</td>
+                    <td data-label="Medicine Stamp">
+                      <MedicineStamp
+                        color={p.stamp_color || getMedicineStampColor({
+                          category: p.category,
+                          medicineName: p.medicine_name,
+                        })}
+                        medicineName={p.medicine_name}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>

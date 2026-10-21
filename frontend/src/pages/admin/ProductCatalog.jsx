@@ -9,6 +9,8 @@ import FieldError from '../../components/ui/FieldError';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import SuccessModal from '../../components/ui/SuccessModal';
 import StatusBadge from '../../components/StatusBadge';
+import MedicineStamp from '../../components/MedicineStamp';
+import { getMedicineStampColor } from '../../utils/medicineStamp';
 
 const CATALOG_CATEGORIES = [
   'Vaccines',
@@ -350,14 +352,14 @@ export default function ProductCatalog() {
           <table className="data-table catalog-sticky-table" style={{ overflow: 'visible', borderRadius: '0' }}>
             <thead className="catalog-sticky-thead">
               <tr>
-                <th>Product</th><th>Category</th><th>Species</th><th>Unit / Subcategory</th><th>Price</th><th>Status</th><th>Action</th><th>Stamp Color</th>
+                <th>Product</th><th>Category</th><th>Species</th><th>Unit / Subcategory</th><th>Price</th><th>Status</th><th>Action</th><th>Medicine Stamp</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-          <tr><td colSpan="7"><LoadingSpinner text="Loading catalog..." fullPage={false} /></td></tr>
+          <tr><td colSpan="8"><LoadingSpinner text="Loading catalog..." fullPage={false} /></td></tr>
               ) : shownProducts.length === 0 ? (
-                <tr><td colSpan="7">No products match your filters.</td></tr>
+                <tr><td colSpan="8">No products match your filters.</td></tr>
               ) : (
                 shownProducts.map((p) => (
                   <tr key={p.id}>
@@ -402,18 +404,18 @@ export default function ProductCatalog() {
                         <Trash2 size={16} />
                       </button>
                     </td>
-                    <td style={{ padding: '0.5rem', color: 'var(--cvo-ink)' }}>
-                      {p.stamp_color ? (
-                        <div style={{
-                          width: '30px', height: '20px', background: p.stamp_color, border: '1px solid #ccc', borderRadius: '4px',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--cvo-ink)' }}>
-                            {p.stamp_color}
-                          </span>
-                        </div>
+                    <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                      {p.category !== 'Consultation' && p.category !== 'Other Supplies' ? (
+                        <MedicineStamp
+                          color={p.stamp_color || getMedicineStampColor({
+                            productCategory: p.category,
+                            medicineName: p.name,
+                          })}
+                          medicineName={p.name}
+                          size={36}
+                        />
                       ) : (
-                        <span style={{ fontSize: '0.7rem', color: 'var(--cvo-muted)' }}>auto</span>
+                        <span className="cell-muted">—</span>
                       )}
                     </td>
                   </tr>
@@ -519,16 +521,16 @@ export default function ProductCatalog() {
                         id="cat-stamp-color"
                         name="stamp_color"
                         type="color"
-                        value={form.stamp_color || '#6B7280'}
+                        value={form.stamp_color || getMedicineStampColor({ productCategory: form.category })}
                         onChange={handleChange}
                         style={{ width: '80px', height: '28px', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }}
                       />
-                      <span style={{ fontSize: '0.78rem', color: 'var(--cvo-ink)' }}>
-                        #{form.stamp_color || 'auto-assign'}
+                                  <span style={{ fontSize: '0.78rem', color: 'var(--cvo-ink)' }}>
+                                    {form.stamp_color || getMedicineStampColor({ productCategory: form.category })}
                       </span>
                     </div>
                     <p className="vaccination-calc-helper">
-                      Auto-assign from category if left empty. Use hex color (e.g., #DC2626) for custom stamp color.
+                                  Category color is used unless you choose a custom stamp color.
                     </p>
                   </div>
                 </div>

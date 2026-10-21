@@ -33,10 +33,24 @@ async function insertPrescription(connection, consultationId, items) {
   for (const item of items) {
     const medicineId = Number(item.medicine_id);
     const [medicine] = await connection.query(
-      'SELECT medicine_name, category, expiry_date FROM medicines WHERE id = ?',
+      `SELECT m.medicine_name, m.category, m.expiry_date,
+              COALESCE(
+                (SELECT cp.stamp_color FROM catalog_products cp
+                 WHERE cp.medicine_id = m.id AND cp.stamp_color IS NOT NULL
+                 ORDER BY cp.id LIMIT 1),
+                m.stamp_color
+              ) AS stamp_color
+       FROM medicines m WHERE m.id = ?`,
       [medicineId]
     );
-    const stampColor = assignStampColor(medicine?.[0]?.category || 'general');
+    const stampColor =
+      medicine?.[0]?.stamp_color || assignStampColor(medicine?.[0]?.category || 'general');
+    if (medicine?.[0] && !medicine[0].stamp_color) {
+      await connection.query(
+        'UPDATE medicines SET stamp_color = ? WHERE id = ? AND stamp_color IS NULL',
+        [stampColor, medicineId]
+      );
+    }
 
     const batchNumber = `MED-${medicineId}-${Date.now()}-${Math.random()
       .toString(36)

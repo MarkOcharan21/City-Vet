@@ -147,6 +147,8 @@ CREATE TABLE `medicines` (
   `default_frequency` varchar(100) DEFAULT NULL,
   `default_duration` varchar(100) DEFAULT NULL,
   `default_instructions` varchar(255) DEFAULT NULL,
+  `expiry_date` date DEFAULT NULL,
+  `stamp_color` varchar(7) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -437,6 +439,7 @@ CREATE TABLE `catalog_products` (
   `unit` varchar(60) DEFAULT NULL,
   `subcategory` varchar(150) DEFAULT NULL,
   `price` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `stamp_color` varchar(7) DEFAULT NULL,
   `active` tinyint(1) NOT NULL DEFAULT 1,
   `sort_order` int(11) NOT NULL DEFAULT 0,
   `medicine_id` int(11) DEFAULT NULL,

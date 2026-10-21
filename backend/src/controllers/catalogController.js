@@ -17,12 +17,18 @@ function paymentTypeForCategory(category) {
   return CATEGORY_PAYMENT_TYPE[category] || "Medicine";
 }
 
+function parseStampColor(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const color = String(value).trim();
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? color : false;
+}
+
 // GET /api/catalog  (Staff/Vet/Admin — the quick-pick menu grouped by category)
 async function listCatalog(req, res) {
   try {
     const [rows] = await db.query(
       `SELECT
-        id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id
+        id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id, stamp_color
        FROM catalog_products
        WHERE active = 1
        ORDER BY category ASC, sort_order ASC, product_name ASC`
@@ -37,6 +43,7 @@ async function listCatalog(req, res) {
         unit: row.unit || null,
         subcategory: row.subcategory || null,
         price: row.price,
+        stamp_color: row.stamp_color || null,
         // Non-null means this stocked item also prescribes a medicine, so the
         // consultation form can add the charge and the dose in one click.
         medicine_id: row.medicine_id || null,
@@ -61,7 +68,7 @@ async function listCatalogAdmin(req, res) {
   try {
     const [rows] = await db.query(
       `SELECT
-        id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id
+        id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id, stamp_color
        FROM catalog_products
        ORDER BY category ASC, sort_order ASC, product_name ASC`
     );
@@ -77,6 +84,7 @@ async function listCatalogAdmin(req, res) {
         price: row.price,
         active: !!row.active,
         medicine_id: row.medicine_id || null,
+        stamp_color: row.stamp_color || null,
       });
     });
 
@@ -96,6 +104,7 @@ async function listCatalogAdmin(req, res) {
 // POST /api/catalog  (Admin only)
 async function createCatalogItem(req, res) {
   const { category, product_name, species, unit, subcategory, price, active } = req.body;
+  const stampColor = parseStampColor(req.body.stamp_color);
   const name = String(product_name || "").trim();
   const cat = String(category || "").trim();
 
@@ -104,6 +113,9 @@ async function createCatalogItem(req, res) {
   }
   if (!cat) {
     return res.status(400).json({ success: false, message: "Category is required." });
+  }
+  if (stampColor === false) {
+    return res.status(400).json({ success: false, message: "Stamp color must be a 6-digit hex color." });
   }
   const amount = Number.parseFloat(price);
   if (Number.isNaN(amount) || amount < 0) {
@@ -118,9 +130,9 @@ async function createCatalogItem(req, res) {
     );
     const [result] = await db.query(
       `INSERT INTO catalog_products
-        (category, product_name, species, unit, subcategory, price, active, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [cat, name, species || "General", unit || null, subcategory || null, amount.toFixed(2), isActive ? 1 : 0, maxSort + 1]
+        (category, product_name, species, unit, subcategory, price, active, sort_order, stamp_color)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [cat, name, species || "General", unit || null, subcategory || null, amount.toFixed(2), isActive ? 1 : 0, maxSort + 1, stampColor]
     );
 
     res.json({ success: true, message: `Catalog item "${name}" added.`, id: result.insertId });
@@ -129,7 +141,7 @@ async function createCatalogItem(req, res) {
       action: "CREATE",
       entity_type: "catalog",
       entity_id: result.insertId,
-      new_value: { category: cat, product_name: name, price: amount.toFixed(2) },
+      new_value: { category: cat, product_name: name, price: amount.toFixed(2), stamp_color: stampColor },
       description: `Added catalog product "${name}" (${cat}) — ₱${amount.toFixed(2)}`,
     });
   } catch (error) {
@@ -142,6 +154,7 @@ async function createCatalogItem(req, res) {
 async function updateCatalogItem(req, res) {
   const { id } = req.params;
   const { category, product_name, species, unit, subcategory, price, active, sort_order } = req.body;
+  const stampColor = parseStampColor(req.body.stamp_color);
 
   try {
     const [[existing]] = await db.query("SELECT * FROM catalog_products WHERE id = ?", [id]);
@@ -161,6 +174,9 @@ async function updateCatalogItem(req, res) {
     if (!cat) {
       return res.status(400).json({ success: false, message: "Category is required." });
     }
+    if (stampColor === false) {
+      return res.status(400).json({ success: false, message: "Stamp color must be a 6-digit hex color." });
+    }
     if (Number.isNaN(amount) || amount < 0) {
       return res.status(400).json({ success: false, message: "A valid price is required." });
     }
@@ -173,7 +189,7 @@ async function updateCatalogItem(req, res) {
     await db.query(
       `UPDATE catalog_products SET
         category = ?, product_name = ?, species = ?, unit = ?, subcategory = ?,
-        price = ?, active = ?, sort_order = ?
+        price = ?, active = ?, sort_order = ?, stamp_color = ?
        WHERE id = ?`,
       [
         cat,
@@ -184,6 +200,7 @@ async function updateCatalogItem(req, res) {
         amount.toFixed(2),
         isActive ? 1 : 0,
         sort_order !== undefined ? Number(sort_order) || 0 : existing.sort_order,
+        req.body.stamp_color !== undefined ? stampColor : existing.stamp_color,
         id,
       ]
     );
@@ -194,8 +211,8 @@ async function updateCatalogItem(req, res) {
       action: "UPDATE",
       entity_type: "catalog",
       entity_id: id,
-      old_value: { product_name: existing.product_name, price: existing.price, active: existing.active },
-      new_value: { category: cat, product_name: name, price: amount.toFixed(2), active: isActive },
+      old_value: { product_name: existing.product_name, price: existing.price, active: existing.active, stamp_color: existing.stamp_color },
+      new_value: { category: cat, product_name: name, price: amount.toFixed(2), active: isActive, stamp_color: req.body.stamp_color !== undefined ? stampColor : existing.stamp_color },
       description: `Updated catalog product "${name}"`,
     });
   } catch (error) {

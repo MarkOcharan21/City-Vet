@@ -14,7 +14,13 @@ async function getMedicineList(req, res) {
     const [rows] = await db.query(
       `SELECT m.id, m.medicine_name, m.description, m.category,
               m.default_dosage, m.default_frequency, m.default_duration, m.default_instructions,
-              m.stamp_color, cp.price AS price
+              COALESCE(
+                (SELECT stamp_product.stamp_color FROM catalog_products stamp_product
+                 WHERE stamp_product.medicine_id = m.id AND stamp_product.stamp_color IS NOT NULL
+                 ORDER BY stamp_product.id LIMIT 1),
+                m.stamp_color
+              ) AS stamp_color,
+              cp.price AS price
        FROM medicines m
        LEFT JOIN catalog_products cp ON cp.medicine_id = m.id
        ORDER BY m.medicine_name`
@@ -29,7 +35,9 @@ async function getMedicineList(req, res) {
 async function getMyMedicineRecords(req, res) {
   try {
     const [rows] = await db.query(
-      `SELECT pi.*, m.medicine_name, m.stamp_color, pr.prescribed_date, p.id AS pet_id, p.name AS pet_name, ${vetNameExpr('vet_name')}
+      `SELECT pi.*, m.medicine_name, m.category,
+              COALESCE((SELECT cp.stamp_color FROM catalog_products cp WHERE cp.medicine_id = m.id AND cp.stamp_color IS NOT NULL ORDER BY cp.id LIMIT 1), m.stamp_color) AS stamp_color,
+              pr.prescribed_date, p.id AS pet_id, p.name AS pet_name, ${vetNameExpr('vet_name')}
        FROM prescription_items pi
        JOIN medicines m ON pi.medicine_id = m.id
        JOIN prescriptions pr ON pi.prescription_id = pr.id
@@ -64,7 +72,8 @@ async function getAllMedicineRecords(req, res) {
               pr.id AS prescription_id,
               pr.prescribed_date,
               m.medicine_name,
-              m.stamp_color,
+              m.category,
+              COALESCE((SELECT cp.stamp_color FROM catalog_products cp WHERE cp.medicine_id = m.id AND cp.stamp_color IS NOT NULL ORDER BY cp.id LIMIT 1), m.stamp_color) AS stamp_color,
               p.name AS pet_name,
               p.pet_code,
               po.full_name AS owner_name,

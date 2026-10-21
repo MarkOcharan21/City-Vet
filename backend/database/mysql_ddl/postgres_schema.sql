@@ -63,6 +63,7 @@ CREATE TABLE "catalog_products" (
   "unit" varchar(60) COLLATE "ci",
   "subcategory" varchar(150) COLLATE "ci",
   "price" numeric(10,2) NOT NULL DEFAULT 0.00,
+  "stamp_color" varchar(7) COLLATE "ci",
   "active" smallint NOT NULL DEFAULT 1,
   "sort_order" integer NOT NULL DEFAULT 0,
   "created_at" timestamp NOT NULL DEFAULT now(),
@@ -180,6 +181,7 @@ CREATE TABLE "medicines" (
   "default_duration" varchar(100) COLLATE "ci",
   "default_instructions" varchar(255) COLLATE "ci",
   "expiry_date" date,
+  "stamp_color" varchar(7) COLLATE "ci",
   PRIMARY KEY ("id")
 );
 
