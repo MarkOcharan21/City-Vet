@@ -371,24 +371,20 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
         {b.medicineDispatches.length ? (
           <div className="stamp-list">
             {b.medicineDispatches.map((d, i) => (
-              <div className="stamp-row" key={i}>
-                <div className="stamp-row__seal">
-                  <div className="stamp-row__seal-icon" style={{ background: d.stamp_color }} />
-                  <div className="stamp-seal-img" role="img" aria-label="Medicine stamp" />
-                </div>
+              <div className="stamp-row" key={d.id || i}>
+                <MedicineStamp
+                  color={d.stamp_color}
+                  medicineName={d.medicine_name}
+                  batchNumber={d.batch_number}
+                  expiryDate={fmt(d.expiry_date)}
+                />
                 <div className="stamp-row__body">
                   <div className="stamp-row__top">
                     <div className="stamp-row__medicine">{d.medicine_name}</div>
-                    <span className="status-pill status-pill--ok">Batch: {d.batch_number}</span>
+                    <span className="status-pill status-pill--ok">DISPENSED</span>
                   </div>
                   <div className="stamp-row__meta">
                     <Clock size={13} /> <span>{fmt(d.dispensed_date)}</span>
-                    {d.expiry_date ? (
-                      <React.Fragment>
-                        <span>•</span>
-                        <span>Exp: {fmt(d.expiry_date)}</span>
-                      </React.Fragment>
-                    ) : null}
                   </div>
                   <div className="stamp-row__footnote">System-generated medicine stamp</div>
                 </div>
@@ -509,6 +505,8 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                           medicineName: p.medicine_name,
                         })}
                         medicineName={p.medicine_name}
+                        batchNumber={p.batch_number}
+                        expiryDate={fmt(p.expiry_date || p.item_expiry_date)}
                       />
                     </td>
                   </tr>

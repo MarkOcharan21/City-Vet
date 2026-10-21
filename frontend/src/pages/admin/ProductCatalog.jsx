@@ -412,7 +412,7 @@ export default function ProductCatalog() {
                             medicineName: p.name,
                           })}
                           medicineName={p.name}
-                          size={36}
+                          size={132}
                         />
                       ) : (
                         <span className="cell-muted">—</span>

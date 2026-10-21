@@ -197,6 +197,7 @@ async function scanQrToken(req, res) {
     `
     SELECT
     p.id,
+    pi.id AS item_id,
     p.consultation_id,
     p.prescribed_date,
     m.medicine_name,

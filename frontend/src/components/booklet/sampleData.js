@@ -88,8 +88,9 @@ export function enrichBooklet(data, mode, canSeeAll = false) {
         p.stamp_color ||
         getMedicineStampColor({ category: p.category, medicineName: p.medicine_name });
       return {
+        id: p.item_id || p.id,
         medicine_name: p.medicine_name,
-        batch_number: p.batch_number || `MED-${p.id}-unknown`,
+        batch_number: p.batch_number || null,
         expiry_date: p.expiry_date || p.item_expiry_date || null,
         dispensed_date: p.dispensed_date || null,
         stamp_color: stampColor,
