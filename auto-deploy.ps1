@@ -104,30 +104,59 @@ Start-Process -FilePath "node" -ArgumentList "server.js" `
   -WindowStyle Hidden
 Start-Sleep -Seconds 10
 
-# 6) Update Vercel env
+# 6) Update Vercel env VITE_API_URL
+# NOTE: VITE_* vars are baked in at BUILD time, so the value below only takes
+# effect after a rebuild. The project is connected to git, so pushing triggers
+# the rebuild; the CLI deploy below is the fallback when the CLI has access.
 Log "Updating Vercel env VITE_API_URL..."
 $apiUrl = "$PublicUrl/api"
-foreach ($target in @("production", "preview", "development")) {
-  $code = Invoke-Vercel @("env", "rm", "VITE_API_URL", $target, "--yes")
-  if ($code -ne 0) { Log "WARN: could not remove VITE_API_URL for $target (exit $code)" }
-}
+$envOk = $true
 Push-Location $Frontend
 try {
-  foreach ($target in @("production", "preview", "development")) {
-    $envArgs = @($VercelArgs) + @("env", "add", "VITE_API_URL", $target)
-    $apiUrl | & vercel @envArgs 2>&1 | ForEach-Object { Log "vercel env add ($target): $_" }
-    if ($LASTEXITCODE -ne 0) { Log "FAIL: env add $target exit $LASTEXITCODE" }
+  $projects = cmd /c "vercel project ls 2>&1"
+  if (-not (($projects -join " ") -match "city-vet")) {
+    $envOk = $false
+    Log "WARN: the signed-in Vercel account has no access to the city-vet project."
+    Log "WARN: set VITE_API_URL manually -> $apiUrl"
+    Log "WARN: dashboard: https://vercel.com/markocharan21-6461ps-projects/city-vet/settings/environment-variables"
+    Log "WARN: (Production, Preview and Development) then redeploy the project."
   }
 } finally { Pop-Location }
 
-# 7) Deploy to Vercel
+if ($envOk) {
+  foreach ($target in @("production", "preview", "development")) {
+    $code = Invoke-Vercel @("env", "rm", "VITE_API_URL", $target, "--yes")
+    if ($code -ne 0) { Log "WARN: could not remove VITE_API_URL for $target (exit $code)" }
+  }
+  Push-Location $Frontend
+  try {
+    foreach ($target in @("production", "preview", "development")) {
+      $envArgs = @($VercelArgs) + @("env", "add", "VITE_API_URL", $target)
+      $apiUrl | & vercel @envArgs 2>&1 | ForEach-Object { Log "vercel env add ($target): $_" }
+      if ($LASTEXITCODE -ne 0) { Log "FAIL: env add $target exit $LASTEXITCODE"; $envOk = $false }
+    }
+  } finally { Pop-Location }
+}
+
+# 7) Deploy to Vercel (CLI when authorised, otherwise a git push to trigger
+#    the Git-connected rebuild)
 Log "Deploying to Vercel..."
 $deployCode = Invoke-Vercel @("--prod", "--yes", "--archive=tgz")
 if ($deployCode -ne 0) {
-  Log "FAIL: vercel deploy failed (exit $deployCode). Live site was NOT updated."
-  exit 1
+  Log "WARN: vercel CLI deploy failed (exit $deployCode) - falling back to git push."
+  Push-Location $Root
+  try {
+    git commit --allow-empty -m "chore: trigger vercel rebuild" 2>&1 | ForEach-Object { Log "git: $_" }
+    git push origin main 2>&1 | ForEach-Object { Log "git: $_" }
+    if ($LASTEXITCODE -ne 0) { Log "FAIL: git push failed (exit $LASTEXITCODE)"; exit 1 }
+    Log "Git push done - Vercel will rebuild from the pushed commit."
+  } finally { Pop-Location }
+  if (-not $envOk) {
+    Log "NOTE: VITE_API_URL was NOT updated automatically. Set it to $apiUrl in the dashboard."
+  }
+} else {
+  Log "Vercel deploy OK"
 }
-Log "Vercel deploy OK"
 
 # 8) Regenerate QR codes
 Log "Regenerating QR codes..."
