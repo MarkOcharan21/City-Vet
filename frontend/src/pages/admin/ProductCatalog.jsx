@@ -3,7 +3,7 @@ import api from '../../services/api';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import useMinLoading from '../../hooks/useMinLoading';
 import {
-  Search, Plus, Pencil, UserX, UserCheck, Trash2, Package, X,
+  Search, Plus, Pencil, UserX, UserCheck, Trash2, Package, X, Eye,
 } from 'lucide-react';
 import FieldError from '../../components/ui/FieldError';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -115,6 +115,7 @@ export default function ProductCatalog() {
 
   const [pendingToggle, setPendingToggle] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [stampPreview, setStampPreview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [successModal, setSuccessModal] = useState({ open: false, title: '', message: '' });
 
@@ -135,6 +136,17 @@ export default function ProductCatalog() {
   }
 
   useEffect(() => { loadCatalog(); }, []);
+
+  useEffect(() => {
+    if (!stampPreview) return undefined;
+
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setStampPreview(null);
+    }
+
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [stampPreview]);
 
   const products = useMemo(
     () => categories.flatMap((c) => c.products.map((p) => ({ ...p, category: c.name }))),
@@ -352,7 +364,7 @@ export default function ProductCatalog() {
           <table className="data-table catalog-sticky-table" style={{ overflow: 'visible', borderRadius: '0' }}>
             <thead className="catalog-sticky-thead">
               <tr>
-                <th>Product</th><th>Category</th><th>Species</th><th>Unit / Subcategory</th><th>Price</th><th>Status</th><th>Action</th><th>Medicine Stamp</th>
+                <th>Product</th><th>Category</th><th>Species</th><th>Unit / Subcategory</th><th>Price</th><th>Status</th><th>Actions</th><th>Stamp</th>
               </tr>
             </thead>
             <tbody>
@@ -387,35 +399,62 @@ export default function ProductCatalog() {
                     <td>
                       <StatusBadge status={p.active ? 'Active' : 'Inactive'} />
                     </td>
-<td className="catalog-actions" style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', justifyContent: 'center', flexWrap: 'nowrap' }}>
-                      <button className="btn-icon-action" onClick={() => openEdit(p)} title="Edit" style={{ padding: '0.35rem' }}>
-                        <Pencil size={16} />
-                      </button>
-                      {p.active ? (
-                        <button className="btn-icon-action btn-icon-action--danger" onClick={() => setPendingToggle(p)} title="Deactivate" style={{ padding: '0.35rem' }}>
-                          <UserX size={16} />
+                    <td>
+                      <div className="catalog-actions">
+                        <button
+                          className="btn-icon-action"
+                          onClick={() => openEdit(p)}
+                          title="Edit"
+                          aria-label={`Edit ${p.name}`}
+                        >
+                          <Pencil size={16} />
                         </button>
-                      ) : (
-                        <button className="btn-icon-action" onClick={() => setPendingToggle(p)} title="Activate" style={{ padding: '0.35rem' }}>
-                          <UserCheck size={16} />
+                        {p.active ? (
+                          <button
+                            className="btn-icon-action btn-icon-action--danger"
+                            onClick={() => setPendingToggle(p)}
+                            title="Deactivate"
+                            aria-label={`Deactivate ${p.name}`}
+                          >
+                            <UserX size={16} />
+                          </button>
+                        ) : (
+                          <button
+                            className="btn-icon-action"
+                            onClick={() => setPendingToggle(p)}
+                            title="Activate"
+                            aria-label={`Activate ${p.name}`}
+                          >
+                            <UserCheck size={16} />
+                          </button>
+                        )}
+                        <button
+                          className="btn-icon-action btn-icon-action--danger"
+                          onClick={() => setPendingDelete(p)}
+                          title="Delete"
+                          aria-label={`Delete ${p.name}`}
+                        >
+                          <Trash2 size={16} />
                         </button>
-                      )}
-                      <button className="btn-icon-action btn-icon-action--danger" onClick={() => setPendingDelete(p)} title="Delete" style={{ padding: '0.35rem' }}>
-                        <Trash2 size={16} />
-                      </button>
+                      </div>
                     </td>
-                    <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                    <td className="catalog-stamp-cell">
                       {p.category !== 'Consultation' && p.category !== 'Other Supplies' ? (
-                        <MedicineStamp
-                          color={p.stamp_color || getMedicineStampColor({
-                            productCategory: p.category,
-                            medicineName: `${p.name} ${p.species || ''}`,
+                        <button
+                          type="button"
+                          className="catalog-stamp-view"
+                          onClick={() => setStampPreview({
+                            ...p,
+                            stamp_color: p.stamp_color || getMedicineStampColor({
+                              productCategory: p.category,
+                              medicineName: `${p.name} ${p.species || ''}`,
+                            }),
                           })}
-                          medicineName={p.name}
-                          batchLabel="Set when dispensed"
-                          expiryLabel="Check package"
-                          expiryDate={p.expiry_date}
-                        />
+                          aria-label={`View medicine stamp for ${p.name}`}
+                        >
+                          <Eye size={15} />
+                          <span>View</span>
+                        </button>
                       ) : (
                         <span className="cell-muted">—</span>
                       )}
@@ -427,6 +466,63 @@ export default function ProductCatalog() {
           </table>
         </div>
       </div>
+
+      {stampPreview && (
+        <div
+          className="logout-modal-overlay catalog-stamp-overlay"
+          onClick={() => setStampPreview(null)}
+        >
+          <div
+            className="aat-modal catalog-stamp-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="catalog-stamp-title"
+          >
+            <div className="aat-modal-header">
+              <div>
+                <h3 id="catalog-stamp-title">Medicine stamp preview</h3>
+                <p><Package size={14} /> {stampPreview.name}</p>
+              </div>
+              <button
+                type="button"
+                className="aat-modal-close"
+                onClick={() => setStampPreview(null)}
+                aria-label="Close stamp preview"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="catalog-stamp-preview">
+              <MedicineStamp
+                color={stampPreview.stamp_color}
+                medicineName={stampPreview.name}
+                batchLabel="Set when dispensed"
+                expiryLabel="Check package"
+                expiryDate={stampPreview.expiry_date}
+                size={260}
+              />
+              <div className="catalog-stamp-details">
+                <div>
+                  <span>Category</span>
+                  <strong>{stampPreview.category}</strong>
+                </div>
+                <div>
+                  <span>Species</span>
+                  <strong>{stampPreview.species || 'General'}</strong>
+                </div>
+                <div>
+                  <span>Stamp color</span>
+                  <strong>
+                    <i style={{ background: stampPreview.stamp_color }} />
+                    {stampPreview.stamp_color}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add / Edit modal */}
       {modalOpen && (
