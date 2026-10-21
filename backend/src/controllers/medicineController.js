@@ -29,7 +29,7 @@ async function getMedicineList(req, res) {
 async function getMyMedicineRecords(req, res) {
   try {
     const [rows] = await db.query(
-      `SELECT pi.*, m.medicine_name, pr.prescribed_date, p.id AS pet_id, p.name AS pet_name, ${vetNameExpr('vet_name')}
+      `SELECT pi.*, m.medicine_name, m.stamp_color, pr.prescribed_date, p.id AS pet_id, p.name AS pet_name, ${vetNameExpr('vet_name')}
        FROM prescription_items pi
        JOIN medicines m ON pi.medicine_id = m.id
        JOIN prescriptions pr ON pi.prescription_id = pr.id
@@ -39,7 +39,7 @@ async function getMyMedicineRecords(req, res) {
        LEFT JOIN users u ON cr.vet_id = u.id
        WHERE po.user_id = ?
        ORDER BY pr.prescribed_date DESC`,
-      [req.user.id]
+       [req.user.id]
     );
 
     const petIds = [...new Set(rows.map((r) => r.pet_id).filter((id) => id != null))];
@@ -64,6 +64,7 @@ async function getAllMedicineRecords(req, res) {
               pr.id AS prescription_id,
               pr.prescribed_date,
               m.medicine_name,
+              m.stamp_color,
               p.name AS pet_name,
               p.pet_code,
               po.full_name AS owner_name,
