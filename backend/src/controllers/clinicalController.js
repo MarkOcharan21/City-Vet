@@ -384,7 +384,17 @@ async function addClinicalRecord(req, res) {
         created = true;
       }
     } else {
-      const [existingRows] = await connection.query(`SELECT id, pet_id, consultation_date, created_at, EXTRACT(EPOCH FROM (NOW() - created_at)) AS age_seconds FROM consultation_records WHERE pet_id = ? AND queue_id IS NULL ORDER BY id DESC LIMIT 1 FOR UPDATE`, [petId]);
+      const ageSecondsExpression = isPg()
+        ? 'EXTRACT(EPOCH FROM (NOW() - created_at))'
+        : 'TIMESTAMPDIFF(SECOND, created_at, NOW())';
+      const [existingRows] = await connection.query(
+        `SELECT id, pet_id, consultation_date, created_at, ${ageSecondsExpression} AS age_seconds
+         FROM consultation_records
+         WHERE pet_id = ? AND queue_id IS NULL
+         ORDER BY id DESC
+         LIMIT 1 FOR UPDATE`,
+        [petId],
+      );
       const existing = existingRows[0];
       // Only replay a previous walk-in when it is plausibly the same submission:
       // same consultation date and written moments ago. A genuine follow-up visit
