@@ -105,13 +105,24 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
 
   const [activeTab, setActiveTab] = useState("pet-profile");
   const [editing, setEditing] = useState(false);
+  const [medicineStampPreview, setMedicineStampPreview] = useState(null);
 
   const canEdit = b.authorized && EDITABLE_ROLES.includes(user?.role);
 
   useEffect(() => {
     setActiveTab("pet-profile");
     setEditing(false);
+    setMedicineStampPreview(null);
   }, [pet.pet_code]);
+
+  useEffect(() => {
+    if (!medicineStampPreview) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setMedicineStampPreview(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [medicineStampPreview]);
 
   const changeTab = (id) => {
     setActiveTab(id);
@@ -499,20 +510,41 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                     <td data-label="Instructions">{p.instructions || "—"}</td>
                     <td data-label="Prescribed By">{p.prescribed_by || "—"}</td>
                     <td data-label="Medicine Stamp">
-                      <MedicineStamp
-                        color={p.stamp_color || getMedicineStampColor({
-                          category: p.category,
-                          medicineName: p.medicine_name,
-                        })}
-                        medicineName={p.medicine_name}
-                        batchNumber={p.batch_number}
-                        expiryDate={
-                          p.expiry_date || p.item_expiry_date || p.medicine_expiry_date
-                            ? fmt(p.expiry_date || p.item_expiry_date || p.medicine_expiry_date)
-                            : null
-                        }
-                        size={120}
-                      />
+                      <>
+                        <button
+                          type="button"
+                          className="booklet-medicine-stamp-trigger"
+                          onClick={() => setMedicineStampPreview(p)}
+                          aria-label={`View medicine stamp for ${p.medicine_name}`}
+                        >
+                          <span
+                            className="booklet-medicine-stamp-trigger__color"
+                            style={{
+                              background: p.stamp_color || getMedicineStampColor({
+                                category: p.category,
+                                medicineName: p.medicine_name,
+                              }),
+                            }}
+                          />
+                          View stamp
+                        </button>
+                        <span className="booklet-medicine-stamp-print">
+                          <MedicineStamp
+                            color={p.stamp_color || getMedicineStampColor({
+                              category: p.category,
+                              medicineName: p.medicine_name,
+                            })}
+                            medicineName={p.medicine_name}
+                            batchNumber={p.batch_number}
+                            expiryDate={
+                              p.expiry_date || p.item_expiry_date || p.medicine_expiry_date
+                                ? fmt(p.expiry_date || p.item_expiry_date || p.medicine_expiry_date)
+                                : null
+                            }
+                            size={110}
+                          />
+                        </span>
+                      </>
                     </td>
                   </tr>
                 ))}
@@ -524,6 +556,58 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
         )}
       </BookletSection>
       </div>
+
+      {medicineStampPreview && (
+        <div
+          className="logout-modal-overlay catalog-stamp-overlay booklet-medicine-stamp-overlay"
+          onClick={() => setMedicineStampPreview(null)}
+        >
+          <div
+            className="aat-modal catalog-stamp-modal booklet-medicine-stamp-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="booklet-medicine-stamp-title"
+          >
+            <div className="aat-modal-header">
+              <div>
+                <h3 id="booklet-medicine-stamp-title">Medicine stamp</h3>
+                <p>{medicineStampPreview.medicine_name}</p>
+              </div>
+              <button
+                type="button"
+                className="aat-modal-close"
+                onClick={() => setMedicineStampPreview(null)}
+                aria-label="Close medicine stamp"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="catalog-stamp-preview">
+              <MedicineStamp
+                color={medicineStampPreview.stamp_color || getMedicineStampColor({
+                  category: medicineStampPreview.category,
+                  medicineName: medicineStampPreview.medicine_name,
+                })}
+                medicineName={medicineStampPreview.medicine_name}
+                batchNumber={medicineStampPreview.batch_number}
+                expiryDate={
+                  medicineStampPreview.expiry_date ||
+                  medicineStampPreview.item_expiry_date ||
+                  medicineStampPreview.medicine_expiry_date
+                    ? fmt(
+                        medicineStampPreview.expiry_date ||
+                        medicineStampPreview.item_expiry_date ||
+                        medicineStampPreview.medicine_expiry_date
+                      )
+                    : null
+                }
+                size={240}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 08 · DEWORMING & PREVENTIVE CARE */}
       <div className="booklet-tab-panel" role="tabpanel" hidden={activeTab !== "preventive-care"}>
