@@ -1389,7 +1389,6 @@
   .portal-layout:has(.booklet-sheet) {
     display: block !important;
   }
-  .portal-layout:has(.booklet-sheet) { display: block !important; }
   .portal-layout:has(.booklet-sheet) .sidebar,
   .portal-layout:has(.booklet-sheet) .portal-topbar { display: none !important; }
   .booklet-modal-close { display: none !important; }
