@@ -68,8 +68,6 @@ const toYMD = (value) => {
   return toLocalISODate(new Date(str));
 };
 
-const pesoSymbol = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
-
 export default function VaccinationMonitoring() {
   const [records, setRecords] = useState([]);
   const [selectedPet, setSelectedPet] = useState(null);
@@ -576,7 +574,6 @@ export default function VaccinationMonitoring() {
                       {availableVaccines.map((v) => (
                         <option key={v.id} value={v.id}>
                           {v.vaccine_name}
-                          {v.price != null ? ` · ${pesoSymbol.format(v.price)}` : ''}
                         </option>
                       ))}
                     </select>
@@ -600,9 +597,7 @@ export default function VaccinationMonitoring() {
 
                 {selectedVaccine && (
                   <p className="vaccination-calc-helper">
-                    {selectedVaccine.price != null
-                      ? `This vaccine is billed to the owner at ${pesoSymbol.format(selectedVaccine.price)} — a payment entry appears in staff payment monitoring and the owner's payment history.`
-                      : 'No catalog price is set for this vaccine, so no payment charge will be created.'}
+                    A fixed ₱20.00 vaccination service fee will be added automatically. Vaccine prices are not charged.
                   </p>
                 )}
 

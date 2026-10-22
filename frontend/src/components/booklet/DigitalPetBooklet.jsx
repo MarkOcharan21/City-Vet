@@ -435,6 +435,7 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                   <th>Date</th>
                   <th>Next Due</th>
                   <th>Verified By</th>
+                  <th>Official Stamp</th>
                   <th>Remarks</th>
                   <th>Status</th>
                 </tr>
@@ -448,6 +449,13 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                       <td data-label="Date">{fmt(v.date_administered)}</td>
                       <td data-label="Next Due">{fmt(v.next_due_date)}</td>
                       <td data-label="Verified By">{v.staff_name || "—"}</td>
+                      <td data-label="Official Stamp">
+                        <img
+                          src={stampPng}
+                          alt={`Official vaccination stamp for ${v.vaccine_name}`}
+                          style={{ width: 76, height: 76, objectFit: "contain" }}
+                        />
+                      </td>
                       <td data-label="Remarks">{v.comments || "—"}</td>
                       <td data-label="Status"><span className={`status-pill status-pill--${meta.tone}`}>{meta.label}</span></td>
                     </tr>

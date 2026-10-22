@@ -86,108 +86,28 @@ function resolveScheduleRow(schedules, speciesId, doseNo) {
 // history. The payment reference is derived from the vaccination record id,
 // which lets edit/delete find the exact billing row without a new FK column.
 
-const SPECIES_NAMES = { 1: "Dog", 2: "Cat" };
-
-function speciesIdToName(speciesId) {
-  return SPECIES_NAMES[Number(speciesId)] || null;
-}
-
 function vaccinationPaymentReference(vaccinationId) {
   return `VAC-${String(vaccinationId).padStart(6, "0")}`;
 }
 
-// Pick the best catalog "Vaccines" product for a vaccine + pet species so the
-// charge carries a real price. Species compatibility is weighted above name
-// overlap; pass a pre-fetched product list to avoid a query per callback.
-async function resolveVaccineCatalogProduct(vaccineName, speciesId, products) {
-  const list = products || (await db.query(
-    `SELECT id, product_name, price, species
-     FROM catalog_products
-     WHERE category = 'Vaccines' AND active = 1`
-  ))[0];
-  if (!list || list.length === 0) return null;
+const VACCINATION_SERVICE_FEE = 20;
 
-  const speciesName = speciesIdToName(speciesId);
-  const toTokens = (text) =>
-    String(text || "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, " ")
-      .trim()
-      .split(/\s+/)
-      .filter((token) => token.length >= 4);
-
-  // "5-in-1 (DHPPL)" vs "5-in-1 Vaccine" share no token of length >= 4, so also
-  // compare the fully-normalized strings (digits/hyphens stripped) for a
-  // containment hit — "5in1dhppl" contains "5in1".
-  const normalizeCore = (text) =>
-    String(text || "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "");
-
-  const vaccineCore = normalizeCore(vaccineName);
-  const vaccineTokens = toTokens(vaccineName);
-  if (vaccineTokens.length === 0 && vaccineCore.length < 4) return null;
-
-  let best = null;
-  let bestScore = -1;
-
-  for (const product of list) {
-    const productTokens = toTokens(product.product_name);
-    if (productTokens.length === 0) continue;
-
-    const shared = productTokens.filter((token) => vaccineTokens.includes(token)).length;
-    const productName = String(product.product_name || "").toLowerCase();
-    const substringHit = vaccineTokens.some((token) => productName.includes(token));
-    const productCore = normalizeCore(product.product_name);
-    const coreHit = (() => {
-      const a = vaccineCore;
-      const b = productCore;
-      if (a.length < 4 || b.length < 4) return false;
-      const [short, long] = a.length <= b.length ? [a, b] : [b, a];
-      for (let len = short.length; len >= 4; len--) {
-        for (let i = 0; i + len <= short.length; i++) {
-          if (long.includes(short.slice(i, i + len))) return true;
-        }
-      }
-      return false;
-    })();
-    if (shared === 0 && !substringHit && !coreHit) continue;
-
-    const speciesScore =
-      product.species && speciesName
-        ? String(product.species).toLowerCase() === speciesName.toLowerCase()
-          ? 100
-          : 0
-        : 40;
-    const score = speciesScore + (shared || (substringHit ? 1 : 0) || (coreHit ? 1 : 0)) * 10;
-
-    if (score > bestScore) {
-      bestScore = score;
-      best = product;
-    }
-  }
-
-  return best
-    ? { id: Number(best.id), product_name: best.product_name, price: Number(best.price) }
-    : null;
-}
-
-function buildVaccinationPaymentItems(vaccine, doseLabel, doseNo, price, catalogProductId) {
+function buildVaccinationPaymentItems(vaccine, doseLabel, doseNo) {
+  const vaccineName = vaccine ? vaccine.vaccine_name : "Vaccination";
+  const dose = doseLabel || `Dose ${doseNo}`;
+  const description = `Vaccination Service Fee — ${vaccineName} (${dose})`;
   return JSON.stringify([
     {
-      service_name: vaccine ? vaccine.vaccine_name : "Vaccination",
-      dosage: doseLabel || `Dose ${doseNo}`,
+      service_name: "Vaccination Service Fee",
+      name: "Vaccination Service Fee",
+      description,
+      dosage: dose,
       quantity: 1,
-      unit_price: price,
-      line_total: price,
-      catalog_product_id: catalogProductId,
+      unit_price: VACCINATION_SERVICE_FEE,
+      line_total: VACCINATION_SERVICE_FEE,
     },
   ]);
 }
-
-const VACCINE_CATALOG_SQL = `SELECT id, product_name, price, species
-     FROM catalog_products
-     WHERE category = 'Vaccines' AND active = 1`;
 
 // ======================================================
 // GET MY VACCINATION HISTORY (PET OWNER)
@@ -398,24 +318,10 @@ async function getVaccineList(req, res) {
       schedulesByVaccine[schedule.vaccine_id].push(schedule);
     });
 
-    const [catalogProducts] = await db.query(VACCINE_CATALOG_SQL);
-
-    const result = await Promise.all(
-      vaccines.map(async (vaccine) => {
-        const catalogProduct = await resolveVaccineCatalogProduct(
-          vaccine.vaccine_name,
-          vaccine.species_id,
-          catalogProducts
-        );
-        return {
-          ...vaccine,
-          schedules: schedulesByVaccine[vaccine.id] || [],
-          catalog_product_id: catalogProduct ? catalogProduct.id : null,
-          catalog_product_name: catalogProduct ? catalogProduct.product_name : null,
-          price: catalogProduct ? catalogProduct.price : null,
-        };
-      })
-    );
+    const result = vaccines.map((vaccine) => ({
+      ...vaccine,
+      schedules: schedulesByVaccine[vaccine.id] || [],
+    }));
 
     res.json({
       success: true,
@@ -564,21 +470,11 @@ async function recordVaccination(req, res) {
 
       const vaccinationId = result.insertId;
 
-      // Bill the vaccination so the charge shows up in staff payment monitoring
-      // and the owner's payment history.
-      const [catalogProducts] = await connection.query(VACCINE_CATALOG_SQL);
-      const catalogProduct = await resolveVaccineCatalogProduct(
-        vaccine ? vaccine.vaccine_name : "",
-        pet.species_id,
-        catalogProducts
-      );
-      const unitPrice = catalogProduct ? catalogProduct.price : 0;
+      // Vaccination records carry a fixed service fee, independent of vaccine catalog prices.
       const paymentItems = buildVaccinationPaymentItems(
         vaccine,
         effectiveDoseLabel,
-        effectiveDoseNo,
-        unitPrice,
-        catalogProduct ? catalogProduct.id : null
+        effectiveDoseNo
       );
       const vaccineLabel = vaccine ? vaccine.vaccine_name : `Vaccine #${vaccine_id}`;
       const paymentReference = vaccinationPaymentReference(vaccinationId);
@@ -593,8 +489,8 @@ async function recordVaccination(req, res) {
           pet.pet_owner_id,
           pet_id,
           paymentReference,
-          unitPrice,
-          unitPrice,
+          VACCINATION_SERVICE_FEE,
+          VACCINATION_SERVICE_FEE,
           date_administered || null,
           paymentItems,
           req.user.id,
@@ -619,17 +515,14 @@ async function recordVaccination(req, res) {
         "vaccinations"
       );
 
-      const unitPriceNumber = Number(unitPrice) || 0;
-      if (unitPriceNumber > 0) {
-        await createNotification(
-          ownerUserId,
-          `Unpaid Charge — ${pet.name}`,
-          `You have an unpaid ${vaccineLabel} vaccination charge of ₱${unitPriceNumber.toFixed(2)} for ${pet.name}. Settle at the City Treasurer's office for the latest record to appear.`,
-          "Payment",
-          false,
-          "payments"
-        );
-      }
+      await createNotification(
+        ownerUserId,
+        `Unpaid Charge — ${pet.name}`,
+        `You have an unpaid vaccination service fee of ₱${VACCINATION_SERVICE_FEE.toFixed(2)} for ${pet.name} (${vaccineLabel}). Settle at the City Treasurer's office for the latest record to appear.`,
+        "Payment",
+        false,
+        "payments"
+      );
 
       // Check Due Date
 
@@ -788,20 +681,11 @@ async function updateVaccination(req, res) {
       ]
     );
 
-    // Keep the billing row in sync with the corrected vaccination.
-    const [catalogProducts] = await connection.query(VACCINE_CATALOG_SQL);
-    const catalogProduct = await resolveVaccineCatalogProduct(
-      vaccine ? vaccine.vaccine_name : "",
-      pet.species_id,
-      catalogProducts
-    );
-    const unitPrice = catalogProduct ? catalogProduct.price : 0;
+    // Keep the fixed service-fee billing row in sync with the corrected vaccination.
     const paymentItems = buildVaccinationPaymentItems(
       vaccine,
       scheduleRow ? scheduleRow.dose_label : null,
-      effectiveDoseNo,
-      unitPrice,
-      catalogProduct ? catalogProduct.id : null
+      effectiveDoseNo
     );
     const vaccineLabel = vaccine ? vaccine.vaccine_name : `Vaccine #${vaccine_id}`;
     const paymentReference = vaccinationPaymentReference(vaccinationId);
@@ -812,8 +696,8 @@ async function updateVaccination(req, res) {
            consultation_date = ?, remarks = ?
        WHERE payment_reference = ?`,
       [
-        unitPrice,
-        unitPrice,
+        VACCINATION_SERVICE_FEE,
+        VACCINATION_SERVICE_FEE,
         date_administered || null,
         paymentItems,
         date_administered || null,
