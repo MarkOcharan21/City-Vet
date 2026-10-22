@@ -165,6 +165,7 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
   const [showAllBarangays, setShowAllBarangays] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
   const [contactDraft, setContactDraft] = useState(null);
+  const [trendView, setTrendView] = useState('both');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -332,6 +333,8 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
     : 0;
   const recordedReasons = (compliance?.retentionReasons || []).filter((row) => row.count > 0);
   const topReasons = recordedReasons.slice().sort((a, b) => b.count - a.count).slice(0, 3);
+  const currentPeriodLabel = compliance?.filterLabel || `${from} to ${to}`;
+  const baselinePeriodLabel = baselineCompliance?.filterLabel || `${baselineFrom} to ${baselineTo}`;
 
   return (
     <div className="analytics-panel">
@@ -442,12 +445,12 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
         <>
           {compare && baselineCompliance && (
             <section className="analytics-chart-section analytics-comparison-summary">
-              <h3 className="analytics-chart-section-title">Vaccine Compliance: Current vs Baseline</h3>
+              <h3 className="analytics-chart-section-title">Vaccine Compliance: {currentPeriodLabel} vs {baselinePeriodLabel}</h3>
               <p className="analytics-chart-section-desc">
                 Every row shows the recorded value for both date windows using the same {grace}-day grace period. Rates are recalculated from each period's own episode counts.
               </p>
               <p className="analytics-period-label">
-                <strong>{compliance.filterLabel || `${from} to ${to}`}</strong> compared with <strong>{baselineCompliance.filterLabel || `${baselineFrom} to ${baselineTo}`}</strong>
+                <strong>{currentPeriodLabel}</strong> compared with <strong>{baselinePeriodLabel}</strong>
               </p>
               <div className="report-table-container">
                 <div className="report-table-wrapper">
@@ -566,6 +569,20 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
               <p className="analytics-chart-section-desc">
                 The tooltip shows evaluated sample size and follow-ups still pending; periods with n &lt; 30 are small samples.
               </p>
+              {compare && baselineCompliance && (
+                <div className="analytics-chart-mode" role="group" aria-label="On-time rate comparison view">
+                  <button type="button" aria-pressed={trendView === 'both'} className={trendView === 'both' ? 'is-active' : ''} onClick={() => setTrendView('both')}>Both years</button>
+                  <button type="button" aria-pressed={trendView === 'current'} className={trendView === 'current' ? 'is-active' : ''} onClick={() => setTrendView('current')}>Current year</button>
+                  <button type="button" aria-pressed={trendView === 'baseline'} className={trendView === 'baseline' ? 'is-active' : ''} onClick={() => setTrendView('baseline')}>Baseline year</button>
+                </div>
+              )}
+              {compare && baselineCompliance && trendView !== 'current' && (
+                <div className="analytics-chart-section-desc"><strong>Baseline:</strong> {baselinePeriodLabel}</div>
+              )}
+              {compare && baselineCompliance && trendView !== 'baseline' && (
+                <div className="analytics-chart-section-desc"><strong>Current:</strong> {currentPeriodLabel}</div>
+              )}
+              {(!compare || !baselineCompliance) && (
               <div className="chart-card-canvas">
                 {(compliance?.trend || []).length ? (
                   <Line
@@ -606,6 +623,57 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
                   <p className="chart-card-empty">No monthly trend is available yet. Choose a wider date range or wait until more follow-ups are evaluated.</p>
                 )}
               </div>
+              )}
+              {compare && baselineCompliance && (trendView === 'both' || trendView === 'current') && (
+                <div className="chart-card-canvas analytics-year-comparison-chart">
+                  <Line
+                    options={{
+                      ...lineOptions,
+                      plugins: {
+                        ...lineOptions.plugins,
+                        tooltip: {
+                          ...lineOptions.plugins.tooltip,
+                          callbacks: {
+                            afterLabel: (context) => {
+                              const point = compliance?.trend?.find((entry) => Number(entry.key.slice(5, 7)) === context.dataIndex + 1);
+                              return point ? [`Evaluated n=${point.evaluable}`, `Pending=${point.pending}`, ...(point.lowSample ? ['Small sample (n < 30)'] : [])] : 'No evaluated follow-ups';
+                            },
+                          },
+                        },
+                      },
+                    }}
+                    data={{
+                      labels: Array.from({ length: 12 }, (_, index) => new Date(2000, index, 1).toLocaleString('en-US', { month: 'short' })),
+                      datasets: [{ label: `Current · ${from.slice(0, 4)}`, data: Array.from({ length: 12 }, (_, month) => compliance.trend?.find((point) => Number(point.key.slice(5, 7)) === month + 1)?.onTimeRate ?? null), borderColor: '#1e7a46', backgroundColor: 'rgba(30, 122, 70, 0.12)', fill: true, tension: 0, spanGaps: false }],
+                    }}
+                  />
+                </div>
+              )}
+              {compare && baselineCompliance && (trendView === 'both' || trendView === 'baseline') && (
+                <div className="chart-card-canvas analytics-year-comparison-chart">
+                  <Line
+                    options={{
+                      ...lineOptions,
+                      plugins: {
+                        ...lineOptions.plugins,
+                        tooltip: {
+                          ...lineOptions.plugins.tooltip,
+                          callbacks: {
+                            afterLabel: (context) => {
+                              const point = baselineCompliance?.trend?.find((entry) => Number(entry.key.slice(5, 7)) === context.dataIndex + 1);
+                              return point ? [`Evaluated n=${point.evaluable}`, `Pending=${point.pending}`, ...(point.lowSample ? ['Small sample (n < 30)'] : [])] : 'No evaluated follow-ups';
+                            },
+                          },
+                        },
+                      },
+                    }}
+                    data={{
+                      labels: Array.from({ length: 12 }, (_, index) => new Date(2000, index, 1).toLocaleString('en-US', { month: 'short' })),
+                      datasets: [{ label: `Baseline · ${baselineFrom.slice(0, 4)}`, data: Array.from({ length: 12 }, (_, month) => baselineCompliance.trend?.find((point) => Number(point.key.slice(5, 7)) === month + 1)?.onTimeRate ?? null), borderColor: '#c6a15b', backgroundColor: 'rgba(198, 161, 91, 0.12)', fill: true, tension: 0, spanGaps: false }],
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </div>
 

@@ -276,7 +276,7 @@ export default function ComparisonPanel() {
         </div>
 
         <div className="analytics-inline-field">
-          <label htmlFor="comparison-anchor">Anchor date</label>
+          <label htmlFor="comparison-anchor">{granularity === 'yearly' ? 'Selected year' : 'Anchor date'}</label>
           <input
             id="comparison-anchor"
             type="date"
