@@ -13922,6 +13922,53 @@ body {
   overflow: visible !important;
 }
 
+.catalog-sticky-table {
+  min-width: 1433px;
+  table-layout: fixed;
+}
+.catalog-sticky-table th,
+.catalog-sticky-table td {
+  vertical-align: middle;
+}
+.catalog-col-product { width: 190px; white-space: normal; overflow-wrap: anywhere; }
+.catalog-col-category { width: 175px; white-space: normal; }
+.catalog-col-species { width: 88px; }
+.catalog-col-unit { width: 95px; }
+.catalog-col-subcategory { width: 155px; white-space: normal; }
+.catalog-col-batch { width: 145px; }
+.catalog-col-expiry { width: 155px; white-space: normal; }
+.catalog-col-price { width: 100px; }
+.catalog-col-status { width: 100px; }
+.catalog-col-actions { width: 130px; }
+.catalog-col-stamp { width: 100px; }
+.catalog-demo-batch,
+.catalog-batch {
+  display: inline-block;
+  max-width: 100%;
+  padding: 4px 7px;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.catalog-demo-batch {
+  color: #92400e;
+  background: #fef3c7;
+}
+.catalog-batch {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-tint);
+}
+.catalog-demo-expiry {
+  color: #92400e;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+[data-theme="dark"] .catalog-demo-batch,
+[data-theme="dark"] .catalog-demo-expiry {
+  color: #fcd34d;
+}
+
 /* Sticky header cells */
 .catalog-sticky-thead th {
   position: sticky;

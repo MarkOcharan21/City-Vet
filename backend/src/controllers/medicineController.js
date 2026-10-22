@@ -36,6 +36,12 @@ async function getMyMedicineRecords(req, res) {
   try {
     const [rows] = await db.query(
       `SELECT pi.*, m.medicine_name, m.category,
+              COALESCE(
+                pi.batch_number,
+                (SELECT cp.batch_number FROM catalog_products cp
+                 WHERE cp.medicine_id = m.id AND cp.batch_number IS NOT NULL
+                 ORDER BY cp.id LIMIT 1)
+              ) AS batch_number,
               COALESCE(pi.expiry_date,
                 (SELECT cp.expiry_date FROM catalog_products cp WHERE cp.medicine_id = m.id AND cp.expiry_date IS NOT NULL ORDER BY cp.id LIMIT 1),
                 m.expiry_date
@@ -77,6 +83,12 @@ async function getAllMedicineRecords(req, res) {
               pr.prescribed_date,
               m.medicine_name,
               m.category,
+              COALESCE(
+                pi.batch_number,
+                (SELECT cp.batch_number FROM catalog_products cp
+                 WHERE cp.medicine_id = m.id AND cp.batch_number IS NOT NULL
+                 ORDER BY cp.id LIMIT 1)
+              ) AS batch_number,
               COALESCE(pi.expiry_date,
                 (SELECT cp.expiry_date FROM catalog_products cp WHERE cp.medicine_id = m.id AND cp.expiry_date IS NOT NULL ORDER BY cp.id LIMIT 1),
                 m.expiry_date
@@ -113,7 +125,12 @@ async function getPetMedicineRecords(req, res) {
   try {
     const [rows] = await db.query(
       `SELECT pi.id,
-              pi.batch_number,
+              COALESCE(
+                pi.batch_number,
+                (SELECT cp.batch_number FROM catalog_products cp
+                 WHERE cp.medicine_id = m.id AND cp.batch_number IS NOT NULL
+                 ORDER BY cp.id LIMIT 1)
+              ) AS batch_number,
               pi.dispensed_date,
               pi.dosage,
               pi.quantity,

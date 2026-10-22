@@ -1,5 +1,9 @@
 const db = require("../config/db");
 const { logAudit } = require("../middleware/auditMiddleware");
+const {
+  defaultCatalogUnit,
+  defaultCatalogExpiryDate,
+} = require("../utils/catalogProductDefaults");
 
 // Category → payment type classification. Vaccines are a vaccination fee, the
 // consultation items are consultation fees, everything else is a medicine item.
@@ -37,7 +41,7 @@ async function listCatalog(req, res) {
   try {
     const [rows] = await db.query(
       `SELECT
-        id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id, stamp_color,
+        id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id, stamp_color, batch_number,
         COALESCE(catalog_products.expiry_date,
           (SELECT m.expiry_date FROM medicines m WHERE m.id = catalog_products.medicine_id)
         ) AS expiry_date
@@ -56,6 +60,7 @@ async function listCatalog(req, res) {
         subcategory: row.subcategory || null,
         price: row.price,
         stamp_color: row.stamp_color || null,
+        batch_number: row.batch_number || null,
         expiry_date: row.expiry_date || null,
         // Non-null means this stocked item also prescribes a medicine, so the
         // consultation form can add the charge and the dose in one click.
@@ -81,7 +86,7 @@ async function listCatalogAdmin(req, res) {
   try {
     const [rows] = await db.query(
       `SELECT
-        id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id, stamp_color,
+        id, category, product_name, species, unit, subcategory, price, active, sort_order, medicine_id, stamp_color, batch_number,
         COALESCE(catalog_products.expiry_date,
           (SELECT m.expiry_date FROM medicines m WHERE m.id = catalog_products.medicine_id)
         ) AS expiry_date
@@ -101,6 +106,7 @@ async function listCatalogAdmin(req, res) {
         active: !!row.active,
         medicine_id: row.medicine_id || null,
         stamp_color: row.stamp_color || null,
+        batch_number: row.batch_number || null,
         expiry_date: row.expiry_date || null,
       });
     });
@@ -123,8 +129,11 @@ async function createCatalogItem(req, res) {
   const { category, product_name, species, unit, subcategory, price, active } = req.body;
   const stampColor = parseStampColor(req.body.stamp_color);
   const expiryDate = parseExpiryDate(req.body.expiry_date);
+  const batchNumber = String(req.body.batch_number || "").trim();
   const name = String(product_name || "").trim();
   const cat = String(category || "").trim();
+  const effectiveExpiryDate =
+    expiryDate || (cat === "Consultation" ? null : defaultCatalogExpiryDate());
 
   if (!name) {
     return res.status(400).json({ success: false, message: "Product name is required." });
@@ -138,6 +147,18 @@ async function createCatalogItem(req, res) {
   if (expiryDate === false) {
     return res.status(400).json({ success: false, message: "Expiry date must be a valid YYYY-MM-DD date." });
   }
+  if (batchNumber.length > 80) {
+    return res.status(400).json({ success: false, message: "Batch number must be 80 characters or fewer." });
+  }
+  if (
+    cat !== "Consultation" &&
+    Boolean(batchNumber) !== Boolean(expiryDate)
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Enter both a batch number and expiry date, or leave both blank to generate clearly marked sample values.",
+    });
+  }
   const amount = Number.parseFloat(price);
   if (Number.isNaN(amount) || amount < 0) {
     return res.status(400).json({ success: false, message: "A valid price is required." });
@@ -149,11 +170,25 @@ async function createCatalogItem(req, res) {
       "SELECT COALESCE(MAX(sort_order), 0) AS n FROM catalog_products WHERE category = ?",
       [cat]
     );
+    const effectiveBatchNumber =
+      batchNumber || (cat === "Consultation" ? null : `DEMO-CP-${Date.now()}-${Number(maxSort) + 1}`);
     const [result] = await db.query(
       `INSERT INTO catalog_products
-        (category, product_name, species, unit, subcategory, price, active, sort_order, stamp_color, expiry_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [cat, name, species || "General", unit || null, subcategory || null, amount.toFixed(2), isActive ? 1 : 0, maxSort + 1, stampColor, expiryDate]
+        (category, product_name, species, unit, subcategory, price, active, sort_order, stamp_color, expiry_date, batch_number)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        cat,
+        name,
+        species || "General",
+        unit || defaultCatalogUnit(cat, name),
+        subcategory || (cat === "Consultation" ? "Check-up" : "General"),
+        amount.toFixed(2),
+        isActive ? 1 : 0,
+        maxSort + 1,
+        stampColor,
+        effectiveExpiryDate,
+        effectiveBatchNumber,
+      ]
     );
 
     res.json({ success: true, message: `Catalog item "${name}" added.`, id: result.insertId });
@@ -162,7 +197,14 @@ async function createCatalogItem(req, res) {
       action: "CREATE",
       entity_type: "catalog",
       entity_id: result.insertId,
-      new_value: { category: cat, product_name: name, price: amount.toFixed(2), stamp_color: stampColor, expiry_date: expiryDate },
+      new_value: {
+        category: cat,
+        product_name: name,
+        price: amount.toFixed(2),
+        stamp_color: stampColor,
+        batch_number: effectiveBatchNumber,
+        expiry_date: effectiveExpiryDate,
+      },
       description: `Added catalog product "${name}" (${cat}) — ₱${amount.toFixed(2)}`,
     });
   } catch (error) {
@@ -177,6 +219,9 @@ async function updateCatalogItem(req, res) {
   const { category, product_name, species, unit, subcategory, price, active, sort_order } = req.body;
   const stampColor = parseStampColor(req.body.stamp_color);
   const expiryDate = parseExpiryDate(req.body.expiry_date);
+  const batchNumber = req.body.batch_number === undefined
+    ? undefined
+    : String(req.body.batch_number || "").trim();
 
   try {
     const [[existing]] = await db.query("SELECT * FROM catalog_products WHERE id = ?", [id]);
@@ -202,6 +247,20 @@ async function updateCatalogItem(req, res) {
     if (expiryDate === false) {
       return res.status(400).json({ success: false, message: "Expiry date must be a valid YYYY-MM-DD date." });
     }
+    if (batchNumber !== undefined && batchNumber.length > 80) {
+      return res.status(400).json({ success: false, message: "Batch number must be 80 characters or fewer." });
+    }
+    const resultingBatchNumber = batchNumber === undefined ? existing.batch_number : batchNumber;
+    const resultingExpiryDate = req.body.expiry_date === undefined ? existing.expiry_date : expiryDate;
+    if (
+      cat !== "Consultation" &&
+      Boolean(resultingBatchNumber) !== Boolean(resultingExpiryDate)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter both a batch number and expiry date, or leave both blank to generate clearly marked sample values.",
+      });
+    }
     if (Number.isNaN(amount) || amount < 0) {
       return res.status(400).json({ success: false, message: "A valid price is required." });
     }
@@ -211,22 +270,40 @@ async function updateCatalogItem(req, res) {
         ? active === true || active === "true" || active === 1
         : !!existing.active;
 
+    const effectiveUnit =
+      unit !== undefined
+        ? unit || defaultCatalogUnit(cat, name)
+        : existing.unit || defaultCatalogUnit(cat, name);
+    const effectiveSubcategory =
+      subcategory !== undefined
+        ? subcategory || (cat === "Consultation" ? "Check-up" : "General")
+        : existing.subcategory || (cat === "Consultation" ? "Check-up" : "General");
+    const effectiveExpiryDate =
+      req.body.expiry_date !== undefined
+        ? expiryDate || (cat === "Consultation" ? null : defaultCatalogExpiryDate())
+        : existing.expiry_date || (cat === "Consultation" ? null : defaultCatalogExpiryDate());
+    const effectiveBatchNumber =
+      batchNumber !== undefined
+        ? batchNumber || (cat === "Consultation" ? null : `DEMO-CP${id}`)
+        : existing.batch_number || (cat === "Consultation" ? null : `DEMO-CP${id}`);
+
     await db.query(
       `UPDATE catalog_products SET
         category = ?, product_name = ?, species = ?, unit = ?, subcategory = ?,
-        price = ?, active = ?, sort_order = ?, stamp_color = ?, expiry_date = ?
+        price = ?, active = ?, sort_order = ?, stamp_color = ?, expiry_date = ?, batch_number = ?
        WHERE id = ?`,
       [
         cat,
         name,
         species !== undefined ? species || "General" : existing.species || "General",
-        unit !== undefined ? unit || null : existing.unit,
-        subcategory !== undefined ? subcategory || null : existing.subcategory,
+        effectiveUnit,
+        effectiveSubcategory,
         amount.toFixed(2),
         isActive ? 1 : 0,
         sort_order !== undefined ? Number(sort_order) || 0 : existing.sort_order,
         req.body.stamp_color !== undefined ? stampColor : existing.stamp_color,
-        req.body.expiry_date !== undefined ? expiryDate : existing.expiry_date,
+        effectiveExpiryDate,
+        effectiveBatchNumber,
         id,
       ]
     );
@@ -237,8 +314,16 @@ async function updateCatalogItem(req, res) {
       action: "UPDATE",
       entity_type: "catalog",
       entity_id: id,
-      old_value: { product_name: existing.product_name, price: existing.price, active: existing.active, stamp_color: existing.stamp_color, expiry_date: existing.expiry_date },
-      new_value: { category: cat, product_name: name, price: amount.toFixed(2), active: isActive, stamp_color: req.body.stamp_color !== undefined ? stampColor : existing.stamp_color, expiry_date: req.body.expiry_date !== undefined ? expiryDate : existing.expiry_date },
+      old_value: { product_name: existing.product_name, price: existing.price, active: existing.active, stamp_color: existing.stamp_color, batch_number: existing.batch_number, expiry_date: existing.expiry_date },
+      new_value: {
+        category: cat,
+        product_name: name,
+        price: amount.toFixed(2),
+        active: isActive,
+        stamp_color: req.body.stamp_color !== undefined ? stampColor : existing.stamp_color,
+        batch_number: effectiveBatchNumber,
+        expiry_date: effectiveExpiryDate,
+      },
       description: `Updated catalog product "${name}"`,
     });
   } catch (error) {

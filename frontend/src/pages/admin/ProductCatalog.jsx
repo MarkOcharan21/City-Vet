@@ -26,6 +26,7 @@ const SPECIES_OPTIONS = ['General', 'Dog', 'Cat'];
 
 const UNIT_OPTIONS = [
   'dose',
+  'service',
   'tablet',
   'capsule',
   'sachet',
@@ -90,6 +91,7 @@ const EMPTY_FORM = {
   price: '',
   active: true,
   stamp_color: '',
+  batch_number: '',
   expiry_date: '',
 };
 
@@ -97,6 +99,18 @@ function formatPeso(value) {
   const n = Number(value);
   if (Number.isNaN(n)) return '—';
   return `₱${n.toFixed(2)}`;
+}
+
+function formatCatalogDate(value, sample = false) {
+  if (!value) return '—';
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return '—';
+  const formatted = date.toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+  return sample ? `SAMPLE · ${formatted}` : formatted;
 }
 
 export default function ProductCatalog() {
@@ -159,7 +173,7 @@ export default function ProductCatalog() {
     return products.filter((p) => {
       const matchesSearch =
         !q ||
-        `${p.name} ${p.category} ${p.species} ${p.subcategory || ''} ${p.unit || ''}`
+        `${p.name} ${p.category} ${p.species} ${p.subcategory || ''} ${p.unit || ''} ${p.batch_number || ''} ${p.expiry_date || ''}`
           .toLowerCase()
           .includes(q);
       const matchesCat = catFilter === 'All' || p.category === catFilter;
@@ -199,6 +213,7 @@ export default function ProductCatalog() {
       price: p.price,
       active: p.active,
       stamp_color: p.stamp_color || '',
+      batch_number: p.batch_number || '',
       expiry_date: p.expiry_date ? String(p.expiry_date).slice(0, 10) : '',
     });
     setFieldErrors({});
@@ -238,6 +253,7 @@ export default function ProductCatalog() {
       price: Number.parseFloat(form.price),
       active: form.active,
       stamp_color: form.stamp_color,
+      batch_number: form.batch_number.trim() || null,
       expiry_date: form.expiry_date || null,
     };
 
@@ -330,7 +346,7 @@ export default function ProductCatalog() {
           <div>
             <h2>Catalog Items</h2>
             <p className="page-intro">
-              {categories.length} categories · shown when a record is being recorded.
+              {categories.length} categories · batch and expiry values marked DEMO are sample display data.
             </p>
           </div>
           <div className="table-meta">{countLabel}</div>
@@ -367,42 +383,55 @@ export default function ProductCatalog() {
           <table className="data-table catalog-sticky-table" style={{ overflow: 'visible', borderRadius: '0' }}>
             <thead className="catalog-sticky-thead">
               <tr>
-                <th>Product</th><th>Category</th><th>Species</th><th>Unit / Subcategory</th><th>Price</th><th>Status</th><th>Actions</th><th>Stamp</th>
+                <th className="catalog-col-product">Product</th>
+                <th className="catalog-col-category">Category</th>
+                <th className="catalog-col-species">Species</th>
+                <th className="catalog-col-unit">Unit</th>
+                <th className="catalog-col-subcategory">Subcategory</th>
+                <th className="catalog-col-batch">Batch Number</th>
+                <th className="catalog-col-expiry">Expiration Date</th>
+                <th className="catalog-col-price">Price</th>
+                <th className="catalog-col-status">Status</th>
+                <th className="catalog-col-actions">Actions</th>
+                <th className="catalog-col-stamp">Stamp</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-          <tr><td colSpan="8"><LoadingSpinner text="Loading catalog..." fullPage={false} /></td></tr>
+          <tr><td colSpan="11"><LoadingSpinner text="Loading catalog..." fullPage={false} /></td></tr>
               ) : shownProducts.length === 0 ? (
-                <tr><td colSpan="8">No products match your filters.</td></tr>
+                <tr><td colSpan="11">No products match your filters.</td></tr>
               ) : (
                 shownProducts.map((p) => (
                   <tr key={p.id}>
-                    <td>
+                    <td className="catalog-col-product">
                       <div className="cell-strong">{p.name}</div>
                     </td>
-                    <td><span className="cell-muted">{p.category}</span></td>
-                    <td>{p.species || 'General'}</td>
-                    <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        {p.unit ? (
-                          <span className="catalog-unit">{p.unit}</span>
-                        ) : (
-                          <span className="cell-muted">—</span>
-                        )}
-                        {p.subcategory && (
-                          <span className="catalog-subcategory">{p.subcategory}</span>
-                        )}
-                        {!p.unit && !p.subcategory && (
-                          <span className="cell-muted">—</span>
-                        )}
-                      </div>
+                    <td className="catalog-col-category"><span className="cell-muted">{p.category}</span></td>
+                    <td className="catalog-col-species">{p.species || 'General'}</td>
+                    <td className="catalog-col-unit">
+                      {p.unit ? <span className="catalog-unit">{p.unit}</span> : <span className="cell-muted">—</span>}
                     </td>
-                    <td className="catalog-price-cell">{formatPeso(p.price)}</td>
-                    <td>
+                    <td className="catalog-col-subcategory">
+                      {p.subcategory ? <span className="catalog-subcategory">{p.subcategory}</span> : <span className="cell-muted">—</span>}
+                    </td>
+                    <td className="catalog-col-batch">
+                      {p.batch_number ? (
+                        <span className={p.batch_number.startsWith('DEMO-') ? 'catalog-demo-batch' : 'catalog-batch'}>
+                          {p.batch_number}
+                        </span>
+                      ) : <span className="cell-muted">—</span>}
+                    </td>
+                    <td className="catalog-col-expiry">
+                      <span className={p.batch_number?.startsWith('DEMO-') ? 'catalog-demo-expiry' : ''}>
+                        {formatCatalogDate(p.expiry_date, p.batch_number?.startsWith('DEMO-'))}
+                      </span>
+                    </td>
+                    <td className="catalog-col-price catalog-price-cell">{formatPeso(p.price)}</td>
+                    <td className="catalog-col-status">
                       <StatusBadge status={p.active ? 'Active' : 'Inactive'} />
                     </td>
-                    <td>
+                    <td className="catalog-col-actions">
                       <div className="catalog-actions">
                         <button
                           className="btn-icon-action"
@@ -441,7 +470,7 @@ export default function ProductCatalog() {
                         </button>
                       </div>
                     </td>
-                    <td className="catalog-stamp-cell">
+                    <td className="catalog-col-stamp catalog-stamp-cell">
                       {p.category !== 'Consultation' && p.category !== 'Other Supplies' ? (
                         <button
                           type="button"
@@ -453,7 +482,7 @@ export default function ProductCatalog() {
                               medicineName: `${p.name} ${p.species || ''}`,
                             }),
                           })}
-                          aria-label={`View medicine stamp for ${p.name}`}
+                          aria-label={`View product stamp for ${p.name}`}
                         >
                           <Eye size={15} />
                           <span>View</span>
@@ -484,7 +513,7 @@ export default function ProductCatalog() {
           >
             <div className="aat-modal-header">
               <div>
-                <h3 id="catalog-stamp-title">Medicine stamp preview</h3>
+                <h3 id="catalog-stamp-title">Product stamp preview</h3>
                 <p><Package size={14} /> {stampPreview.name}</p>
               </div>
               <button
@@ -500,9 +529,11 @@ export default function ProductCatalog() {
               <MedicineStamp
                 color={stampPreview.stamp_color}
                 medicineName={stampPreview.name}
-                batchLabel="Set when dispensed"
-                expiryLabel="Check package"
+                batchNumber={stampPreview.batch_number}
+                batchLabel="Not recorded"
+                expiryLabel="Not recorded"
                 expiryDate={stampPreview.expiry_date}
+                itemType={stampPreview.category === 'Vaccines' ? 'Vaccination' : 'Medicine'}
                 size={260}
               />
               <div className="catalog-stamp-details">
@@ -513,6 +544,21 @@ export default function ProductCatalog() {
                 <div>
                   <span>Species</span>
                   <strong>{stampPreview.species || 'General'}</strong>
+                </div>
+                <div>
+                  <span>Batch number</span>
+                  <strong>{stampPreview.batch_number || '—'}</strong>
+                </div>
+                <div>
+                  <span>Expiration date</span>
+                  <strong>{formatCatalogDate(
+                    stampPreview.expiry_date,
+                    stampPreview.batch_number?.startsWith('DEMO-')
+                  )}</strong>
+                </div>
+                <div>
+                  <span>Unit / Subcategory</span>
+                  <strong>{[stampPreview.unit, stampPreview.subcategory].filter(Boolean).join(' · ') || '—'}</strong>
                 </div>
                 <div>
                   <span>Stamp color</span>
@@ -604,7 +650,7 @@ export default function ProductCatalog() {
                       ))}
                     </select>
                   </div>
-<div className="field-group">
+                  <div className="field-group">
                     <label htmlFor="cat-subcategory">Subcategory (optional)</label>
                     <select id="cat-subcategory" name="subcategory" value={form.subcategory} onChange={handleChange}>
                       <option value="">None</option>
@@ -612,6 +658,36 @@ export default function ProductCatalog() {
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
+                  </div>
+                </div>
+                <div className="vaccination-form-row">
+                  <div className="field-group">
+                    <label htmlFor="cat-batch-number">Batch Number</label>
+                    <input
+                      id="cat-batch-number"
+                      name="batch_number"
+                      type="text"
+                      maxLength={80}
+                      value={form.batch_number}
+                      onChange={handleChange}
+                      placeholder="Leave blank to generate a DEMO batch"
+                    />
+                    <p className="vaccination-calc-helper">
+                      DEMO batch numbers are sample display values, not actual inventory lots.
+                    </p>
+                  </div>
+                  <div className="field-group">
+                    <label htmlFor="cat-expiry-date">Expiration Date</label>
+                    <input
+                      id="cat-expiry-date"
+                      name="expiry_date"
+                      type="date"
+                      value={form.expiry_date}
+                      onChange={handleChange}
+                    />
+                    <p className="vaccination-calc-helper">
+                      Enter both actual batch and expiry details, or leave both blank to generate clearly marked sample values.
+                    </p>
                   </div>
                 </div>
                 <div className="vaccination-form-row">
@@ -632,21 +708,6 @@ export default function ProductCatalog() {
                     </div>
                     <p className="vaccination-calc-helper">
                                   Category color is used unless you choose a custom stamp color.
-                    </p>
-                  </div>
-                </div>
-                <div className="vaccination-form-row">
-                  <div className="field-group">
-                    <label htmlFor="cat-expiry-date">Expiry Date (optional)</label>
-                    <input
-                      id="cat-expiry-date"
-                      name="expiry_date"
-                      type="date"
-                      value={form.expiry_date}
-                      onChange={handleChange}
-                    />
-                    <p className="vaccination-calc-helper">
-                      Enter the actual expiry date printed on the product or batch. Leave blank if unknown.
                     </p>
                   </div>
                 </div>

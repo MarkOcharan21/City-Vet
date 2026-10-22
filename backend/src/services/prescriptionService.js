@@ -63,7 +63,10 @@ async function insertPrescription(connection, consultationId, items) {
                ORDER BY cp.id LIMIT 1) AS catalog_stamp_color,
               (SELECT cp.expiry_date FROM catalog_products cp
                WHERE cp.medicine_id = m.id AND cp.expiry_date IS NOT NULL
-               ORDER BY cp.id LIMIT 1) AS catalog_expiry_date
+               ORDER BY cp.id LIMIT 1) AS catalog_expiry_date,
+              (SELECT cp.batch_number FROM catalog_products cp
+               WHERE cp.medicine_id = m.id AND cp.batch_number IS NOT NULL
+               ORDER BY cp.id LIMIT 1) AS catalog_batch_number
        FROM medicines m WHERE m.id = ?`,
       [medicineId]
     );
@@ -76,9 +79,9 @@ async function insertPrescription(connection, consultationId, items) {
       );
     }
 
-    const batchNumber = `MED-${medicineId}-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 8)}`;
+    const batchNumber =
+      medicine?.[0]?.catalog_batch_number ||
+      `DEMO-MED-${medicineId}`;
 
     await connection.query(
       `INSERT INTO prescription_items (prescription_id, medicine_id, quantity, dosage, frequency, duration, instructions, batch_number, expiry_date, dispensed_date)
