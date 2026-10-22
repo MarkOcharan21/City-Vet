@@ -12,6 +12,7 @@ import CompliancePanel from "../../components/analytics/CompliancePanel";
 import ComparisonPanel from "../../components/analytics/ComparisonPanel";
 import ReportsPanel from "../../components/analytics/ReportsPanel";
 import AnalyticsPeriodFilter, {
+  getAnalyticsComparisonRange,
   getAnalyticsPeriodLabel,
   getAnalyticsPeriodRange,
 } from "../../components/analytics/AnalyticsPeriodFilter";
@@ -319,6 +320,7 @@ export default function AnalyticsReports() {
   const [printOpen, setPrintOpen] = useState(false);
 
   const periodRange = getAnalyticsPeriodRange(period, from, to);
+  const complianceBaselineRange = getAnalyticsComparisonRange(periodRange, compare, period);
   const periodLabel = dashboard?.filterLabel || getAnalyticsPeriodLabel(period, from, to);
   const compareDisabled = period === 'all' || (period === 'custom' && (!from || !to));
 
@@ -689,7 +691,7 @@ export default function AnalyticsReports() {
         </>
       )}
 
-      {tab === "compliance" && <CompliancePanel from={periodRange.from} to={periodRange.to} initialSubTab={complianceSubTab} />}
+      {tab === "compliance" && <CompliancePanel from={periodRange.from} to={periodRange.to} initialSubTab={complianceSubTab} compare={compare} baselineFrom={complianceBaselineRange?.from} baselineTo={complianceBaselineRange?.to} />}
       {tab === "comparison" && <ComparisonPanel />}
       {tab === "reports" && (
         <ReportsPanel

@@ -545,16 +545,19 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
                   label="Unique Pets"
                   value={fmtNum(preview.totals?.current?.pets)}
                   color="#1e7a46"
+                  sub={[{ label: 'Baseline', value: fmtNum(preview.totals?.baseline?.pets) }]}
                 />
                 <SummaryCard
                   label="On-Time Rate"
                   value={fmtPct(preview.totals?.current?.onTimeRate)}
                   color="#b8860b"
+                  sub={[{ label: 'Baseline', value: fmtPct(preview.totals?.baseline?.onTimeRate) }]}
                 />
                 <SummaryCard
                   label="Revenue"
                   value={fmtPeso(preview.totals?.current?.revenue)}
                   color="#c6a15b"
+                  sub={[{ label: 'Baseline', value: fmtPeso(preview.totals?.baseline?.revenue) }]}
                 />
               </div>
               <p className="analytics-visual-explanation">The x-axis is the report period; each bar shows the selected measure for current and baseline periods. Review the table below to find which periods drove the difference.</p>
@@ -584,7 +587,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
                         <th>On-Time Rate</th>
                         <th>Revenue</th>
                         {activeReport.key === 'yearly' && <th>Change vs previous year</th>}
-                        {activeReport.key !== 'yearly' && <><th>Baseline doses</th><th>Baseline revenue</th></>}
+                        {activeReport.key !== 'yearly' && <><th>Baseline doses</th><th>Baseline pets</th><th>Baseline owners</th><th>Baseline on-time rate</th><th>Baseline revenue</th></>}
                       </tr>
                     </thead>
                     <tbody>
@@ -593,12 +596,13 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
                             <tr key={row.year}>
                               <td>{row.year}</td>
                               <td>{fmtNum(row.doses)}</td>
-                              <td>{fmtNum(row.pets)}</td>
-                              <td>{fmtNum(row.owners)}</td>
-                              <td>{fmtPct(row.onTimeRate)}</td>
-                              <td>{fmtPeso(row.revenue)}</td>
+                              <td>{fmtNum(row.pets)}<small className="analytics-table-delta">vs {Number(row.year) - 1}: {fmtNum((preview.yearly || []).find((item) => Number(item.year) === Number(row.year) - 1)?.pets)}</small></td>
+                              <td>{fmtNum(row.owners)}<small className="analytics-table-delta">vs {Number(row.year) - 1}: {fmtNum((preview.yearly || []).find((item) => Number(item.year) === Number(row.year) - 1)?.owners)}</small></td>
+                              <td>{fmtPct(row.onTimeRate)}<small className="analytics-table-delta">vs {Number(row.year) - 1}: {fmtPct((preview.yearly || []).find((item) => Number(item.year) === Number(row.year) - 1)?.onTimeRate)}</small></td>
+                              <td>{fmtPeso(row.revenue)}<small className="analytics-table-delta">vs {Number(row.year) - 1}: {fmtPeso((preview.yearly || []).find((item) => Number(item.year) === Number(row.year) - 1)?.revenue)}</small></td>
                               {activeReport.key === 'yearly' && (
                                 <td>
+                                  <small className="analytics-table-delta">vs {Number(row.year) - 1}: {fmtNum((preview.yearly || []).find((item) => Number(item.year) === Number(row.year) - 1)?.doses)}</small>
                                   {fmtDelta(row.deltas?.doses?.delta)}
                                   {row.deltas?.doses?.pctChange != null && (
                                     <small className="analytics-table-delta">
@@ -608,7 +612,6 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
                                   )}
                                 </td>
                               )}
-                              {activeReport.key !== 'yearly' && <><td>—</td><td>—</td></>}
                             </tr>
                           ))
                         : visibleComparisonRows.map((row) => (
@@ -622,19 +625,22 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
                               </td>
                               <td>{row.current ? fmtPeso(row.current.revenue) : '—'}</td>
                               <td>{row.baseline ? fmtNum(row.baseline.doses) : '—'}</td>
+                              <td>{row.baseline ? fmtNum(row.baseline.pets) : '—'}</td>
+                              <td>{row.baseline ? fmtNum(row.baseline.owners) : '—'}</td>
+                              <td>{row.baseline ? fmtPct(row.baseline.onTimeRate) : '—'}</td>
                               <td>{row.baseline ? fmtPeso(row.baseline.revenue) : '—'}</td>
                             </tr>
                           ))}
                       {activeReport.key === 'yearly' && !(preview.yearly || []).length ? (
                         <tr>
-                          <td className="report-table-empty" colSpan={activeReport.key === 'yearly' ? 7 : 8}>
+                          <td className="report-table-empty" colSpan={activeReport.key === 'yearly' ? 7 : 11}>
                             No yearly vaccination data is available. Choose another report period or check that vaccine service records have been entered.
                           </td>
                         </tr>
                       ) : null}
                       {activeReport.key !== 'yearly' && !(preview.series || []).length ? (
                         <tr>
-                          <td className="report-table-empty" colSpan={8}>
+                          <td className="report-table-empty" colSpan={11}>
                             No period comparison data is available. Choose a wider report period or check that vaccination records exist for both periods.
                           </td>
                         </tr>

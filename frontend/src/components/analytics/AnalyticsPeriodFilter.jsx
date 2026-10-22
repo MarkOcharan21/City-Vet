@@ -30,6 +30,56 @@ export function getAnalyticsPeriodRange(period, from, to, now = new Date()) {
   return { from: '', to: '' };
 }
 
+function shiftISODate(value, { years = 0, days = 0 }) {
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  if (years) {
+    const targetYear = year + years;
+    date.setDate(1);
+    date.setFullYear(targetYear);
+    date.setMonth(month - 1);
+    date.setDate(Math.min(day, new Date(targetYear, month, 0).getDate()));
+  }
+  if (days) date.setDate(date.getDate() + days);
+  return toISO(date);
+}
+
+export function getAnalyticsComparisonRange(range, compare, period = 'custom') {
+  if (!range?.from || !range?.to || !compare) return null;
+  if (compare === 'previousYear') {
+    return {
+      from: shiftISODate(range.from, { years: -1 }),
+      to: shiftISODate(range.to, { years: -1 }),
+    };
+  }
+
+  const presets = { today: 1, week: 7 };
+  if (presets[period]) {
+    return {
+      from: shiftISODate(range.from, { days: -presets[period] }),
+      to: shiftISODate(range.to, { days: -presets[period] }),
+    };
+  }
+  if (period === 'month' || period === 'year') {
+    const months = period === 'month' ? 1 : 12;
+    const shiftMonths = (value) => {
+      const [year, month, day] = value.split('-').map(Number);
+      const target = new Date(year, month - 1 - months, 1);
+      target.setDate(Math.min(day, new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate()));
+      return toISO(target);
+    };
+    return { from: shiftMonths(range.from), to: shiftMonths(range.to) };
+  }
+
+  const start = new Date(`${range.from}T00:00:00`);
+  const end = new Date(`${range.to}T00:00:00`);
+  const days = Math.max(1, Math.round((end - start) / 86400000) + 1);
+  return {
+    from: shiftISODate(range.from, { days: -days }),
+    to: shiftISODate(range.to, { days: -days }),
+  };
+}
+
 export function getAnalyticsPeriodLabel(period, from, to, now = new Date()) {
   if (period === 'custom') {
     if (from && to) return `${from} to ${to}`;

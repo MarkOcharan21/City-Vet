@@ -30,10 +30,15 @@ const METRIC_OPTIONS = [
   { key: 'qrIssued', label: 'QR Issued', money: false, invert: false },
   { key: 'revenue', label: 'Revenue', money: true, invert: false },
   { key: 'newOwners', label: 'New Owners', money: false, invert: false },
+  { key: 'evaluable', label: 'Evaluated Follow-ups', money: false, invert: false },
+  { key: 'onTime', label: 'On-Time Follow-ups', money: false, invert: false },
+  { key: 'late', label: 'Late Follow-ups', money: false, invert: true },
+  { key: 'lapsed', label: 'Lapsed Follow-ups', money: false, invert: true },
+  { key: 'noReturn', label: 'No Same-Vaccine Return', money: false, invert: true },
 ];
 
-function fmtMetric(value, money = false) {
-  return money ? fmtPeso(value) : fmtNum(value);
+function fmtMetric(value, money = false, percent = false) {
+  return money ? fmtPeso(value) : percent ? fmtPct(value) : fmtNum(value);
 }
 
 function toISO(date) {
@@ -173,6 +178,9 @@ export default function ComparisonPanel() {
   };
 
   const comparisonChartOptions = useMemo(() => {
+    if (activeMetric.percent) {
+      return { ...groupedBarOptions, scales: { ...groupedBarOptions.scales, y: { ...groupedBarOptions.scales.y, max: 100, ticks: { ...groupedBarOptions.scales.y.ticks, callback: (value) => `${value}%` } } } };
+    }
     if (!activeMetric.money) return groupedBarOptions;
     return {
       ...groupedBarOptions,
@@ -187,7 +195,7 @@ export default function ComparisonPanel() {
         },
       },
     };
-  }, [activeMetric.money]);
+  }, [activeMetric.money, activeMetric.percent]);
 
   const handlePrint = async () => {
     setPrinting(true);
@@ -330,15 +338,15 @@ export default function ComparisonPanel() {
           <div className="summary-row">
             <SummaryCard
               label={`${activeMetric.label} — Current`}
-              value={fmtMetric(current[chartData.metric], activeMetric.money)}
+              value={fmtMetric(current[chartData.metric], activeMetric.money, activeMetric.percent)}
             />
             <SummaryCard
               label={`${activeMetric.label} — Baseline`}
-              value={fmtMetric(baseline[chartData.metric], activeMetric.money)}
+              value={fmtMetric(baseline[chartData.metric], activeMetric.money, activeMetric.percent)}
             />
             <SummaryCard
               label="Absolute Change"
-              value={fmtMetric(totals[chartData.metric]?.delta, activeMetric.money)}
+              value={activeMetric.percent ? `${fmtDelta(totals[chartData.metric]?.delta)} pp` : fmtMetric(totals[chartData.metric]?.delta, activeMetric.money)}
             />
             <SummaryCard
               label="Percent Change"
@@ -426,9 +434,9 @@ export default function ComparisonPanel() {
                         <tr key={row.key}>
                           <td>{row.label}</td>
                           <td>{row.baselineLabel}</td>
-                          <td>{fmtMetric(row.current?.[chartData.metric] ?? 0, activeMetric.money)}</td>
-                          <td>{row.baseline ? fmtMetric(row.baseline[chartData.metric], activeMetric.money) : 'No data'}</td>
-                          <td>{fmtDelta(row.deltas?.[chartData.metric]?.delta ?? row.delta)}</td>
+                          <td>{fmtMetric(row.current?.[chartData.metric] ?? 0, activeMetric.money, activeMetric.percent)}</td>
+                          <td>{row.baseline ? fmtMetric(row.baseline[chartData.metric], activeMetric.money, activeMetric.percent) : 'No data'}</td>
+                          <td>{activeMetric.percent ? `${fmtDelta(row.deltas?.[chartData.metric]?.delta ?? row.delta)} pp` : fmtDelta(row.deltas?.[chartData.metric]?.delta ?? row.delta)}</td>
                           <td>
                             {(row.deltas?.[chartData.metric]?.pctChange ?? row.pctChange) == null
                               ? '—'
@@ -457,7 +465,7 @@ export default function ComparisonPanel() {
           <section className="analytics-chart-section">
             <h3 className="analytics-chart-section-title">Year-over-Year Summary</h3>
             <p className="analytics-chart-section-desc">
-              The latest five years are shown first. The small figure under each value is the change against the year before it. Current year is year-to-date (YTD), so compare it cautiously with a complete prior year.
+              Each cell shows the year's actual value, the previous year's actual value, and the change. Current year is year-to-date (YTD), so compare it cautiously with a complete prior year.
             </p>
             <div className="report-table-container">
               <h3>Yearly totals</h3>
@@ -479,12 +487,16 @@ export default function ComparisonPanel() {
                   <tbody>
                     {yearlyRows.length ? (
                       visibleYearlyRows.map((row) => {
-                        const cell = (metric, money = false) => (
+                        const cell = (metric, money = false) => {
+                          const previous = yearlyRows.find((item) => Number(item.year) === Number(row.year) - 1);
+                          return (
                           <>
                             <div>{fmtMetric(row[metric], money)}</div>
-                            <small className="analytics-table-delta">{fmtDelta(row.deltas?.[metric]?.delta)}</small>
+                            <small className="analytics-table-delta">{previous ? `vs ${previous.year}: ${fmtMetric(previous[metric], money)}` : 'No prior year'}</small>
+                            <small className="analytics-table-delta">Change: {fmtDelta(row.deltas?.[metric]?.delta)}</small>
                           </>
                         );
+                        };
                         return (
                           <tr key={row.year}>
                             <td>

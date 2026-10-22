@@ -174,23 +174,21 @@ export function buildComparisonReportBody(data, {
     ${tableBlock(
       3,
       'YEAR-OVER-YEAR SUMMARY',
-      ['Year', 'Registrations', 'Δ', 'Vaccinations', 'Δ', 'Unique Pets', 'Unique Owners', 'Consultations', 'Δ', 'QR Issued', 'Δ', 'Revenue', 'Δ', 'New Owners'],
-      (data?.yearly || []).map((y) => [
-        y.year,
-        num(y.registrations),
-        delta(y.deltas?.registrations?.delta),
-        num(y.doses),
-        delta(y.deltas?.doses?.delta),
-        num(y.pets),
-        num(y.owners),
-        num(y.consultations),
-        delta(y.deltas?.consultations?.delta),
-        num(y.qrIssued),
-        delta(y.deltas?.qrIssued?.delta),
-        peso(y.revenue),
-        peso(y.deltas?.revenue?.delta),
-        num(y.newOwners),
-      ]),
+      ['Year', 'Registrations', 'Previous year registrations', 'Vaccinations', 'Previous year vaccinations', 'Unique Pets', 'Previous year unique pets', 'Unique Owners', 'Previous year unique owners', 'Consultations', 'Previous year consultations', 'QR Issued', 'Previous year QR issued', 'Revenue', 'Previous year revenue', 'New Owners', 'Previous year new owners'],
+      (data?.yearly || []).map((y) => {
+        const previous = (data?.yearly || []).find((item) => Number(item.year) === Number(y.year) - 1);
+        return [
+          y.year,
+          num(y.registrations), num(previous?.registrations),
+          num(y.doses), num(previous?.doses),
+          num(y.pets), num(previous?.pets),
+          num(y.owners), num(previous?.owners),
+          num(y.consultations), num(previous?.consultations),
+          num(y.qrIssued), num(previous?.qrIssued),
+          peso(y.revenue), peso(previous?.revenue),
+          num(y.newOwners), num(previous?.newOwners),
+        ];
+      }),
       'No yearly data available.'
     )}
     ${getPrintBarChart(4, `CURRENT ${granularity.toUpperCase()} SERIES`, (data?.series || []).map((row) => ({

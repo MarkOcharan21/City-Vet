@@ -138,7 +138,7 @@ const lineOptions = {
   },
 };
 
-export default function CompliancePanel({ from = '', to = '', initialSubTab = '' }) {
+export default function CompliancePanel({ from = '', to = '', initialSubTab = '', compare = '', baselineFrom = '', baselineTo = '' }) {
   const { user } = useAuth();
   const canManageContacts = ['Admin', 'Staff'].includes(user?.role);
   const [subTab, setSubTab] = useState(['summary', 'service', 'reasons', 'followups'].includes(initialSubTab) ? initialSubTab : 'summary');
@@ -146,6 +146,7 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
   const [barangay, setBarangay] = useState('');
 
   const [compliance, setCompliance] = useState(null);
+  const [baselineCompliance, setBaselineCompliance] = useState(null);
   const [returns, setReturns] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -182,23 +183,31 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
     if (to) returnParams.to = to;
 
     try {
-      const [complianceRes, returnRes] = await Promise.all([
+      const requests = [
         api.get('/analytics/vaccine-compliance', { params }),
         api.get('/analytics/return-rate', { params: returnParams }),
-      ]);
+      ];
+      if (compare && baselineFrom && baselineTo) {
+        requests.push(api.get('/analytics/vaccine-compliance', {
+          params: { from: baselineFrom, to: baselineTo, grace },
+        }));
+      }
+      const [complianceRes, returnRes, baselineRes] = await Promise.all(requests);
       setCompliance(complianceRes.data);
       setReturns(returnRes.data);
+      setBaselineCompliance(baselineRes?.data || null);
     } catch (err) {
       const message =
         err.response?.data?.message || 'Failed to load the vaccine compliance report.';
       setError(message);
       setCompliance(null);
       setReturns(null);
+      setBaselineCompliance(null);
       toast.error(message);
     } finally {
       setLoading(false);
     }
-  }, [from, to, grace, barangay, search, contactStatusFilter, vaccineFilter, sortBy, page]);
+  }, [from, to, grace, barangay, search, contactStatusFilter, vaccineFilter, sortBy, page, compare, baselineFrom, baselineTo]);
 
   const saveContact = async () => {
     if (!editingContact || !contactDraft) return;
@@ -431,6 +440,42 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
 
       {!loading && !error && compliance && (
         <>
+          {compare && baselineCompliance && (
+            <section className="analytics-chart-section analytics-comparison-summary">
+              <h3 className="analytics-chart-section-title">Vaccine Compliance: Current vs Baseline</h3>
+              <p className="analytics-chart-section-desc">
+                Every row shows the recorded value for both date windows using the same {grace}-day grace period. Rates are recalculated from each period's own episode counts.
+              </p>
+              <p className="analytics-period-label">
+                <strong>{compliance.filterLabel || `${from} to ${to}`}</strong> compared with <strong>{baselineCompliance.filterLabel || `${baselineFrom} to ${baselineTo}`}</strong>
+              </p>
+              <div className="report-table-container">
+                <div className="report-table-wrapper">
+                  <table className="report-table">
+                    <thead><tr><th>Measure</th><th>Current ({from} to {to})</th><th>Baseline ({baselineFrom} to {baselineTo})</th><th>Difference</th></tr></thead>
+                    <tbody>
+                      {[
+                        ['Follow-ups evaluated', 'evaluable', 'number'],
+                        ['On time', 'onTime', 'number'],
+                        ['Late', 'late', 'number'],
+                        ['Lapsed', 'lapsed', 'number'],
+                        ['No same-vaccine return', 'noReturn', 'number'],
+                        ['On-time compliance rate', 'onTimeRate', 'percent'],
+                        ['No-return rate', 'noReturnRate', 'percent'],
+                        ['Any-service return rate', 'anyServiceReturnedRate', 'percent'],
+                      ].map(([label, key, kind]) => {
+                        const currentValue = Number(summary[key]) || 0;
+                        const baselineValue = Number(baselineCompliance.summary?.[key]) || 0;
+                        const delta = currentValue - baselineValue;
+                        const format = (value) => kind === 'percent' ? fmtPct(value) : fmtNum(value);
+                        return <tr key={key}><td>{label}</td><td>{format(currentValue)}</td><td>{format(baselineValue)}</td><td>{kind === 'percent' ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)} percentage points` : `${delta > 0 ? '+' : ''}${fmtNum(delta)}`}</td></tr>;
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          )}
           {subTab === 'summary' && (
           <>
           <div className="summary-row">
