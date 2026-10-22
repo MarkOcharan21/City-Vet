@@ -3,6 +3,7 @@ const { logAudit } = require("../middleware/auditMiddleware");
 const {
   defaultCatalogUnit,
   defaultCatalogExpiryDate,
+  defaultCatalogBatchNumber,
 } = require("../utils/catalogProductDefaults");
 
 // Category → payment type classification. Vaccines are a vaccination fee, the
@@ -132,8 +133,6 @@ async function createCatalogItem(req, res) {
   const batchNumber = String(req.body.batch_number || "").trim();
   const name = String(product_name || "").trim();
   const cat = String(category || "").trim();
-  const effectiveExpiryDate =
-    expiryDate || (cat === "Consultation" ? null : defaultCatalogExpiryDate());
 
   if (!name) {
     return res.status(400).json({ success: false, message: "Product name is required." });
@@ -170,8 +169,11 @@ async function createCatalogItem(req, res) {
       "SELECT COALESCE(MAX(sort_order), 0) AS n FROM catalog_products WHERE category = ?",
       [cat]
     );
+    const defaultSeed = Date.now() * 100 + Number(maxSort) + 1;
+    const effectiveExpiryDate =
+      expiryDate || (cat === "Consultation" ? null : defaultCatalogExpiryDate(defaultSeed));
     const effectiveBatchNumber =
-      batchNumber || (cat === "Consultation" ? null : `DEMO-CP-${Date.now()}-${Number(maxSort) + 1}`);
+      batchNumber || (cat === "Consultation" ? null : defaultCatalogBatchNumber(defaultSeed));
     const [result] = await db.query(
       `INSERT INTO catalog_products
         (category, product_name, species, unit, subcategory, price, active, sort_order, stamp_color, expiry_date, batch_number)
@@ -278,14 +280,25 @@ async function updateCatalogItem(req, res) {
       subcategory !== undefined
         ? subcategory || (cat === "Consultation" ? "Check-up" : "General")
         : existing.subcategory || (cat === "Consultation" ? "Check-up" : "General");
+    const replacingGeneratedBatch =
+      /^DEMO-/i.test(String(batchNumber || "")) ||
+      /^DEMO-/i.test(String(existing.batch_number || ""));
     const effectiveExpiryDate =
-      req.body.expiry_date !== undefined
-        ? expiryDate || (cat === "Consultation" ? null : defaultCatalogExpiryDate())
-        : existing.expiry_date || (cat === "Consultation" ? null : defaultCatalogExpiryDate());
+      replacingGeneratedBatch && req.body.expiry_date === undefined
+        ? defaultCatalogExpiryDate(id)
+        : req.body.expiry_date !== undefined
+        ? expiryDate || (cat === "Consultation" ? null : defaultCatalogExpiryDate(id))
+        : existing.expiry_date || (cat === "Consultation" ? null : defaultCatalogExpiryDate(id));
     const effectiveBatchNumber =
       batchNumber !== undefined
-        ? batchNumber || (cat === "Consultation" ? null : `DEMO-CP${id}`)
-        : existing.batch_number || (cat === "Consultation" ? null : `DEMO-CP${id}`);
+        ? !batchNumber
+          ? (cat === "Consultation" ? null : defaultCatalogBatchNumber(id))
+          : /^DEMO-/i.test(batchNumber)
+            ? defaultCatalogBatchNumber(id)
+            : batchNumber
+        : /^DEMO-/i.test(String(existing.batch_number || ""))
+          ? defaultCatalogBatchNumber(id)
+          : existing.batch_number || (cat === "Consultation" ? null : defaultCatalogBatchNumber(id));
 
     await db.query(
       `UPDATE catalog_products SET

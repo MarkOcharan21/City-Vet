@@ -13941,7 +13941,6 @@ body {
 .catalog-col-status { width: 100px; }
 .catalog-col-actions { width: 130px; }
 .catalog-col-stamp { width: 100px; }
-.catalog-demo-batch,
 .catalog-batch {
   display: inline-block;
   max-width: 100%;
@@ -13950,23 +13949,45 @@ body {
   font-size: 0.74rem;
   font-weight: 700;
   overflow-wrap: anywhere;
-}
-.catalog-demo-batch {
-  color: #92400e;
-  background: #fef3c7;
-}
-.catalog-batch {
   color: var(--color-primary-dark);
   background: var(--color-primary-tint);
 }
-.catalog-demo-expiry {
-  color: #92400e;
+
+.catalog-expiry-watch {
+  margin-top: 1.25rem;
+}
+.catalog-expiry-table-wrapper {
+  max-height: 55vh;
+  overflow: auto;
+}
+.catalog-expiry-table {
+  min-width: 820px;
+}
+.catalog-expiry-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-primary-tint);
+}
+[data-theme="dark"] .catalog-expiry-table th {
+  background: #1a1a2e;
+}
+.catalog-expiry-status {
+  display: inline-flex;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: #854d0e;
+  background: #fef3c7;
   font-size: 0.75rem;
   font-weight: 700;
+  white-space: nowrap;
 }
-[data-theme="dark"] .catalog-demo-batch,
-[data-theme="dark"] .catalog-demo-expiry {
-  color: #fcd34d;
+.catalog-expiry-status.is-expired {
+  color: #991b1b;
+  background: #fee2e2;
+}
+.catalog-expiry-row--expired td {
+  background: color-mix(in srgb, #ef4444 5%, var(--color-card));
 }
 
 /* Sticky header cells */

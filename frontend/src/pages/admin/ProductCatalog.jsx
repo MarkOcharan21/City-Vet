@@ -101,7 +101,7 @@ function formatPeso(value) {
   return `₱${n.toFixed(2)}`;
 }
 
-function formatCatalogDate(value, sample = false) {
+function formatCatalogDate(value) {
   if (!value) return '—';
   const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
   if (Number.isNaN(date.getTime())) return '—';
@@ -110,7 +110,20 @@ function formatCatalogDate(value, sample = false) {
     month: 'short',
     day: 'numeric',
   });
-  return sample ? `SAMPLE · ${formatted}` : formatted;
+  return formatted;
+}
+
+function parseCatalogDate(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function daysUntilExpiry(value, today) {
+  const expiry = parseCatalogDate(value);
+  if (!expiry) return null;
+  return Math.floor((expiry.getTime() - today.getTime()) / 86400000);
 }
 
 export default function ProductCatalog() {
@@ -183,6 +196,23 @@ export default function ProductCatalog() {
       return matchesSearch && matchesCat && matchesStatus;
     });
   }, [products, search, catFilter, statusFilter]);
+
+  const expiryWatchProducts = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return products
+      .filter((product) =>
+        product.active &&
+        product.category !== 'Consultation' &&
+        product.category !== 'Other Supplies'
+      )
+      .map((product) => ({
+        ...product,
+        daysUntilExpiry: daysUntilExpiry(product.expiry_date, today),
+      }))
+      .filter((product) => product.daysUntilExpiry !== null && product.daysUntilExpiry <= 30)
+      .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
+  }, [products]);
 
   const unitOptions = useMemo(
     () => Array.from(new Set([...UNIT_OPTIONS, ...products.map((p) => p.unit).filter(Boolean)])),
@@ -346,7 +376,7 @@ export default function ProductCatalog() {
           <div>
             <h2>Catalog Items</h2>
             <p className="page-intro">
-              {categories.length} categories · batch and expiry values marked DEMO are sample display data.
+              {categories.length} categories · inventory details and product stamps.
             </p>
           </div>
           <div className="table-meta">{countLabel}</div>
@@ -417,15 +447,11 @@ export default function ProductCatalog() {
                     </td>
                     <td className="catalog-col-batch">
                       {p.batch_number ? (
-                        <span className={p.batch_number.startsWith('DEMO-') ? 'catalog-demo-batch' : 'catalog-batch'}>
-                          {p.batch_number}
-                        </span>
+                        <span className="catalog-batch">{p.batch_number}</span>
                       ) : <span className="cell-muted">—</span>}
                     </td>
                     <td className="catalog-col-expiry">
-                      <span className={p.batch_number?.startsWith('DEMO-') ? 'catalog-demo-expiry' : ''}>
-                        {formatCatalogDate(p.expiry_date, p.batch_number?.startsWith('DEMO-'))}
-                      </span>
+                      {formatCatalogDate(p.expiry_date)}
                     </td>
                     <td className="catalog-col-price catalog-price-cell">{formatPeso(p.price)}</td>
                     <td className="catalog-col-status">
@@ -499,6 +525,62 @@ export default function ProductCatalog() {
         </div>
       </div>
 
+      <div className="page-card catalog-expiry-watch">
+        <div className="table-header-row">
+          <div>
+            <h2>Medicine Expiration Watch</h2>
+            <p className="page-intro">Active medicines and vaccines expiring within 30 days or already expired.</p>
+          </div>
+          <div className="table-meta">
+            {expiryWatchProducts.filter((product) => product.daysUntilExpiry < 0).length} expired ·{' '}
+            {expiryWatchProducts.filter((product) => product.daysUntilExpiry >= 0).length} expiring soon
+          </div>
+        </div>
+        <div className="table-wrapper catalog-expiry-table-wrapper">
+          <table className="data-table catalog-expiry-table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Category</th>
+                <th>Unit</th>
+                <th>Batch Number</th>
+                <th>Expiration Date</th>
+                <th>Status</th>
+                <th>Days</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan="7"><LoadingSpinner text="Loading expiration data..." fullPage={false} /></td></tr>
+              ) : expiryWatchProducts.length === 0 ? (
+                <tr><td colSpan="7">No active medicines are expired or expiring within 30 days.</td></tr>
+              ) : expiryWatchProducts.map((product) => {
+                const expired = product.daysUntilExpiry < 0;
+                return (
+                  <tr key={`expiry-${product.id}`} className={expired ? 'catalog-expiry-row--expired' : ''}>
+                    <td><strong>{product.name}</strong></td>
+                    <td>{product.category}</td>
+                    <td>{product.unit || '—'}</td>
+                    <td>
+                      {product.batch_number
+                        ? <span className="catalog-batch">{product.batch_number}</span>
+                        : '—'}
+                    </td>
+                    <td>{formatCatalogDate(product.expiry_date)}</td>
+                    <td>
+                      <span className={`catalog-expiry-status${expired ? ' is-expired' : ''}`}>
+                        {expired ? 'Expired' : 'Expiring Soon'}
+                      </span>
+                    </td>
+                    <td>{expired ? `${Math.abs(product.daysUntilExpiry)} days ago` : `${product.daysUntilExpiry} days`}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {stampPreview && (
         <div
           className="logout-modal-overlay catalog-stamp-overlay"
@@ -551,10 +633,7 @@ export default function ProductCatalog() {
                 </div>
                 <div>
                   <span>Expiration date</span>
-                  <strong>{formatCatalogDate(
-                    stampPreview.expiry_date,
-                    stampPreview.batch_number?.startsWith('DEMO-')
-                  )}</strong>
+                  <strong>{formatCatalogDate(stampPreview.expiry_date)}</strong>
                 </div>
                 <div>
                   <span>Unit / Subcategory</span>
@@ -670,10 +749,10 @@ export default function ProductCatalog() {
                       maxLength={80}
                       value={form.batch_number}
                       onChange={handleChange}
-                      placeholder="Leave blank to generate a DEMO batch"
+                      placeholder="Leave blank to generate a batch number"
                     />
                     <p className="vaccination-calc-helper">
-                      DEMO batch numbers are sample display values, not actual inventory lots.
+                      A batch number is generated automatically if left blank.
                     </p>
                   </div>
                   <div className="field-group">
@@ -686,7 +765,7 @@ export default function ProductCatalog() {
                       onChange={handleChange}
                     />
                     <p className="vaccination-calc-helper">
-                      Enter both actual batch and expiry details, or leave both blank to generate clearly marked sample values.
+                      Enter both actual values, or leave both blank to generate them automatically.
                     </p>
                   </div>
                 </div>

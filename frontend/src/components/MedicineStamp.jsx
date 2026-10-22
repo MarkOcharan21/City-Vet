@@ -23,11 +23,8 @@ export default function MedicineStamp({
             });
       })()
     : expiryLabel;
-  const isSampleBatch = /^(?:DEMO-|MED-\d+-\d+-)/i.test(String(batchNumber || ""));
-  const expiryText =
-    isSampleBatch && expiryDate ? `SAMPLE: ${displayExpiry}` : displayExpiry;
   const label = medicineName
-    ? `${itemType} label for ${medicineName}, batch ${batchNumber || batchLabel}, expires ${expiryText}`
+    ? `${itemType} label for ${medicineName}, batch ${batchNumber || batchLabel}, expires ${displayExpiry}`
     : `${itemType} label`;
 
   return (
@@ -80,7 +77,7 @@ export default function MedicineStamp({
         <strong>Batch</strong>
         <span>{batchNumber || batchLabel}</span>
         <strong>Exp.</strong>
-        <span>{expiryText}</span>
+        <span>{displayExpiry}</span>
       </span>
     </span>
   );

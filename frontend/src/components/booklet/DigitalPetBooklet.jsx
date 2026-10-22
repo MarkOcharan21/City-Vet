@@ -471,13 +471,9 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                             medicineName: v.vaccine_name,
                           })}
                           medicineName={v.vaccine_name}
-                          batchNumber={v.batch_number || `DEMO-${recordKey}`}
+                          batchNumber={v.batch_number || `VAC-${recordKey}`}
                           expiryDate={v.expiry_date ? fmt(v.expiry_date) : null}
-                          expiryLabel={
-                            sampleExpiry
-                              ? `SAMPLE: ${fmt(sampleExpiry)}`
-                              : "SAMPLE: Not recorded"
-                          }
+                          expiryLabel={sampleExpiry ? fmt(sampleExpiry) : "Not recorded"}
                           itemType="Vaccination"
                           size={168}
                         />

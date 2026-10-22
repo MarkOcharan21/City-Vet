@@ -2,6 +2,7 @@ const db = require("../config/db");
 const {
   defaultCatalogUnit,
   defaultCatalogExpiryDate,
+  defaultCatalogBatchNumber,
 } = require("../utils/catalogProductDefaults");
 
 async function ensureMedicineStampColumns() {
@@ -49,13 +50,20 @@ async function ensureMedicineStampColumns() {
       `SELECT id, category, product_name, unit, subcategory, batch_number, expiry_date
        FROM catalog_products`
     );
-    const seededExpiry = defaultCatalogExpiryDate();
     for (const product of products) {
       const isService = product.category === "Consultation";
-      const batchNumber =
-        String(product.batch_number || "").trim() ||
-        (isService ? null : `DEMO-CP${product.id}`);
-      const expiryDate = product.expiry_date || (isService ? null : seededExpiry);
+      const storedBatch = String(product.batch_number || "").trim();
+      const hasGeneratedBatch = /^DEMO-/i.test(storedBatch);
+      const batchNumber = isService
+        ? storedBatch || null
+        : hasGeneratedBatch || !storedBatch
+          ? defaultCatalogBatchNumber(product.id)
+          : storedBatch;
+      const expiryDate = isService
+        ? product.expiry_date || null
+        : hasGeneratedBatch || !product.expiry_date
+          ? defaultCatalogExpiryDate(product.id)
+          : product.expiry_date;
       const unit = product.unit || defaultCatalogUnit(product.category, product.product_name);
       const subcategory = product.subcategory || (isService ? "Check-up" : "General");
 
@@ -74,14 +82,30 @@ async function ensureMedicineStampColumns() {
       }
     }
 
-    const [medicines] = await db.query(
-      "SELECT id, expiry_date FROM medicines"
-    );
+    const [medicines] = await db.query("SELECT id, expiry_date FROM medicines");
+    const legacySeedDate = new Date();
+    legacySeedDate.setFullYear(legacySeedDate.getFullYear() + 1);
+    const legacySeededExpiry = `${legacySeedDate.getFullYear()}-${String(legacySeedDate.getMonth() + 1).padStart(2, "0")}-${String(legacySeedDate.getDate()).padStart(2, "0")}`;
+    const expiryCounts = new Map();
+    medicines.forEach((medicine) => {
+      const date = String(medicine.expiry_date || "").slice(0, 10);
+      if (date) expiryCounts.set(date, (expiryCounts.get(date) || 0) + 1);
+    });
+    const commonSeededExpiry = [...expiryCounts.entries()]
+      .sort((a, b) => b[1] - a[1])[0];
+    const sharedSeedDate =
+      commonSeededExpiry && commonSeededExpiry[1] >= Math.max(3, Math.ceil(medicines.length / 2))
+        ? commonSeededExpiry[0]
+        : null;
     for (const medicine of medicines) {
-      if (!medicine.expiry_date) {
+      if (
+        !medicine.expiry_date ||
+        String(medicine.expiry_date).slice(0, 10) === legacySeededExpiry ||
+        String(medicine.expiry_date).slice(0, 10) === sharedSeedDate
+      ) {
         await db.query(
           "UPDATE medicines SET expiry_date = ? WHERE id = ?",
-          [seededExpiry, medicine.id]
+          [defaultCatalogExpiryDate(Number(medicine.id) + 4), medicine.id]
         );
       }
     }
