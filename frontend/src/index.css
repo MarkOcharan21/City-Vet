@@ -3610,11 +3610,6 @@ body:has(.clinic-access-page)::before {
   overflow-x: auto;
   border-radius: 12px;
 }
-.catalog-table-wrapper thead th {
-  position: relative;
-  background: transparent;
-  z-index: auto;
-}
 .data-table {
   width: 100%;
   min-width: 760px;
@@ -14077,7 +14072,7 @@ body {
 }
 
 /* Sticky header cells */
-.catalog-sticky-thead th {
+.catalog-table-wrapper .catalog-sticky-thead th {
   display: table-cell;
   position: sticky;
   top: 0;
@@ -14089,7 +14084,7 @@ body {
 }
 
 /* Dark mode override so header stays opaque */
-[data-theme="dark"] .catalog-sticky-thead th {
+[data-theme="dark"] .catalog-table-wrapper .catalog-sticky-thead th {
   background: #1a1a2e;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
 }
