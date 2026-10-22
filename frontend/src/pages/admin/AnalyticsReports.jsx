@@ -320,9 +320,9 @@ export default function AnalyticsReports() {
   const [printOpen, setPrintOpen] = useState(false);
 
   const periodRange = getAnalyticsPeriodRange(period, from, to);
-  const complianceBaselineRange = getAnalyticsComparisonRange(periodRange, compare, period);
+  const complianceBaselineRange = getAnalyticsComparisonRange(periodRange, compare, period, from);
   const periodLabel = dashboard?.filterLabel || getAnalyticsPeriodLabel(period, from, to);
-  const compareDisabled = period === 'all' || (period === 'custom' && (!from || !to));
+  const compareDisabled = period === 'all' || (period === 'custom' && (!from || !to)) || (period === 'selectedYear' && !from);
 
   useEffect(() => {
     if (compareDisabled && compare) setCompare('');
@@ -335,7 +335,7 @@ export default function AnalyticsReports() {
     setError(null);
     setDashboard(null);
 
-    const filter = period === 'custom' ? 'all' : period;
+    const filter = period === 'custom' || period === 'selectedYear' ? 'all' : period;
     let url = `/analytics/dashboard?filter=${filter}`;
     if (periodRange.from) url += `&from=${periodRange.from}`;
     if (periodRange.to) url += `&to=${periodRange.to}`;
@@ -408,6 +408,7 @@ export default function AnalyticsReports() {
               setFrom('');
               setTo('');
             }
+            if (next === 'selectedYear') setFrom(String(new Date().getFullYear()));
           }}
           from={from}
           to={to}
@@ -698,6 +699,7 @@ export default function AnalyticsReports() {
           from={periodRange.from}
           to={periodRange.to}
           periodLabel={periodLabel}
+          compare={compare}
           onOpenFollowups={() => {
             setComplianceSubTab("followups");
             setTab("compliance");

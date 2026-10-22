@@ -37,6 +37,10 @@ function toISO(date) {
   ).padStart(2, '0')}`;
 }
 
+function lastDayOfYear(year) {
+  return toISO(new Date(Number(year), 11, 31));
+}
+
 function fmtNum(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n.toLocaleString('en-US') : '—';
@@ -72,7 +76,7 @@ function fmtRange(range) {
   return `${start.toLocaleDateString('en-US', options)} – ${end.toLocaleDateString('en-US', options)}`;
 }
 
-export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFollowups }) {
+export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFollowups, compare = '' }) {
   const [grace, setGrace] = useState(30);
 
   const [selected, setSelected] = useState('summary');
@@ -132,10 +136,24 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
           'Current window against the previous period, broken down daily, weekly, monthly or yearly.',
         icon: FileBarChart,
         load: async () => {
-          const params = { granularity: 'monthly', compare: 'previous', anchor: toISO(new Date()), windows: 60 };
+          const params = { granularity: 'monthly', compare: compare || 'previous', anchor: toISO(new Date()), windows: 60 };
           if (from && to) {
             params.from = from;
             params.to = to;
+            if (compare === 'previousYear') {
+              params.baselineFrom = `${Number(from.slice(0, 4)) - 1}${from.slice(4)}`;
+              params.baselineTo = `${Number(to.slice(0, 4)) - 1}${to.slice(4)}`;
+            } else if (compare === 'previous') {
+              const start = new Date(`${from}T00:00:00`);
+              const end = new Date(`${to}T00:00:00`);
+              const days = Math.round((end - start) / 86400000) + 1;
+              const baselineEnd = new Date(start);
+              baselineEnd.setDate(baselineEnd.getDate() - 1);
+              const baselineStart = new Date(baselineEnd);
+              baselineStart.setDate(baselineStart.getDate() - days + 1);
+              params.baselineFrom = toISO(baselineStart);
+              params.baselineTo = toISO(baselineEnd);
+            }
           }
           const res = await api.get('/analytics/vaccination-trends', { params });
           return res.data;
@@ -150,14 +168,15 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
         key: 'yearly',
         title: 'Yearly Vaccination Report',
         description:
-          'Every year on record with doses, pets, owners, on-time rate, revenue and the change against the year before.',
+          'Compare the selected calendar year with the full previous calendar year using doses, pets, owners, on-time rate and revenue.',
         icon: ClipboardList,
         load: async () => {
           const res = await api.get('/analytics/vaccination-trends', {
             params: {
               granularity: 'yearly',
               compare: 'previousYear',
-              anchor: toISO(new Date()),
+              anchor: toISO(new Date(`${from || new Date().getFullYear()}-12-31T00:00:00`)),
+              ...(from ? { from: `${from}-01-01`, to: lastDayOfYear(from), baselineFrom: `${Number(from) - 1}-01-01`, baselineTo: lastDayOfYear(Number(from) - 1) } : {}),
             },
           });
           return res.data;
@@ -169,7 +188,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
           }),
       },
     ],
-    [from, to, grace]
+    [from, to, grace, compare]
   );
 
   const activeReport = REPORTS.find((report) => report.key === selected) || REPORTS[0];
@@ -303,6 +322,9 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
   const visibleMonths = previewMonths.slice(-12);
   const comparisonRows = activeReport.key === 'yearly' ? preview?.yearly || [] : preview?.series || [];
   const visibleComparisonRows = comparisonRows.slice(activeReport.key === 'yearly' ? -5 : -6);
+  const selectedCurrentYear = Number(from) || new Date().getFullYear();
+  const currentYearTotals = (preview?.yearly || []).find((row) => Number(row.year) === selectedCurrentYear);
+  const baselineYearTotals = (preview?.yearly || []).find((row) => Number(row.year) === selectedCurrentYear - 1);
 
   return (
     <div className="analytics-panel">
@@ -332,7 +354,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
         </button>
       </div>
 
-      <p className="analytics-period-label">
+        <p className="analytics-period-label">
         Report period: <strong>{reportPeriodLabel}</strong>
       </p>
 
@@ -563,19 +585,27 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
               <p className="analytics-visual-explanation">The x-axis is the report period; each bar shows the selected measure for current and baseline periods. Review the table below to find which periods drove the difference.</p>
               <div className="chart-card-canvas">
                 <Bar options={reportChartOptions} data={{
-                  labels: (preview.series || []).map((row) => row.label),
+                  labels: activeReport.key === 'yearly' ? ['Doses', 'Unique Pets', 'Unique Owners', 'On-Time Rate', 'Revenue'] : (preview.series || []).map((row) => row.label),
                   datasets: [
-                    { label: preview.current?.label || 'Current', data: (preview.series || []).map((row) => Number(row.current?.[preview.primaryMetric]) || 0), backgroundColor: '#c8102e' },
-                    { label: preview.baseline?.label || 'Baseline', data: (preview.series || []).map((row) => Number(row.baseline?.[preview.primaryMetric]) || 0), backgroundColor: '#c6a15b' },
+                    { label: preview.current?.label || 'Current', data: activeReport.key === 'yearly' ? ['doses', 'pets', 'owners', 'onTimeRate', 'revenue'].map((key) => Number(currentYearTotals?.[key]) || 0) : (preview.series || []).map((row) => Number(row.current?.[preview.primaryMetric]) || 0), backgroundColor: '#c8102e' },
+                    { label: preview.baseline?.label || 'Baseline', data: activeReport.key === 'yearly' ? ['doses', 'pets', 'owners', 'onTimeRate', 'revenue'].map((key) => Number(baselineYearTotals?.[key]) || 0) : (preview.series || []).map((row) => Number(row.baseline?.[preview.primaryMetric]) || 0), backgroundColor: '#c6a15b' },
                   ],
                 }} />
               </div>
 
+              {activeReport.key === 'yearly' && (
+                <div className="summary-row">
+                  <SummaryCard label={`${selectedCurrentYear} doses`} value={fmtNum(currentYearTotals?.doses)} sub={[{ label: `${selectedCurrentYear - 1}`, value: fmtNum(baselineYearTotals?.doses) }]} />
+                  <SummaryCard label={`${selectedCurrentYear} unique pets`} value={fmtNum(currentYearTotals?.pets)} color="#1e7a46" sub={[{ label: `${selectedCurrentYear - 1}`, value: fmtNum(baselineYearTotals?.pets) }]} />
+                  <SummaryCard label={`${selectedCurrentYear} on-time rate`} value={fmtPct(currentYearTotals?.onTimeRate)} color="#b8860b" sub={[{ label: `${selectedCurrentYear - 1}`, value: fmtPct(baselineYearTotals?.onTimeRate) }]} />
+                  <SummaryCard label={`${selectedCurrentYear} revenue`} value={fmtPeso(currentYearTotals?.revenue)} color="#c6a15b" sub={[{ label: `${selectedCurrentYear - 1}`, value: fmtPeso(baselineYearTotals?.revenue) }]} />
+                </div>
+              )}
               <div className="report-table-container">
                 <h3>
-                  {activeReport.key === 'yearly' ? 'Yearly totals' : 'Period by period'}
+                  {activeReport.key === 'yearly' ? `Calendar year ${preview.current?.from?.slice(0, 4) || ''} vs ${preview.baseline?.from?.slice(0, 4) || 'previous year'}` : 'Period by period'}
                 </h3>
-                <p className="analytics-chart-section-desc">This table contains the records included in the preview. “Change vs previous year” is the dose change; the remaining columns show current values or current and baseline values by period.</p>
+                <p className="analytics-chart-section-desc">{activeReport.key === 'yearly' ? 'Both rows show the full calendar-year values for the selected year and the previous year.' : 'This table contains the records included in the preview. Each period lists the current and baseline values.'}</p>
                 <div className="report-table-wrapper">
                   <table className="report-table">
                     <thead>
@@ -586,30 +616,23 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
                         <th>Owners</th>
                         <th>On-Time Rate</th>
                         <th>Revenue</th>
-                        {activeReport.key === 'yearly' && <th>Change vs previous year</th>}
+                        {activeReport.key === 'yearly' && <th>Compared window</th>}
                         {activeReport.key !== 'yearly' && <><th>Baseline doses</th><th>Baseline pets</th><th>Baseline owners</th><th>Baseline on-time rate</th><th>Baseline revenue</th></>}
                       </tr>
                     </thead>
                     <tbody>
-                      {activeReport.key === 'yearly'
-                        ? visibleComparisonRows.map((row) => (
+                    {activeReport.key === 'yearly'
+                        ? [currentYearTotals, baselineYearTotals].filter(Boolean).map((row) => (
                             <tr key={row.year}>
                               <td>{row.year}</td>
                               <td>{fmtNum(row.doses)}</td>
-                              <td>{fmtNum(row.pets)}<small className="analytics-table-delta">vs {Number(row.year) - 1}: {fmtNum((preview.yearly || []).find((item) => Number(item.year) === Number(row.year) - 1)?.pets)}</small></td>
-                              <td>{fmtNum(row.owners)}<small className="analytics-table-delta">vs {Number(row.year) - 1}: {fmtNum((preview.yearly || []).find((item) => Number(item.year) === Number(row.year) - 1)?.owners)}</small></td>
-                              <td>{fmtPct(row.onTimeRate)}<small className="analytics-table-delta">vs {Number(row.year) - 1}: {fmtPct((preview.yearly || []).find((item) => Number(item.year) === Number(row.year) - 1)?.onTimeRate)}</small></td>
-                              <td>{fmtPeso(row.revenue)}<small className="analytics-table-delta">vs {Number(row.year) - 1}: {fmtPeso((preview.yearly || []).find((item) => Number(item.year) === Number(row.year) - 1)?.revenue)}</small></td>
+                              <td>{fmtNum(row.pets)}</td>
+                              <td>{fmtNum(row.owners)}</td>
+                              <td>{fmtPct(row.onTimeRate)}</td>
+                              <td>{fmtPeso(row.revenue)}</td>
                               {activeReport.key === 'yearly' && (
                                 <td>
-                                  <small className="analytics-table-delta">vs {Number(row.year) - 1}: {fmtNum((preview.yearly || []).find((item) => Number(item.year) === Number(row.year) - 1)?.doses)}</small>
-                                  {fmtDelta(row.deltas?.doses?.delta)}
-                                  {row.deltas?.doses?.pctChange != null && (
-                                    <small className="analytics-table-delta">
-                                      {Number(row.deltas.doses.pctChange) > 0 ? '+' : ''}
-                                      {Number(row.deltas.doses.pctChange).toFixed(1)}%
-                                    </small>
-                                  )}
+                                  {row.year === selectedCurrentYear ? `Current period: ${preview.current?.partial ? 'partial year' : 'full year'}` : 'Baseline year'}
                                 </td>
                               )}
                             </tr>

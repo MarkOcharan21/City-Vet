@@ -5,6 +5,7 @@ const PERIODS = [
   { key: 'week', label: 'This Week' },
   { key: 'month', label: 'This Month' },
   { key: 'year', label: 'This Year' },
+  { key: 'selectedYear', label: 'Select Year' },
   { key: 'all', label: 'All Time' },
   { key: 'custom', label: 'Custom' },
 ];
@@ -27,6 +28,11 @@ export function getAnalyticsPeriodRange(period, from, to, now = new Date()) {
   }
   if (period === 'month') return { from: `${today.slice(0, 7)}-01`, to: today };
   if (period === 'year') return { from: `${today.slice(0, 4)}-01-01`, to: today };
+  if (period === 'selectedYear' && from) {
+    const year = Number(from);
+    const end = new Date(year, 11, 31);
+    return { from: `${year}-01-01`, to: toISO(end) };
+  }
   return { from: '', to: '' };
 }
 
@@ -44,8 +50,12 @@ function shiftISODate(value, { years = 0, days = 0 }) {
   return toISO(date);
 }
 
-export function getAnalyticsComparisonRange(range, compare, period = 'custom') {
+export function getAnalyticsComparisonRange(range, compare, period = 'custom', selectedYear = '') {
   if (!range?.from || !range?.to || !compare) return null;
+  if (period === 'selectedYear' && selectedYear) {
+    const baselineYear = Number(selectedYear) - 1;
+    return { from: `${baselineYear}-01-01`, to: toISO(new Date(baselineYear, 11, 31)) };
+  }
   if (compare === 'previousYear') {
     return {
       from: shiftISODate(range.from, { years: -1 }),
@@ -92,10 +102,13 @@ export function getAnalyticsPeriodLabel(period, from, to, now = new Date()) {
     week: 'This Week',
     month: 'This Month',
     year: 'This Year',
+    selectedYear: `Year ${from}`,
     all: 'All Time',
   };
   const range = getAnalyticsPeriodRange(period, from, to, now);
-  return period === 'all' ? labels.all : `${labels[period]} · ${range.from} to ${range.to}`;
+  if (period === 'all') return labels.all;
+  if (period === 'selectedYear') return `${labels.selectedYear} · ${range.from} to ${range.to}`;
+  return `${labels[period]} · ${range.from} to ${range.to}`;
 }
 
 export default function AnalyticsPeriodFilter({
@@ -112,6 +125,7 @@ export default function AnalyticsPeriodFilter({
   onReports,
 }) {
   const today = useMemo(() => toISO(new Date()), []);
+  const currentYear = new Date().getFullYear();
   return (
     <div className="analytics-period-toolbar">
       <div className="analytics-filter-row" role="group" aria-label="Analytics time period">
@@ -159,6 +173,16 @@ export default function AnalyticsPeriodFilter({
             >
               Clear
             </button>
+          </div>
+        )}
+        {period === 'selectedYear' && (
+          <div className="analytics-inline-field">
+            <label htmlFor="analytics-selected-year">Year</label>
+            <select id="analytics-selected-year" value={from || String(currentYear)} onChange={(event) => onFromChange(event.target.value)}>
+              {Array.from({ length: 12 }, (_, index) => currentYear - index).map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
           </div>
         )}
         {onCompareChange && (

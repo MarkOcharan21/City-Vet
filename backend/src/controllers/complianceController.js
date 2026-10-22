@@ -971,6 +971,10 @@ async function getVaccinationTrends(req, res) {
       req.query.from && req.query.to
         ? { from: req.query.from, to: req.query.to }
         : undefined;
+    const baseline =
+      req.query.baselineFrom && req.query.baselineTo
+        ? { from: req.query.baselineFrom, to: req.query.baselineTo }
+        : undefined;
 
     const payload = await buildPeriodComparison({
       granularity: req.query.granularity,
@@ -980,6 +984,7 @@ async function getVaccinationTrends(req, res) {
       primaryMetric: "doses",
       includeSynthetic: req.query.includeSynthetic !== "false",
       current,
+      baseline,
       toDate: !current,
     });
 

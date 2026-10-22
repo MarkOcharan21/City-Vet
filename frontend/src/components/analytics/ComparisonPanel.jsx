@@ -9,12 +9,20 @@ import GlobalLoadingOverlay from '../GlobalLoadingOverlay';
 import { printComparisonReport } from '../../utils/comparisonReportPrint';
 import './chartSetup';
 
+function toISO(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 const GRANULARITIES = [
   { key: 'daily', label: 'Daily' },
   { key: 'weekly', label: 'Weekly' },
   { key: 'monthly', label: 'Monthly' },
   { key: 'yearly', label: 'Yearly' },
 ];
+
+function lastDayOfYear(year) {
+  return toISO(new Date(Number(year), 11, 31));
+}
 
 const COMPARE_MODES = [
   { key: 'previous', label: 'Previous Period' },
@@ -39,12 +47,6 @@ const METRIC_OPTIONS = [
 
 function fmtMetric(value, money = false, percent = false) {
   return money ? fmtPeso(value) : percent ? fmtPct(value) : fmtNum(value);
-}
-
-function toISO(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-    date.getDate()
-  ).padStart(2, '0')}`;
 }
 
 function fmtNum(value) {
@@ -126,7 +128,9 @@ export default function ComparisonPanel() {
     setError(null);
     try {
       const res = await api.get('/analytics/period-comparison', {
-        params: { granularity, compare, anchor, metric },
+        params: granularity === 'yearly'
+          ? { granularity, compare, anchor, metric, from: `${anchor.slice(0, 4)}-01-01`, to: lastDayOfYear(anchor.slice(0, 4)), baselineFrom: `${Number(anchor.slice(0, 4)) - 1}-01-01`, baselineTo: lastDayOfYear(Number(anchor.slice(0, 4)) - 1) }
+          : { granularity, compare, anchor, metric },
       });
       if (!res.data?.success) throw new Error(res.data?.message || 'Failed to load comparison');
       setData(res.data);
@@ -201,7 +205,9 @@ export default function ComparisonPanel() {
     setPrinting(true);
     try {
       const res = await api.get('/analytics/period-comparison', {
-        params: { granularity, compare, anchor, metric },
+        params: granularity === 'yearly'
+          ? { granularity, compare, anchor, metric, from: `${anchor.slice(0, 4)}-01-01`, to: lastDayOfYear(anchor.slice(0, 4)), baselineFrom: `${Number(anchor.slice(0, 4)) - 1}-01-01`, baselineTo: lastDayOfYear(Number(anchor.slice(0, 4)) - 1) }
+          : { granularity, compare, anchor, metric },
       });
       if (!res.data?.success) {
         toast.error(res.data?.message || 'Could not build the comparison report.');
