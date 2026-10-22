@@ -13971,9 +13971,38 @@ body {
 .catalog-expiry-table-wrapper {
   max-height: 55vh;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 .catalog-expiry-table {
-  min-width: 980px;
+  display: table;
+  width: 100%;
+  min-width: 1320px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.catalog-expiry-table th,
+.catalog-expiry-table td {
+  padding: 0.85rem 1rem;
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.catalog-expiry-table th:nth-child(1) { width: 18%; }
+.catalog-expiry-table th:nth-child(2) { width: 17%; }
+.catalog-expiry-table th:nth-child(3) { width: 7%; }
+.catalog-expiry-table th:nth-child(4) { width: 15%; }
+.catalog-expiry-table th:nth-child(5) { width: 13%; }
+.catalog-expiry-table th:nth-child(6) { width: 11%; }
+.catalog-expiry-table th:nth-child(7) { width: 8%; }
+.catalog-expiry-table th:nth-child(8) { width: 11%; }
+.catalog-expiry-table th:nth-child(5),
+.catalog-expiry-table td:nth-child(5),
+.catalog-expiry-table th:nth-child(7),
+.catalog-expiry-table td:nth-child(7),
+.catalog-expiry-table th:nth-child(8),
+.catalog-expiry-table td:nth-child(8) {
+  white-space: nowrap;
 }
 .catalog-expiry-update {
   display: inline-flex;
@@ -13985,13 +14014,35 @@ body {
   max-width: 520px;
 }
 .catalog-expiry-table th {
+  display: table-cell;
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 3;
   background: var(--color-primary-tint);
+  box-shadow: 0 1px 0 var(--color-border);
 }
 [data-theme="dark"] .catalog-expiry-table th {
   background: #1a1a2e;
+}
+.catalog-expiry-table thead {
+  display: table-header-group;
+}
+.catalog-expiry-table tbody {
+  display: table-row-group;
+}
+.catalog-expiry-table tbody tr {
+  display: table-row;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.catalog-expiry-table tbody td {
+  display: table-cell;
+}
+.catalog-expiry-table tbody td::before {
+  content: none;
 }
 .catalog-expiry-status {
   display: inline-flex;
