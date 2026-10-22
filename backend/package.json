@@ -12,6 +12,7 @@
     "seed:bulk": "node src/utils/seedBulkData.js",
     "analytics:seed:2025:preview": "node src/utils/seedAnalytics2025.js",
     "analytics:seed:2025": "node src/utils/seedAnalytics2025.js --apply",
+    "analytics:seed:reasons": "node src/utils/seedAnalyticsRetentionReasons.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {

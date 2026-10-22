@@ -282,6 +282,14 @@ async function getVaccineCompliance(req, res) {
       const decoded = JSON.parse(row.reasons_json || "[]");
       return Array.isArray(decoded) ? decoded.filter((reason) => RETENTION_REASON_KEYS.has(reason)) : [];
     };
+    const syntheticEpisodeIds = new Set(
+      allEpisodes
+        .filter((row) => String(row.pet_code || "").startsWith("ANL-2025-"))
+        .map((row) => Number(row.id))
+    );
+    const syntheticReasonRecords = (contactRows || []).filter(
+      (row) => syntheticEpisodeIds.has(Number(row.vaccination_record_id)) && parseReasons(row).length > 0
+    ).length;
     const excludedReasons = new Set(["moved", "lost_deceased"]);
     const excludedEpisodeIds = new Set(
       (contactRows || [])
@@ -506,6 +514,7 @@ async function getVaccineCompliance(req, res) {
         label: "Synthetic Analytics Seed 2025",
         included: includeSynthetic,
         vaccineEpisodes: syntheticSeedEpisodes,
+        reasonRecords: syntheticReasonRecords,
       },
       filterLabel: from && to ? `${from} to ${to}` : from ? `From ${from}` : to ? `Up to ${to}` : "All Time",
       summary: {

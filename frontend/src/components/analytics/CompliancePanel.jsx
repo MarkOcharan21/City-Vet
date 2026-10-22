@@ -656,6 +656,11 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
             <p className="analytics-chart-section-desc">
               Only reasons explicitly recorded during owner contact are shown. Missing reasons are not inferred from a missed visit.
             </p>
+            {Number(compliance.syntheticData?.reasonRecords) > 0 && (
+              <p className="analytics-warning" role="note">
+                Includes {fmtNum(compliance.syntheticData.reasonRecords)} seeded sample follow-ups for chart testing. These are fictional examples, not actual owner responses.
+              </p>
+            )}
             <div className="chart-card">
               <div className="chart-card-canvas">
               {(compliance.retentionReasons || []).some((reason) => reason.count > 0) ? (
@@ -680,7 +685,9 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
                   data={{
                     labels: recordedReasons.map((reason) => reason.label),
                     datasets: [{
-                      label: 'Recorded owner-stated reasons',
+                      label: Number(compliance.syntheticData?.reasonRecords) > 0
+                        ? 'Recorded reasons, including seeded samples'
+                        : 'Recorded owner-stated reasons',
                       data: recordedReasons.map((reason) => reason.count),
                       backgroundColor: '#2879a8',
                       borderRadius: 4,
