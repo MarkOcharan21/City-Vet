@@ -5,6 +5,7 @@ export default function MedicineStamp({
   expiryDate,
   batchLabel = "Set when dispensed",
   expiryLabel = "Not recorded",
+  itemType = "Medicine",
   size = 168,
 }) {
   const displayExpiry = expiryDate
@@ -23,8 +24,8 @@ export default function MedicineStamp({
       })()
     : expiryLabel;
   const label = medicineName
-    ? `Medicine label for ${medicineName}, batch ${batchNumber || batchLabel}, expires ${displayExpiry}`
-    : "Medicine label";
+    ? `${itemType} label for ${medicineName}, batch ${batchNumber || batchLabel}, expires ${displayExpiry}`
+    : `${itemType} label`;
 
   return (
     <span

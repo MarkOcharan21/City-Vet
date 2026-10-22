@@ -450,10 +450,18 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                       <td data-label="Next Due">{fmt(v.next_due_date)}</td>
                       <td data-label="Verified By">{v.staff_name || "—"}</td>
                       <td data-label="Official Stamp">
-                        <img
-                          src={stampPng}
-                          alt={`Official vaccination stamp for ${v.vaccine_name}`}
-                          style={{ width: 76, height: 76, objectFit: "contain" }}
+                        <MedicineStamp
+                          color={getMedicineStampColor({
+                            category: "Vaccines",
+                            medicineName: v.vaccine_name,
+                          })}
+                          medicineName={v.vaccine_name}
+                          batchNumber={v.batch_number}
+                          expiryDate={v.expiry_date ? fmt(v.expiry_date) : null}
+                          batchLabel="Not recorded"
+                          expiryLabel="Not recorded"
+                          itemType="Vaccination"
+                          size={168}
                         />
                       </td>
                       <td data-label="Remarks">{v.comments || "—"}</td>
