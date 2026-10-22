@@ -118,6 +118,14 @@ export function buildComparisonReportBody(data, {
   const totals = data?.totals || {};
   const current = totals.current || {};
   const baseline = totals.baseline || {};
+  const hasSyntheticRecords = data?.syntheticData?.included && [
+    data.syntheticData.current?.pets,
+    data.syntheticData.current?.vaccinations,
+    data.syntheticData.current?.payments,
+    data.syntheticData.baseline?.pets,
+    data.syntheticData.baseline?.vaccinations,
+    data.syntheticData.baseline?.payments,
+  ].some((value) => Number(value) > 0);
   const granularity = GRANULARITY_LABELS[data?.granularity] || data?.granularity || '';
   const compareLabel = COMPARE_LABELS[data?.compare] || data?.compare || '';
   const currentWindow = fmtRange(data?.current) || data?.current?.label || period;
@@ -136,9 +144,7 @@ export function buildComparisonReportBody(data, {
       Generated ${esc(dateStr)}. Doses are vaccination records; unique pets and owners are distinct IDs within the reporting window.
       Revenue is paid-ledger revenue. Percent changes are omitted when the baseline is zero or fewer than five records.
     </div>
-    ${((Number(data?.syntheticData?.current?.pets) || 0) + (Number(data?.syntheticData?.current?.vaccinations) || 0) +
-      (Number(data?.syntheticData?.current?.payments) || 0) + (Number(data?.syntheticData?.baseline?.pets) || 0) +
-      (Number(data?.syntheticData?.baseline?.vaccinations) || 0) + (Number(data?.syntheticData?.baseline?.payments) || 0)) > 0
+    ${hasSyntheticRecords
       ? '<div class="notes"><strong>Data notice:</strong> Synthetic Analytics Seed 2025 records are included in one or both comparison windows; do not interpret them as real clinic activity.</div>'
       : ''}
 

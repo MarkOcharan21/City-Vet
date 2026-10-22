@@ -20,14 +20,6 @@ import { printComplianceReport } from '../../utils/complianceReportPrint';
 import { printComparisonReport } from '../../utils/comparisonReportPrint';
 import './chartSetup';
 
-const PRESETS = [
-  { key: 'thisMonth', label: 'This Month' },
-  { key: 'lastMonth', label: 'Last Month' },
-  { key: 'thisYear', label: 'This Year' },
-  { key: 'lastYear', label: 'Last Year' },
-  { key: 'all', label: 'All Time' },
-];
-
 const GRACE_OPTIONS = [0, 15, 30, 60, 90];
 const reportChartOptions = {
   responsive: true,
@@ -43,27 +35,6 @@ function toISO(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
     date.getDate()
   ).padStart(2, '0')}`;
-}
-
-function presetRange(preset) {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  switch (preset) {
-    case 'thisMonth':
-      return { from: `${year}-${month}-01`, to: toISO(now) };
-    case 'lastMonth': {
-      const first = new Date(year, now.getMonth() - 1, 1);
-      const last = new Date(year, now.getMonth(), 0);
-      return { from: toISO(first), to: toISO(last) };
-    }
-    case 'thisYear':
-      return { from: `${year}-01-01`, to: toISO(now) };
-    case 'lastYear':
-      return { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` };
-    default:
-      return { from: '', to: '' };
-  }
 }
 
 function fmtNum(value) {
@@ -94,10 +65,7 @@ function fmtRange(range) {
   return `${start.toLocaleDateString('en-US', options)} – ${end.toLocaleDateString('en-US', options)}`;
 }
 
-export default function ReportsPanel() {
-  const [preset, setPreset] = useState('thisYear');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+export default function ReportsPanel({ from = '', to = '', periodLabel, includeSynthetic = false }) {
   const [grace, setGrace] = useState(30);
 
   const [selected, setSelected] = useState('summary');
@@ -106,12 +74,7 @@ export default function ReportsPanel() {
   const [printing, setPrinting] = useState(false);
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
-
-  useEffect(() => {
-    const range = presetRange('thisYear');
-    setFrom(range.from);
-    setTo(range.to);
-  }, []);
+  const [showAllPreviewRows, setShowAllPreviewRows] = useState(false);
 
   const REPORTS = useMemo(
     () => [
@@ -125,6 +88,7 @@ export default function ReportsPanel() {
           const params = {};
           if (from) params.from = from;
           if (to) params.to = to;
+          if (includeSynthetic) params.includeSynthetic = 'true';
           const res = await api.get('/analytics/dashboard', { params });
           return res.data;
         },
@@ -144,6 +108,7 @@ export default function ReportsPanel() {
           const params = { grace, limit: 1000, page: 1 };
           if (from) params.from = from;
           if (to) params.to = to;
+          if (includeSynthetic) params.includeSynthetic = 'true';
           const [res, serviceReturn] = await Promise.all([
             api.get('/analytics/vaccine-compliance', { params }),
             api.get('/analytics/return-rate', { params }),
@@ -168,6 +133,7 @@ export default function ReportsPanel() {
             params.from = from;
             params.to = to;
           }
+          if (includeSynthetic) params.includeSynthetic = 'true';
           const res = await api.get('/analytics/vaccination-trends', { params });
           return res.data;
         },
@@ -185,7 +151,12 @@ export default function ReportsPanel() {
         icon: ClipboardList,
         load: async () => {
           const res = await api.get('/analytics/vaccination-trends', {
-            params: { granularity: 'yearly', compare: 'previousYear', anchor: toISO(new Date()) },
+            params: {
+              granularity: 'yearly',
+              compare: 'previousYear',
+              anchor: toISO(new Date()),
+              ...(includeSynthetic ? { includeSynthetic: 'true' } : {}),
+            },
           });
           return res.data;
         },
@@ -196,7 +167,7 @@ export default function ReportsPanel() {
           }),
       },
     ],
-    [from, to, grace]
+    [from, to, grace, includeSynthetic]
   );
 
   const activeReport = REPORTS.find((report) => report.key === selected) || REPORTS[0];
@@ -320,64 +291,25 @@ export default function ReportsPanel() {
     }
   };
 
-  const applyPreset = (key) => {
-    setPreset(key);
-    const range = presetRange(key);
-    setFrom(range.from);
-    setTo(range.to);
-  };
-
-  const periodLabel = preview?.filterLabel ||
+  const reportPeriodLabel = preview?.filterLabel ||
     (preview?.current ? fmtRange(preview.current) || preview.current.label :
-      from || to ? `${from || '…'} → ${to || '…'}` : 'All Time');
+      periodLabel || (from || to ? `${from || '…'} → ${to || '…'}` : 'All Time'));
   const previewMonths = Array.from(new Set([
     ...(preview?.registrations || []).map((row) => row.month),
     ...(preview?.vaccinations || []).map((row) => row.month),
     ...(preview?.paymentRevenue || []).map((row) => row.month),
   ])).sort((a, b) => new Date(`${a} 1`).getTime() - new Date(`${b} 1`).getTime());
+  const visibleMonths = showAllPreviewRows ? previewMonths : previewMonths.slice(-12);
+  const distributionRows = Array.from({
+    length: Math.max(preview?.species?.length || 0, preview?.barangays?.length || 0),
+  }, (_, index) => index);
+  const visibleDistributionRows = showAllPreviewRows ? distributionRows : distributionRows.slice(0, 10);
+  const comparisonRows = activeReport.key === 'yearly' ? preview?.yearly || [] : preview?.series || [];
+  const visibleComparisonRows = showAllPreviewRows ? comparisonRows : comparisonRows.slice(-10);
 
   return (
     <div className="analytics-panel">
       <div className="analytics-filter-row" role="group" aria-label="Report period">
-        <div className="analytics-toggle-group">
-          <span className="analytics-toggle-label">Quick period</span>
-          {PRESETS.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              aria-pressed={preset === option.key}
-              onClick={() => applyPreset(option.key)}
-              className={`analytics-filter-btn${preset === option.key ? ' is-active' : ''}`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="analytics-inline-field">
-          <label htmlFor="report-from">From</label>
-          <input
-            id="report-from"
-            type="date"
-            value={from}
-            onChange={(e) => {
-              setFrom(e.target.value);
-              setPreset('');
-            }}
-          />
-        </div>
-        <div className="analytics-inline-field">
-          <label htmlFor="report-to">To</label>
-          <input
-            id="report-to"
-            type="date"
-            value={to}
-            onChange={(e) => {
-              setTo(e.target.value);
-              setPreset('');
-            }}
-          />
-        </div>
         <div className="analytics-inline-field">
           <label htmlFor="report-grace">Grace period</label>
           <select
@@ -402,7 +334,7 @@ export default function ReportsPanel() {
       </div>
 
       <p className="analytics-period-label">
-        Report period: <strong>{periodLabel}</strong>
+        Report period: <strong>{reportPeriodLabel}</strong>
       </p>
 
       <div className="report-catalogue">
@@ -429,20 +361,6 @@ export default function ReportsPanel() {
         })}
       </div>
 
-      <div className="analytics-print-row">
-        <button
-          type="button"
-          className="btn-primary"
-          onClick={handlePrint}
-          disabled={loading || printing || !preview}
-        >
-          <Printer size={16} />{' '}
-          {printing ? 'Preparing report…' : `Print / Save PDF`}
-        </button>
-        <button type="button" className="btn-secondary" onClick={() => handleExport('csv')} disabled={loading || !preview}>Export CSV</button>
-        <button type="button" className="btn-secondary" onClick={() => handleExport('xlsx')} disabled={loading || !preview}>Export Excel</button>
-      </div>
-
       {loading && <GlobalLoadingOverlay visible={true} message="Preparing report preview..." />}
 
       {!loading && error && (
@@ -456,16 +374,23 @@ export default function ReportsPanel() {
 
       {!loading && !error && preview && (
         <section className="analytics-chart-section">
-          <h3 className="analytics-chart-section-title">
-            Preview — {activeReport.title}
-          </h3>
-          <p className="analytics-chart-section-desc">
-            <CalendarRange size={14} /> {periodLabel}
-          </p>
-          {((preview.dataQuality?.syntheticSeedPets || 0) + (preview.dataQuality?.syntheticSeedVaccinations || 0) +
+          <div className="analytics-report-preview-header">
+            <div>
+              <h3 className="analytics-chart-section-title">Preview — {activeReport.title}</h3>
+              <p className="analytics-chart-section-desc"><CalendarRange size={14} /> {reportPeriodLabel}</p>
+            </div>
+            <div className="analytics-print-row">
+              <button type="button" className="btn-primary" onClick={handlePrint} disabled={loading || printing || !preview}>
+                <Printer size={16} /> {printing ? 'Preparing report…' : 'Print / Save PDF'}
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => handleExport('csv')} disabled={loading || !preview}>Export CSV</button>
+              <button type="button" className="btn-secondary" onClick={() => handleExport('xlsx')} disabled={loading || !preview}>Export Excel</button>
+            </div>
+          </div>
+          {includeSynthetic && (((preview.dataQuality?.syntheticSeedPets || 0) + (preview.dataQuality?.syntheticSeedVaccinations || 0) +
             (preview.dataQuality?.syntheticSeedPayments || 0) + (preview.syntheticData?.current?.pets || 0) +
             (preview.syntheticData?.current?.vaccinations || 0) + (preview.syntheticData?.current?.payments || 0) +
-            (preview.syntheticData?.vaccineEpisodes || 0)) > 0 && (
+            (preview.syntheticData?.vaccineEpisodes || 0)) > 0) && (
             <p className="analytics-warning">
               Synthetic 2025 seed data is included. Clearly exclude or disclose these records before using this as an official clinic report.
             </p>
@@ -495,17 +420,17 @@ export default function ReportsPanel() {
               <h3>Monthly registrations and vaccinations</h3>
               <div className="chart-card-canvas">
                 <Bar options={reportChartOptions} data={{
-                  labels: previewMonths,
+                  labels: visibleMonths,
                   datasets: [
-                    { label: 'Verified registrations', data: previewMonths.map((month) => preview.registrations?.find((row) => row.month === month)?.total || 0), backgroundColor: '#7a0c1e' },
-                    { label: 'Vaccine doses', data: previewMonths.map((month) => preview.vaccinations?.find((row) => row.month === month)?.total || 0), backgroundColor: '#1e7a46' },
+                    { label: 'Verified registrations', data: visibleMonths.map((month) => preview.registrations?.find((row) => row.month === month)?.total || 0), backgroundColor: '#7a0c1e' },
+                    { label: 'Vaccine doses', data: visibleMonths.map((month) => preview.vaccinations?.find((row) => row.month === month)?.total || 0), backgroundColor: '#1e7a46' },
                   ],
                 }} />
               </div>
               <div className="report-table-wrapper">
                 <table className="report-table">
                   <thead><tr><th>Month</th><th>Verified registrations</th><th>Vaccine doses</th><th>Paid revenue</th></tr></thead>
-                  <tbody>{previewMonths.map((month) => {
+                  <tbody>{visibleMonths.map((month) => {
                     const registrations = preview.registrations?.find((entry) => entry.month === month);
                     const vaccinations = preview.vaccinations?.find((entry) => entry.month === month);
                     const revenue = preview.paymentRevenue?.find((entry) => entry.month === month);
@@ -513,6 +438,7 @@ export default function ReportsPanel() {
                   })}</tbody>
                 </table>
               </div>
+              {previewMonths.length > 12 && <button type="button" className="btn-secondary" onClick={() => setShowAllPreviewRows((show) => !show)}>{showAllPreviewRows ? 'Show recent 12 months' : `Show all ${previewMonths.length} months`}</button>}
               <p>Pet registrations use registration date when available. Revenue includes paid ledger records only.</p>
             </div>
             <div className="report-table-container">
@@ -520,11 +446,12 @@ export default function ReportsPanel() {
               <div className="report-table-wrapper">
                 <table className="report-table">
                   <thead><tr><th>Species</th><th>Verified pets</th><th>Barangay</th><th>Verified pets</th></tr></thead>
-                  <tbody>{Array.from({ length: Math.max(preview.species?.length || 0, preview.barangays?.length || 0) }).map((_, index) => (
+                  <tbody>{visibleDistributionRows.map((index) => (
                     <tr key={index}><td>{preview.species?.[index]?.species || '—'}</td><td>{fmtNum(preview.species?.[index]?.total)}</td><td>{preview.barangays?.[index]?.barangay || '—'}</td><td>{fmtNum(preview.barangays?.[index]?.total)}</td></tr>
                   ))}</tbody>
                 </table>
               </div>
+              {distributionRows.length > 10 && <button type="button" className="btn-secondary" onClick={() => setShowAllPreviewRows((show) => !show)}>{showAllPreviewRows ? 'Show top 10' : `Show all ${distributionRows.length}`}</button>}
             </div>
             </>
           )}
@@ -640,7 +567,7 @@ export default function ReportsPanel() {
                     </thead>
                     <tbody>
                       {activeReport.key === 'yearly'
-                        ? (preview.yearly || []).map((row) => (
+                        ? visibleComparisonRows.map((row) => (
                             <tr key={row.year}>
                               <td>{row.year}</td>
                               <td>{fmtNum(row.doses)}</td>
@@ -651,7 +578,7 @@ export default function ReportsPanel() {
                               {activeReport.key !== 'yearly' && <><td>—</td><td>—</td></>}
                             </tr>
                           ))
-                        : (preview.series || []).map((row) => (
+                        : visibleComparisonRows.map((row) => (
                             <tr key={row.key}>
                               <td>{row.label}</td>
                               <td>{fmtNum(row.current?.doses ?? 0)}</td>
@@ -682,6 +609,7 @@ export default function ReportsPanel() {
                     </tbody>
                   </table>
                 </div>
+                {comparisonRows.length > 10 && <button type="button" className="btn-secondary" onClick={() => setShowAllPreviewRows((show) => !show)}>{showAllPreviewRows ? 'Show latest 10 rows' : `Show all ${comparisonRows.length} rows`}</button>}
               </div>
             </>
           )}

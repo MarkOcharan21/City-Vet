@@ -83,7 +83,7 @@ export function buildAdminReportBody(dashboard, {
       unique vaccinated pets are distinct pets with at least one vaccine record in the selected service-date range;
       revenue is paid ledger revenue only. The date range is ${esc(period)}.
     </div>
-    ${(Number(dashboard.dataQuality?.syntheticSeedPets) + Number(dashboard.dataQuality?.syntheticSeedVaccinations) + Number(dashboard.dataQuality?.syntheticSeedPayments)) > 0
+    ${dashboard.dataQuality?.syntheticIncluded && (Number(dashboard.dataQuality?.syntheticSeedPets) + Number(dashboard.dataQuality?.syntheticSeedVaccinations) + Number(dashboard.dataQuality?.syntheticSeedPayments)) > 0
       ? `<div class="notes"><strong>Data notice:</strong> this report includes synthetic 2025 seed data (${num(dashboard.dataQuality?.syntheticSeedPets)} pets, ${num(dashboard.dataQuality?.syntheticSeedVaccinations)} vaccine records, ${num(dashboard.dataQuality?.syntheticSeedPayments)} payments). Do not interpret these as real clinic activity.</div>`
       : ''}
     ${tableBlock(1, 'KEY FINDINGS', ['Finding'], [

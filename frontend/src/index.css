@@ -6256,7 +6256,106 @@ body:has(.clinic-access-page)::before {
 .followup-contact-editor {
   display: grid;
   gap: 0.75rem;
-  margin-top: 1rem;
+  width: min(680px, calc(100vw - 2rem));
+  max-height: min(90vh, 900px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 1.25rem;
+  background: var(--color-card, #fff);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(20, 12, 13, 0.28);
+}
+.followup-contact-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(22, 15, 16, 0.58);
+}
+.analytics-subtabs {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  padding-bottom: 0.5rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--color-border, #e8e2e0);
+}
+.analytics-synthetic-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: fit-content;
+  margin: 0.5rem 0 1rem;
+  padding: 0.6rem 0.8rem;
+  color: #704f00;
+  background: #fff7df;
+  border: 1px solid rgba(184, 134, 11, 0.3);
+  border-radius: 8px;
+  font-weight: 600;
+}
+.analytics-report-preview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.analytics-report-preview-header .analytics-chart-section-title,
+.analytics-report-preview-header .analytics-chart-section-desc {
+  margin-top: 0;
+}
+.analytics-subtab {
+  flex: 0 0 auto;
+  padding: 0.65rem 0.9rem;
+  color: var(--color-text-secondary, #65585a);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+.analytics-subtab.is-active {
+  color: var(--color-accent, #9b3e3e);
+  border-bottom-color: var(--color-accent, #9b3e3e);
+}
+.analytics-metric-chips,
+.analytics-chart-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+}
+.analytics-metric-chip,
+.analytics-chart-mode button {
+  padding: 0.5rem 0.8rem;
+  color: var(--color-text-secondary, #65585a);
+  background: var(--color-card, #fff);
+  border: 1px solid var(--color-border, #e8e2e0);
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+}
+.analytics-metric-chip.is-active,
+.analytics-chart-mode button.is-active {
+  color: #fff;
+  background: var(--color-accent, #9b3e3e);
+  border-color: var(--color-accent, #9b3e3e);
+}
+.analytics-contact-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--color-surface, #f8f5f4);
+  border-radius: 8px;
+}
+.analytics-contact-progress progress {
+  width: min(220px, 30vw);
+  margin-left: auto;
 }
 .followup-contact-editor fieldset {
   display: grid;
@@ -6275,6 +6374,17 @@ body:has(.clinic-access-page)::before {
   .analytics-insight-grid,
   .followup-contact-editor fieldset {
     grid-template-columns: 1fr;
+  }
+  .analytics-contact-progress {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .analytics-contact-progress progress {
+    width: 100%;
+    margin-left: 0;
+  }
+  .analytics-report-preview-header {
+    flex-direction: column;
   }
 }
 .chart-grid--single {

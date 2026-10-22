@@ -140,6 +140,10 @@ async function getDashboardAnalytics(req, res) {
         const from = String(req.query.from || "").trim() || null;
         const to = String(req.query.to || "").trim() || null;
         const hasRange = !!(from || to);
+        const includeSynthetic = req.query.includeSynthetic === "true";
+        const petSeedFilter = (alias) => includeSynthetic ? "" : `AND COALESCE(LEFT(${alias}.pet_code, 9), '') <> 'ANL-2025-'`;
+        const vaccinationSeedFilter = includeSynthetic ? "" : "AND COALESCE(LEFT(vr.comments, 20), '') <> 'ANALYTICS_SEED_2025:'";
+        const paymentSeedFilter = includeSynthetic ? "" : "AND COALESCE(LEFT(payment_reference, 13), '') <> 'ANL-2025-PAY-'";
         const condition = hasRange
             ? (col) => dateRangeCondition(col, from, to)
             : (col) => dateWhere(col, filter);
@@ -157,14 +161,18 @@ async function getDashboardAnalytics(req, res) {
             FROM pets
             WHERE ${petDateSimple}
             AND status = 'Verified'
+            ${petSeedFilter("pets")}
         `);
 
         const [[vaccinatedPets]] = await db.query(`
             SELECT COUNT(DISTINCT vr.pet_id) AS total
             FROM vaccination_records vr
             JOIN vaccines v ON v.id = vr.vaccine_id
+            JOIN pets p ON p.id = vr.pet_id
             WHERE ${condition("vr.date_administered")}
               AND v.vaccine_name <> 'REGISTRATION FEE'
+              ${petSeedFilter("p")}
+              ${vaccinationSeedFilter}
         `);
 
         const [[lostPets]] = await db.query(`
@@ -173,12 +181,15 @@ async function getDashboardAnalytics(req, res) {
             WHERE is_lost = 1
             AND status = 'Verified'
             AND ${lostDate}
+            ${petSeedFilter("pets")}
         `);
 
         const [[totalQr]] = await db.query(`
             SELECT COUNT(*) AS total
             FROM qr_codes
+            JOIN pets p ON p.id = qr_codes.pet_id
             WHERE ${qrDate}
+            ${petSeedFilter("p")}
         `);
 
         const [species] = await db.query(`
@@ -189,6 +200,7 @@ async function getDashboardAnalytics(req, res) {
             JOIN species s ON p.species_id = s.id
             WHERE ${petDate}
             AND p.status = 'Verified'
+            ${petSeedFilter("p")}
             GROUP BY s.species_name
             ORDER BY total DESC
         `);
@@ -202,6 +214,7 @@ async function getDashboardAnalytics(req, res) {
             WHERE s.species_name = 'Dog'
             AND ${petDate}
             AND p.status = 'Verified'
+            ${petSeedFilter("p")}
             GROUP BY p.sex
             ORDER BY p.sex
         `);
@@ -215,6 +228,7 @@ async function getDashboardAnalytics(req, res) {
             WHERE s.species_name = 'Cat'
             AND ${petDate}
             AND p.status = 'Verified'
+            ${petSeedFilter("p")}
             GROUP BY p.sex
             ORDER BY p.sex
         `);
@@ -227,6 +241,7 @@ async function getDashboardAnalytics(req, res) {
             FROM pets
             WHERE ${petDateSimple}
             AND status = 'Verified'
+            ${petSeedFilter("pets")}
             GROUP BY sex
             ORDER BY sex
         `);
@@ -240,6 +255,7 @@ async function getDashboardAnalytics(req, res) {
                 COUNT(*) AS total
             FROM payment_monitoring
             WHERE ${ledgerDate}
+            ${paymentSeedFilter}
             GROUP BY payment_status
         `);
 
@@ -250,8 +266,11 @@ async function getDashboardAnalytics(req, res) {
                 COUNT(*) AS total
             FROM vaccination_records vr
             JOIN vaccines v ON v.id = vr.vaccine_id
+            JOIN pets p ON p.id = vr.pet_id
             WHERE ${condition("vr.date_administered")}
               AND v.vaccine_name <> 'REGISTRATION FEE'
+              ${petSeedFilter("p")}
+              ${vaccinationSeedFilter}
             GROUP BY 1, 2
             ORDER BY 1, 2
         `);
@@ -261,7 +280,9 @@ async function getDashboardAnalytics(req, res) {
                 status,
                 COUNT(*) AS total
             FROM qr_codes
+            JOIN pets p ON p.id = qr_codes.pet_id
             WHERE ${qrDate}
+            ${petSeedFilter("p")}
             GROUP BY status
         `);
 
@@ -275,6 +296,7 @@ async function getDashboardAnalytics(req, res) {
             AND po.barangay != ''
             AND ${petDate}
             AND p.status = 'Verified'
+            ${petSeedFilter("p")}
             GROUP BY po.barangay
             ORDER BY total DESC
             LIMIT 10
@@ -286,6 +308,7 @@ async function getDashboardAnalytics(req, res) {
                 COUNT(*) AS total
             FROM pets
             WHERE ${petDateSimple}
+            ${petSeedFilter("pets")}
             GROUP BY status
             ORDER BY total DESC
         `);
@@ -297,6 +320,7 @@ async function getDashboardAnalytics(req, res) {
                 COUNT(*) AS total
             FROM pets
             WHERE ${petDateSimple}
+            ${petSeedFilter("pets")}
             GROUP BY 1, 2
             ORDER BY 1, 2
         `);
@@ -318,20 +342,27 @@ async function getDashboardAnalytics(req, res) {
                     SELECT best_pet_id AS pet_id, MAX(vr2.id) AS max_id
                     FROM vaccination_records vr2
                     JOIN vaccines v2 ON v2.id = vr2.vaccine_id
+                    JOIN pets p2 ON p2.id = vr2.pet_id
                     JOIN (
                         SELECT pet_id AS best_pet_id, MAX(date_administered) AS latest_date
                         FROM vaccination_records vr
                         JOIN vaccines v ON v.id = vr.vaccine_id
+                        JOIN pets p ON p.id = vr.pet_id
                         WHERE v.vaccine_name <> 'REGISTRATION FEE'
+                          ${vaccinationSeedFilter}
+                          ${petSeedFilter("p")}
                         GROUP BY pet_id
                     ) latest_date ON latest_date.best_pet_id = vr2.pet_id
                         AND vr2.date_administered = latest_date.latest_date
                     WHERE v2.vaccine_name <> 'REGISTRATION FEE'
+                      ${includeSynthetic ? "" : "AND COALESCE(LEFT(vr2.comments, 20), '') <> 'ANALYTICS_SEED_2025:'"}
+                      ${petSeedFilter("p2")}
                     GROUP BY best_pet_id
                 ) latest_id ON latest_id.pet_id = vr1.pet_id AND latest_id.max_id = vr1.id
             ) latest ON p.id = latest.pet_id
             WHERE ${petDate}
             AND p.status = 'Verified'
+            ${petSeedFilter("p")}
             GROUP BY
                 CASE
                     WHEN latest.next_due_date IS NULL THEN 'No Record'
@@ -350,6 +381,7 @@ async function getDashboardAnalytics(req, res) {
             FROM payment_monitoring
             WHERE payment_status = 'Paid'
             AND ${ledgerDate}
+            ${paymentSeedFilter}
             GROUP BY 1, 2
             ORDER BY 1, 2
         `);
@@ -361,17 +393,20 @@ async function getDashboardAnalytics(req, res) {
                  JOIN pets p ON p.pet_owner_id = po.id
                  WHERE ${condition("COALESCE(p.registration_date, DATE(p.created_at))")}
                    AND p.status = 'Verified'
+                   ${petSeedFilter("p")}
                    AND (po.barangay IS NULL OR TRIM(po.barangay) = '')) AS missing_barangay,
                 (SELECT COUNT(*)
                  FROM vaccination_records vr
                  JOIN vaccines v ON v.id = vr.vaccine_id
                  WHERE ${condition("vr.date_administered")}
                    AND v.vaccine_name <> 'REGISTRATION FEE'
+                   ${vaccinationSeedFilter}
                    AND vr.next_due_date IS NULL) AS missing_due_date,
                 (SELECT COUNT(*)
                  FROM pets p
                  WHERE ${condition("COALESCE(p.registration_date, DATE(p.created_at))")}
                    AND p.status = 'Verified'
+                   ${petSeedFilter("p")}
                    AND p.registration_date IS NOT NULL
                    AND DATE(p.created_at) > p.registration_date) AS late_encoded_registrations,
                 (SELECT COUNT(*)
@@ -379,6 +414,7 @@ async function getDashboardAnalytics(req, res) {
                  JOIN vaccines v ON v.id = vr.vaccine_id
                  WHERE ${condition("vr.date_administered")}
                    AND v.vaccine_name <> 'REGISTRATION FEE'
+                   ${vaccinationSeedFilter}
                    AND vr.date_administered IS NOT NULL
                    AND DATE(vr.created_at) > vr.date_administered) AS late_encoded_vaccinations,
                 (SELECT COUNT(*)
@@ -402,6 +438,7 @@ async function getDashboardAnalytics(req, res) {
                 created_at
             FROM pets
             WHERE ${petDateSimple}
+            ${petSeedFilter("pets")}
             ORDER BY created_at DESC
             LIMIT 5
         `);
@@ -417,6 +454,8 @@ async function getDashboardAnalytics(req, res) {
             JOIN vaccines v ON vr.vaccine_id = v.id
             WHERE ${condition("vr.date_administered")}
             AND v.vaccine_name <> 'REGISTRATION FEE'
+            ${petSeedFilter("p")}
+            ${vaccinationSeedFilter}
             ORDER BY vr.date_administered DESC
             LIMIT 5
         `);
@@ -430,6 +469,8 @@ async function getDashboardAnalytics(req, res) {
             FROM payment_monitoring py
             JOIN pets p ON py.pet_id = p.id
             WHERE ${ledgerDateAliased}
+            ${petSeedFilter("p")}
+            ${includeSynthetic ? "" : "AND COALESCE(LEFT(py.payment_reference, 13), '') <> 'ANL-2025-PAY-'"}
             ORDER BY py.created_at DESC
             LIMIT 5
         `);
@@ -442,6 +483,7 @@ async function getDashboardAnalytics(req, res) {
             FROM qr_codes qc
             JOIN pets p ON qc.pet_id = p.id
             WHERE ${qrDate}
+            ${petSeedFilter("p")}
             ORDER BY qc.issue_date DESC
             LIMIT 5
         `);
@@ -470,6 +512,7 @@ async function getDashboardAnalytics(req, res) {
                     windows: hasRange ? 12 : 1,
                     primaryMetric: 'registrations',
                     includeEpisodes: false,
+                    includeSynthetic,
                     ...(hasRange ? { current: { from, to } } : {}),
                     toDate: !hasRange,
                 });
@@ -529,6 +572,7 @@ async function getDashboardAnalytics(req, res) {
                 syntheticSeedPets: Number(dataQuality?.synthetic_seed_pets) || 0,
                 syntheticSeedVaccinations: Number(dataQuality?.synthetic_seed_vaccinations) || 0,
                 syntheticSeedPayments: Number(dataQuality?.synthetic_seed_payments) || 0,
+                syntheticIncluded: includeSynthetic,
             },
             recentPets,
             recentVaccinations,

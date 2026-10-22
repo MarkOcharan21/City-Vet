@@ -16,6 +16,11 @@ export function getPrintStyles() {
     @page {
       size: A4 portrait;
       margin: 16mm 14mm;
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        color: ${PRINT_THEME.textMuted};
+        font: 9pt 'Inter', Arial, sans-serif;
+      }
     }
 
     * { box-sizing: border-box; }

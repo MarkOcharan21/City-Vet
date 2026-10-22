@@ -1,0 +1,102 @@
+PALIWANAG SA MGA PAGBABAGO SA ANALYTICS & REPORTS
+================================================
+
+Layunin
+------
+Inayos at pinalawak ang Analytics & Reports page para mas malinaw at kapaki-
+pakinabang ang pagsusuri ng clinic data. Bukod sa charts at totals, isinama
+ang mas maingat na period comparisons, vaccine follow-up compliance,
+owner-retention analysis, at mas kumpletong report previews at exports.
+
+
+1. MAS MAKATARUNGANG PERIOD COMPARISON
+--------------------------------------
+- Ang comparison ay gumagamit ng kasalukuyang napiling period at katumbas na
+  baseline period.
+- Ang partial periods, gaya ng year-to-date, ay nililimitahan sa anchor date
+  para hindi maikumpara ang incomplete period sa buong period.
+- Hindi nagpapakita ng percentage change kapag mas mababa sa lima ang baseline.
+  Nananatili pa rin ang raw values at absolute change para makita ang aktuwal
+  na bilang.
+- Hindi ipinapakita ang comparison para sa All Time o incomplete custom date
+  range dahil walang patas at malinaw na baseline para rito.
+- Sinusunod na ng Overview comparison ang napiling Today, This Week,
+  This Month, This Year, o kumpletong custom date range.
+
+
+2. MAS MALINAW NA VACCINE COMPLIANCE
+------------------------------------
+- Ang follow-up ay sinusuri kada vaccination record na may due date.
+- Pending pa ang follow-up habang hindi pa lumilipas ang due date at napiling
+  grace period. Hindi ito agad binibilang na missed.
+- Hindi isinasama sa compliance denominator ang pets na naka-mark lost at mga
+  record na may dokumentadong dahilan na moved o lost/deceased.
+- Ipinapakita ang evaluated at pending counts, sample sizes, vaccine outcomes,
+  return-time distribution, at cohort retention.
+- Ang service-return percentages ay gumagamit lamang ng mga record na may
+  sapat nang observation period para sa 30, 60, o 90 araw. Hindi itinuturing
+  na hindi bumalik ang pet kung kulang pa ang panahon para masubaybayan ito.
+
+
+3. OWNER CONTACT AT MGA DAHILAN NG HINDI PAGBALIK
+------------------------------------------------
+- May contact workflow para makapagtala ang Admin at Staff ng contact status,
+  contact date, caller, at mga dahilan na mismong owner ang nagbigay.
+- Hindi hinuhulaan ng system ang dahilan ng hindi pagbabalik. Isinasama lamang
+  sa reason summaries ang mga sagot na aktuwal na naitala.
+- Naka-proteksiyon ang personal contact details: aggregate compliance data
+  lang ang nakikita ng Veterinarian; hindi kasama sa kanilang actionable list
+  ang mga pangalan o numero ng may-ari.
+- Ang factors at retention analysis ay nagpapakita ng kaugnayan sa data, hindi
+  patunay na ang isang factor ang sanhi ng hindi pagbabalik.
+
+
+4. REPORTS, PRINT AT EXPORTS
+----------------------------
+- Pinalawak ang report previews para magpakita ng angkop na summary, analysis,
+  charts, at tables bago mag-print o mag-export.
+- May browser Print / Save PDF, Excel workbook, at CSV export para sa reports;
+  may hiwalay ding CSV export ang follow-up worklist.
+- May babala kapag kasama sa totals ang synthetic Analytics Seed 2025 data,
+  para hindi mapagkamalang totoong clinic activity ang mga test record.
+
+
+5. PAGWAWASTO NG METRIC AT UI
+-----------------------------
+- Ang registration analytics ay gumagamit ng registration_date; fallback lang
+  ang encoded date kapag walang service/registration date.
+- Hindi binibilang na vaccine ang REGISTRATION FEE line item.
+- Inalis ang QR status chart na iisang category lang, inayos ang demographic
+  chart layout, at itinago ang zero labels kung hindi nakakatulong sa pagbasa.
+
+
+6. MGA FOLLOW-UP BUG FIXES
+--------------------------
+- Naayos ang page crash na nangyayari kapag null pa ang dashboard response:
+  ipinapakita na lang ang Key Findings at Data Quality matapos matagumpay na
+  ma-load ang dashboard sa Overview tab.
+- Naayos ang PostgreSQL error na "nondeterministic collations are not
+  supported for LIKE". Ang synthetic seed prefix checks sa dashboard at period
+  comparison queries ay gumagamit na ng LEFT(...)=... sa halip na LIKE.
+
+
+PAG-VALIDATE
+------------
+- Pumasa ang frontend production build matapos ayusin ang null dashboard crash.
+- Pumasa ang focused Analytics/comparison/PostgreSQL compatibility tests.
+- Sa buong backend test suite, 78 sa 80 tests ang pumasa. Dalawang test na
+  hiwalay sa Analytics changes ang pumalya: petRegistrationValidation.test.js
+  at security.test.js.
+- May CSS parser warning mula sa null bytes sa booklet.css at chunk-size
+  warning ang frontend build; hindi ito sanhi ng Analytics changes.
+
+
+MGA KAUGNAY NA COMMIT
+---------------------
+- 738c7cd Improve analytics retention reporting
+- 7e6d90b Fix analytics reports page crash
+- 2ffdecd Fix analytics seed matching on PostgreSQL
+
+Ang dokumentong ito ay paliwanag ng mga pangunahing pagbabago. Para sa
+detalyadong feature descriptions at API/metric reference, tingnan ang
+"Analytics & Reports Page Exp.txt".

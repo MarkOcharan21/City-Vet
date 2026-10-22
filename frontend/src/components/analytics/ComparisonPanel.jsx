@@ -103,10 +103,12 @@ const groupedBarOptions = {
   },
 };
 
-export default function ComparisonPanel() {
+export default function ComparisonPanel({ includeSynthetic = false }) {
   const [granularity, setGranularity] = useState('monthly');
   const [compare, setCompare] = useState('previous');
   const [metric, setMetric] = useState('doses');
+  const [chartStyle, setChartStyle] = useState('bars');
+  const [showEarlierYears, setShowEarlierYears] = useState(false);
   const [anchor, setAnchor] = useState(toISO(new Date()));
 
   const [data, setData] = useState(null);
@@ -120,7 +122,7 @@ export default function ComparisonPanel() {
     setError(null);
     try {
       const res = await api.get('/analytics/period-comparison', {
-        params: { granularity, compare, anchor, metric },
+        params: { granularity, compare, anchor, metric, ...(includeSynthetic ? { includeSynthetic: 'true' } : {}) },
       });
       if (!res.data?.success) throw new Error(res.data?.message || 'Failed to load comparison');
       setData(res.data);
@@ -133,7 +135,7 @@ export default function ComparisonPanel() {
     } finally {
       setLoading(false);
     }
-  }, [granularity, compare, anchor, metric]);
+  }, [granularity, compare, anchor, metric, includeSynthetic]);
 
   useEffect(() => {
     load();
@@ -143,6 +145,8 @@ export default function ComparisonPanel() {
   const current = totals.current || {};
   const baseline = totals.baseline || {};
   const series = data?.series || [];
+  const yearlyRows = data?.yearly || [];
+  const visibleYearlyRows = showEarlierYears ? yearlyRows : yearlyRows.slice(-5);
 
   const chartData = useMemo(() => {
     const key = data?.primaryMetric || metric;
@@ -161,7 +165,7 @@ export default function ComparisonPanel() {
     setPrinting(true);
     try {
       const res = await api.get('/analytics/period-comparison', {
-        params: { granularity, compare, anchor, metric },
+        params: { granularity, compare, anchor, metric, ...(includeSynthetic ? { includeSynthetic: 'true' } : {}) },
       });
       if (!res.data?.success) {
         toast.error(res.data?.message || 'Could not build the comparison report.');
@@ -264,7 +268,22 @@ export default function ComparisonPanel() {
         {data?.current?.partial && <strong> · Partial current period</strong>}
         {data?.baseline?.partial && <strong> · Partial baseline period</strong>}
       </p>
-      {(data?.syntheticData?.current?.pets || data?.syntheticData?.current?.vaccinations || data?.syntheticData?.current?.payments ||
+      <div className="analytics-metric-chips" role="group" aria-label="Quick comparison metrics">
+        {METRIC_OPTIONS.filter((option) =>
+          ['registrations', 'doses', 'pets', 'owners', 'revenue', 'consultations'].includes(option.key)
+        ).map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            className={`analytics-metric-chip${metric === option.key ? ' is-active' : ''}`}
+            aria-pressed={metric === option.key}
+            onClick={() => setMetric(option.key)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {data?.syntheticData?.included && (data?.syntheticData?.current?.pets || data?.syntheticData?.current?.vaccinations || data?.syntheticData?.current?.payments ||
         data?.syntheticData?.baseline?.pets || data?.syntheticData?.baseline?.vaccinations || data?.syntheticData?.baseline?.payments) > 0 && (
         <p className="analytics-warning">
           Synthetic 2025 seed data is included in this comparison. Current: {fmtNum(data.syntheticData.current.pets)} pets / {fmtNum(data.syntheticData.current.vaccinations)} vaccine records; baseline: {fmtNum(data.syntheticData.baseline.pets)} pets / {fmtNum(data.syntheticData.baseline.vaccinations)} vaccine records.
@@ -311,12 +330,16 @@ export default function ComparisonPanel() {
             </p>
           )}
 
+          <div className="analytics-chart-mode" role="group" aria-label="Comparison chart type">
+            <button type="button" aria-pressed={chartStyle === 'bars'} className={chartStyle === 'bars' ? 'is-active' : ''} onClick={() => setChartStyle('bars')}>Bars</button>
+            <button type="button" aria-pressed={chartStyle === 'line'} className={chartStyle === 'line' ? 'is-active' : ''} onClick={() => setChartStyle('line')}>Line</button>
+          </div>
           <div className="chart-grid chart-grid--1col">
             <div className="chart-card">
-              <h3>{activeMetric.label} — Current vs Baseline</h3>
+              <h3>{activeMetric.label} — Current vs Baseline ({chartStyle === 'bars' ? 'Bars' : 'Line'})</h3>
               <div className="chart-card-canvas">
                 {series.length ? (
-                  <Bar
+                  chartStyle === 'bars' ? <Bar
                     options={groupedBarOptions}
                     data={{
                       labels: chartData.labels,
@@ -335,50 +358,24 @@ export default function ComparisonPanel() {
                         },
                       ],
                     }}
-                  />
+                  /> : (
+                    <Line
+                      options={groupedBarOptions}
+                      data={{
+                        labels: chartData.labels,
+                        datasets: [
+                          { label: data.current?.label || 'Current', data: chartData.current, borderColor: '#c8102e', backgroundColor: 'rgba(200, 16, 46, 0.1)', fill: true, tension: 0, pointRadius: 3, spanGaps: true },
+                          { label: data.baseline?.label || 'Baseline', data: chartData.baseline, borderColor: '#c6a15b', backgroundColor: 'rgba(198, 161, 91, 0.1)', borderDash: [6, 4], tension: 0, pointRadius: 3, spanGaps: true },
+                        ],
+                      }}
+                    />
+                  )
                 ) : (
                   <p className="chart-card-empty">No comparison data available.</p>
                 )}
               </div>
             </div>
 
-            <div className="chart-card">
-              <h3>{activeMetric.label} Trend — Current vs Baseline</h3>
-              <div className="chart-card-canvas">
-                {series.length ? (
-                  <Line
-                    options={groupedBarOptions}
-                    data={{
-                      labels: chartData.labels,
-                      datasets: [
-                        {
-                          label: data.current?.label || 'Current',
-                          data: chartData.current,
-                          borderColor: '#c8102e',
-                          backgroundColor: 'rgba(200, 16, 46, 0.1)',
-                          fill: true,
-                          tension: 0,
-                          pointRadius: 3,
-                          spanGaps: true,
-                        },
-                        {
-                          label: data.baseline?.label || 'Baseline',
-                          data: chartData.baseline,
-                          borderColor: '#c6a15b',
-                          backgroundColor: 'rgba(198, 161, 91, 0.1)',
-                          borderDash: [6, 4],
-                          tension: 0,
-                          pointRadius: 3,
-                          spanGaps: true,
-                        },
-                      ],
-                    }}
-                  />
-                ) : (
-                  <p className="chart-card-empty">No comparison data available.</p>
-                )}
-              </div>
-            </div>
           </div>
 
           <section className="analytics-chart-section">
@@ -399,7 +396,7 @@ export default function ComparisonPanel() {
                   </thead>
                   <tbody>
                     {series.length ? (
-                      series.map((row) => (
+                      (granularity === 'yearly' ? (showEarlierYears ? series : series.slice(-5)) : series).map((row) => (
                         <tr key={row.key}>
                           <td>{row.label}</td>
                           <td>{row.baselineLabel}</td>
@@ -423,13 +420,18 @@ export default function ComparisonPanel() {
                   </tbody>
                 </table>
               </div>
+              {granularity === 'yearly' && series.length > 5 && (
+                <button type="button" className="btn-secondary" onClick={() => setShowEarlierYears((show) => !show)}>
+                  {showEarlierYears ? 'Show latest 5 years' : `Show earlier years (${series.length - 5})`}
+                </button>
+              )}
             </div>
           </section>
 
           <section className="analytics-chart-section">
             <h3 className="analytics-chart-section-title">Year-over-Year Summary</h3>
             <p className="analytics-chart-section-desc">
-              Every year on record. The small figure under each value is the change against the year before it.
+              The latest five years are shown first. The small figure under each value is the change against the year before it.
             </p>
             <div className="report-table-container">
               <h3>Yearly totals</h3>
@@ -450,8 +452,8 @@ export default function ComparisonPanel() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(data.yearly || []).length ? (
-                      (data.yearly || []).map((row) => {
+                    {yearlyRows.length ? (
+                      visibleYearlyRows.map((row) => {
                         const cell = (metric, money = false) => (
                           <>
                             <div>{fmtMetric(row[metric], money)}</div>
@@ -483,6 +485,11 @@ export default function ComparisonPanel() {
                   </tbody>
                 </table>
               </div>
+              {yearlyRows.length > 5 && (
+                <button type="button" className="btn-secondary" onClick={() => setShowEarlierYears((show) => !show)}>
+                  {showEarlierYears ? 'Show latest 5 years' : `Show earlier years (${yearlyRows.length - 5})`}
+                </button>
+              )}
             </div>
           </section>
         </>

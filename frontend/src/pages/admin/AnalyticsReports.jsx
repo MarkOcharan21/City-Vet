@@ -11,6 +11,10 @@ import AdminReportModal from "../../components/admin/AdminReportModal";
 import CompliancePanel from "../../components/analytics/CompliancePanel";
 import ComparisonPanel from "../../components/analytics/ComparisonPanel";
 import ReportsPanel from "../../components/analytics/ReportsPanel";
+import AnalyticsPeriodFilter, {
+  getAnalyticsPeriodLabel,
+  getAnalyticsPeriodRange,
+} from "../../components/analytics/AnalyticsPeriodFilter";
 import "../../components/analytics/chartSetup";
 
 const CHART_PALETTE = ["#c8102e", "#c6a15b", "#1e7a46", "#b8860b", "#7a0c1e"];
@@ -20,20 +24,6 @@ const TABS = [
   { key: "compliance", label: "Vaccine Compliance" },
   { key: "comparison", label: "Period Comparison" },
   { key: "reports", label: "Reports" },
-];
-
-const FILTER_OPTIONS = [
-  { key: "today", label: "Today" },
-  { key: "week", label: "This Week" },
-  { key: "month", label: "This Month" },
-  { key: "year", label: "This Year" },
-  { key: "all", label: "All Time" },
-];
-
-const COMPARE_OPTIONS = [
-  { key: "", label: "Off" },
-  { key: "previousYear", label: "Same Period Last Year" },
-  { key: "previous", label: "Previous Period" },
 ];
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -259,7 +249,7 @@ function getComparisonMetric(dashboard, key) {
 
 function buildGroupedYearDatasets(rows) {
   if (!Array.isArray(rows) || rows.length === 0) return { labels: MONTH_LABELS, datasets: [] };
-  const years = Array.from(new Set(rows.map((r) => r.year).filter((y) => y))).sort();
+  const years = Array.from(new Set(rows.map((r) => r.year).filter((y) => y))).sort().slice(-2);
   const palette = ["#c8102e", "#c6a15b", "#1e7a46", "#b8860b", "#7a0c1e"];
   const datasets = years.map((year, idx) => ({
     label: String(year),
@@ -283,23 +273,65 @@ function hasChartData(items, valueKey = "total") {
   return Array.isArray(items) && items.some((item) => Number(item[valueKey]) > 0);
 }
 
+function getComparisonLabel(comparison, key) {
+  const current = Number(comparison?.totals?.current?.[key]) || 0;
+  const baseline = Number(comparison?.totals?.baseline?.[key]) || 0;
+  const delta = current - baseline;
+  if (baseline < 5) {
+    if (baseline === 0 && current > 0) return `New · ${fmtDelta(delta)} vs baseline`;
+    return `${fmtDelta(delta)} vs baseline`;
+  }
+  const percent = (delta / baseline) * 100;
+  return `${fmtDelta(delta)} (${percent > 0 ? '+' : ''}${percent.toFixed(1)}%) vs baseline`;
+}
+
+function buildOverviewFindings(dashboard) {
+  const findings = [];
+  const verified = Number(dashboard.summary?.totalPets) || 0;
+  const vaccinated = Number(dashboard.summary?.vaccinatedPets) || 0;
+  if (verified > 0) {
+    findings.push(`${fmtNum(vaccinated)} of ${fmtNum(verified)} verified pets (${((vaccinated / verified) * 100).toFixed(1)}%) have a vaccine record in this period.`);
+  }
+  const topBarangay = dashboard.barangays?.[0];
+  if (topBarangay && verified > 0) {
+    findings.push(`${topBarangay.barangay} has the most registrations (${fmtNum(topBarangay.total)}, ${((Number(topBarangay.total || 0) / verified) * 100).toFixed(1)}% of the total).`);
+  }
+  const dueStatus = dashboard.vaccinationStatus || [];
+  const overdue = Number(dueStatus.find((row) => row.status === 'Overdue')?.total) || 0;
+  const noRecord = Number(dueStatus.find((row) => row.status === 'No Record')?.total) || 0;
+  const statusTotal = dueStatus.reduce((sum, row) => sum + (Number(row.total) || 0), 0);
+  if (statusTotal > 0 && (overdue > 0 || noRecord > 0)) {
+    findings.push(`${fmtNum(overdue)} pets (${((overdue / statusTotal) * 100).toFixed(1)}%) are overdue for a vaccine and ${fmtNum(noRecord)} have no vaccine record.`);
+  }
+  const doseChange = dashboard.comparison?.totals?.doses;
+  const doseBaseline = Number(dashboard.comparison?.totals?.baseline?.doses) || 0;
+  if (doseChange && doseBaseline >= 5 && doseChange.pctChange != null) {
+    const direction = Number(doseChange.delta) > 0 ? 'up' : Number(doseChange.delta) < 0 ? 'down' : 'unchanged';
+    findings.push(`Vaccinations are ${direction} ${Math.abs(Number(doseChange.pctChange)).toFixed(1)}% vs the baseline period.`);
+  }
+  return findings.slice(0, 3);
+}
+
 export default function AnalyticsReports() {
   const [tab, setTab] = useState("overview");
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filter, setFilter] = useState("all");
+  const [period, setPeriod] = useState("year");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [compare, setCompare] = useState("previousYear");
+  const [compare, setCompare] = useState("");
+  const [includeSynthetic, setIncludeSynthetic] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [printOpen, setPrintOpen] = useState(false);
 
-  const filterLabel =
-    dashboard?.filterLabel ||
-    FILTER_OPTIONS.find((option) => option.key === filter)?.label ||
-    "All Time";
-  const compareDisabled = (filter === 'all' && !from && !to) || Boolean(from) !== Boolean(to);
+  const periodRange = getAnalyticsPeriodRange(period, from, to);
+  const periodLabel = dashboard?.filterLabel || getAnalyticsPeriodLabel(period, from, to);
+  const compareDisabled = period === 'all' || (period === 'custom' && (!from || !to));
+
+  useEffect(() => {
+    if (compareDisabled && compare) setCompare('');
+  }, [compareDisabled, compare]);
 
   useEffect(() => {
     if (tab !== "overview") return;
@@ -308,18 +340,24 @@ export default function AnalyticsReports() {
     setError(null);
     setDashboard(null);
 
+    const filter = period === 'custom' ? 'all' : period;
     let url = `/analytics/dashboard?filter=${filter}`;
-    if (from) url += `&from=${from}`;
-    if (to) url += `&to=${to}`;
+    if (periodRange.from) url += `&from=${periodRange.from}`;
+    if (periodRange.to) url += `&to=${periodRange.to}`;
     if (compare && !compareDisabled) url += `&compare=${compare}`;
+    if (includeSynthetic) url += "&includeSynthetic=true";
 
     api
       .get(url)
       .then((res) => {
         setDashboard({
           ...res.data,
-          from: res.data.from || from,
-          to: res.data.to || to,
+          from: res.data.from || periodRange.from,
+          to: res.data.to || periodRange.to,
+          summary: res.data.summary ?? {},
+          dataQuality: res.data.dataQuality ?? {},
+          species: res.data.species ?? [],
+          vaccinations: res.data.vaccinations ?? [],
           barangays: res.data.barangays ?? [],
           registrationStatus: res.data.registrationStatus ?? [],
           registrations: res.data.registrations ?? [],
@@ -338,7 +376,7 @@ export default function AnalyticsReports() {
       .finally(() => {
         setLoading(false);
       });
-  }, [tab, filter, from, to, compare, compareDisabled, retryCount]);
+  }, [tab, period, periodRange.from, periodRange.to, compare, compareDisabled, retryCount, includeSynthetic]);
 
   return (
     <div className="page">
@@ -351,54 +389,6 @@ export default function AnalyticsReports() {
           </p>
         </div>
 
-        {tab === "overview" && !loading && !error && dashboard && (
-          <>
-            <section className="analytics-chart-section">
-              <h3 className="analytics-chart-section-title">Key Findings</h3>
-              <ul>
-                <li>
-                  {fmtNum(dashboard.summary?.totalPets)} verified pets were registered in the selected registration-date range.
-                </li>
-                <li>
-                  {fmtNum(dashboard.summary?.vaccinatedPets)} unique pets had at least one vaccine record in the selected service-date range.
-                </li>
-                {dashboard.barangays?.[0] && (
-                  <li>
-                    {dashboard.barangays[0].barangay} has the most verified pet records in this range ({fmtNum(dashboard.barangays[0].total)}).
-                  </li>
-                )}
-                {(dashboard.dataQuality?.lateEncodedRegistrations || dashboard.dataQuality?.lateEncodedVaccinations) > 0 && (
-                  <li>
-                    Some records were encoded after their service/registration date; interpret encode-date trends separately.
-                  </li>
-                )}
-              </ul>
-              <p>Recommendations: verify missing owner location and due-date data, and use recorded owner responses—not missing transactions—to explain missed follow-ups.</p>
-            </section>
-
-            <section className="analytics-chart-section">
-              <h3 className="analytics-chart-section-title">Data Quality</h3>
-              <div className="summary-row">
-                <SummaryCard label="Verified pets without barangay" value={fmtNum(dashboard.dataQuality?.missingBarangay)} />
-                <SummaryCard label="Vaccine records without due date" value={fmtNum(dashboard.dataQuality?.missingDueDate)} />
-                <SummaryCard label="Late-encoded registrations" value={fmtNum(dashboard.dataQuality?.lateEncodedRegistrations)} />
-                <SummaryCard label="Late-encoded vaccinations" value={fmtNum(dashboard.dataQuality?.lateEncodedVaccinations)} />
-              </div>
-              <p className="analytics-chart-section-desc">
-                Registrations use registration_date (fallback: encoded date); vaccination trends use date_administered. Late encoding is counted when the stored date is later than the service date.
-              </p>
-            </section>
-
-            <p className="analytics-chart-section-desc">
-              Definitions: verified pets = verified records registered in range; vaccinated pets = distinct pets with a vaccination in range; doses = vaccine records; revenue = paid ledger entries only.
-            </p>
-            {(dashboard.dataQuality?.syntheticSeedPets || dashboard.dataQuality?.syntheticSeedVaccinations || dashboard.dataQuality?.syntheticSeedPayments) > 0 && (
-              <p className="analytics-warning">
-                Synthetic 2025 seed data is included in this period: {fmtNum(dashboard.dataQuality.syntheticSeedPets)} pets, {fmtNum(dashboard.dataQuality.syntheticSeedVaccinations)} vaccine records, and {fmtNum(dashboard.dataQuality.syntheticSeedPayments)} payments. Do not treat these rows as real clinic activity.
-              </p>
-            )}
-          </>
-        )}
       </div>
 
       <div className="report-tabs" role="tablist" aria-label="Analytics sections">
@@ -415,75 +405,49 @@ export default function AnalyticsReports() {
           </button>
         ))}
       </div>
-      {compareDisabled && (
-        <p className="analytics-chart-section-desc">
-          Choose a date range or a finite time filter to compare periods; an all-time total cannot be compared to a single rolling window.
+      {tab !== 'comparison' && (
+        <AnalyticsPeriodFilter
+          period={period}
+          onPeriodChange={(next) => {
+            setPeriod(next);
+            if (next !== 'custom') {
+              setFrom('');
+              setTo('');
+            }
+          }}
+          from={from}
+          to={to}
+          onFromChange={setFrom}
+          onToChange={setTo}
+          compare={compare}
+          onCompareChange={setCompare}
+          compareDisabled={compareDisabled}
+          onPrint={tab === 'overview' ? () => setPrintOpen(true) : undefined}
+          onReports={tab === 'overview' ? () => setTab('reports') : undefined}
+        />
+      )}
+      <label className="analytics-synthetic-toggle">
+        <input
+          type="checkbox"
+          checked={includeSynthetic}
+          onChange={(event) => setIncludeSynthetic(event.target.checked)}
+        />
+        Include synthetic 2025 seed data
+      </label>
+      {tab === 'overview' && includeSynthetic && dashboard &&
+        ((Number(dashboard.dataQuality?.syntheticSeedPets) || 0) +
+          (Number(dashboard.dataQuality?.syntheticSeedVaccinations) || 0) +
+          (Number(dashboard.dataQuality?.syntheticSeedPayments) || 0)) > 0 && (
+        <p className="analytics-warning analytics-warning--slim">
+          Synthetic 2025 seed data is included in these totals. <a href="#analytics-data-notes">Data notes</a>
         </p>
       )}
 
       {tab === "overview" && (
         <>
           <p className="analytics-period-label">
-            Showing data for: <strong>{filterLabel}</strong>
+            Showing: <strong>{periodLabel}</strong>
           </p>
-
-          <div className="analytics-filter-row" role="group" aria-label="Analytics time period">
-            {FILTER_OPTIONS.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                aria-pressed={filter === option.key}
-                onClick={() => setFilter(option.key)}
-                className={`analytics-filter-btn${filter === option.key ? " is-active" : ""}`}
-              >
-                {option.label}
-              </button>
-            ))}
-            <div className="analytics-inline-field">
-              <label htmlFor="overview-from">Custom Range</label>
-              <input
-                id="overview-from"
-                type="date"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-                title="From date"
-              />
-              <span className="analytics-inline-separator">to</span>
-              <input
-                id="overview-to"
-                type="date"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                title="To date"
-              />
-              <button
-                type="button"
-                className="btn-secondary analytics-filter-action"
-                onClick={() => {
-                  setFrom("");
-                  setTo("");
-                }}
-                disabled={!from && !to}
-              >
-                Clear
-              </button>
-            </div>
-            <div className="analytics-toggle-group">
-              <span className="analytics-toggle-label">Compare to</span>
-              {COMPARE_OPTIONS.map((option) => (
-                <button
-                  key={option.key || "off"}
-                  type="button"
-                  aria-pressed={compare === option.key}
-                  onClick={() => setCompare(option.key)}
-                  disabled={compareDisabled}
-                  className={`analytics-filter-btn${compare === option.key ? " is-active" : ""}`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
 
           {loading && <GlobalLoadingOverlay visible={true} message="Loading analytics data..." />}
 
@@ -499,23 +463,60 @@ export default function AnalyticsReports() {
           {!loading && !error && dashboard && (
             <>
               <div className="summary-row">
-                <SummaryCard label="Verified Pet Registrations" value={dashboard?.summary?.totalPets ?? '-'} />
+                <SummaryCard
+                  label="Verified Pet Registrations"
+                  value={dashboard.summary?.totalPets ?? '-'}
+                  sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getComparisonLabel(dashboard.comparison, 'registrations') }] : undefined}
+                />
                 <SummaryCard
                   label="Vaccinated Pets"
                   value={dashboard?.summary?.vaccinatedPets ?? '-'}
                   color="#1e7a46"
+                  sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getComparisonLabel(dashboard.comparison, 'pets') }] : undefined}
                 />
                 <SummaryCard
                   label="Lost Pets"
                   value={dashboard?.summary?.lostPets ?? '-'}
                   color="#c8102e"
+                  sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getComparisonLabel(dashboard.comparison, 'lostPets') }] : undefined}
                 />
                 <SummaryCard
                   label="Generated QR"
                   value={dashboard?.summary?.totalQr ?? '-'}
                   color="#c6a15b"
+                  sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getComparisonLabel(dashboard.comparison, 'qrIssued') }] : undefined}
                 />
               </div>
+
+              <section className="analytics-overview-findings">
+                <div>
+                  <h2>Key Findings</h2>
+                  <ul>
+                    {buildOverviewFindings(dashboard).map((finding) => <li key={finding}>{finding}</li>)}
+                    {!buildOverviewFindings(dashboard).length && <li>Not enough verified records in this period to identify a meaningful trend.</li>}
+                  </ul>
+                  <button type="button" className="analytics-inline-link" onClick={() => setTab('compliance')}>
+                    Review overdue follow-ups in Vaccine Compliance →
+                  </button>
+                </div>
+                <div className="analytics-pending-stat">
+                  <strong>{fmtNum(dashboard.registrationStatus?.find((row) => /pending|registered/i.test(row.status))?.total || 0)}</strong>
+                  <span>Pending verification</span>
+                </div>
+              </section>
+
+              <details className="analytics-data-notes" id="analytics-data-notes">
+                <summary>Data notes</summary>
+                <div className="summary-row">
+                  <SummaryCard label="Verified pets without barangay" value={fmtNum(dashboard.dataQuality?.missingBarangay)} />
+                  <SummaryCard label="Vaccine records without due date" value={fmtNum(dashboard.dataQuality?.missingDueDate)} />
+                  <SummaryCard label="Late-encoded registrations" value={fmtNum(dashboard.dataQuality?.lateEncodedRegistrations)} />
+                  <SummaryCard label="Late-encoded vaccinations" value={fmtNum(dashboard.dataQuality?.lateEncodedVaccinations)} />
+                </div>
+                <p className="analytics-chart-section-desc">
+                  Verified pets are grouped by registration date; vaccination counts use service date and exclude registration fees. Revenue is paid ledger activity only.
+                </p>
+              </details>
 
               {compare && dashboard?.comparison && (
                 <section className="analytics-chart-section">
@@ -578,37 +579,18 @@ export default function AnalyticsReports() {
                     />
                   </ChartCard>
 
-                  <ChartCard title="Pet Sex Distribution" isEmpty={!hasChartData(dashboard?.petsBySex)}>
-                    <Doughnut
-                      options={circularChartOptions}
-                      data={{
-                        labels: dashboard?.petsBySex.map((x) => x.sex || "Unknown") || [],
-                        datasets: [
-                          {
-                            data: dashboard?.petsBySex.map((x) => x.total) || [],
-                            backgroundColor: ["#c8102e", "#c6a15b", "#7a0c1e"],
-                            borderWidth: 0,
-                          },
-                        ],
-                      }}
-                    />
-                  </ChartCard>
-
-                  <ChartCard title="Pet Verification Status" isEmpty={!hasChartData(dashboard?.registrationStatus)}>
-                    <Pie
-                      options={circularChartOptions}
-                      data={{
-                        labels: dashboard?.registrationStatus.map((x) => x.status) || [],
-                        datasets: [
-                          {
-                            data: dashboard?.registrationStatus.map((x) => x.total) || [],
-                            backgroundColor: CHART_PALETTE,
-                            borderWidth: 0,
-                          },
-                        ],
-                      }}
-                    />
-                  </ChartCard>
+                  <div className="chart-card">
+                    <h3>Pet Profile</h3>
+                    <div className="analytics-profile-stats">
+                      {(dashboard.petsBySex || []).map((row) => (
+                        <div className="analytics-profile-stat" key={row.sex || 'Unknown'}>
+                          <span>{row.sex || 'Unknown'}</span>
+                          <strong>{fmtNum(row.total)}</strong>
+                        </div>
+                      ))}
+                      {!dashboard.petsBySex?.length && <p className="chart-card-empty">No profile data available.</p>}
+                    </div>
+                  </div>
 
                   <ChartCard
                     title={distinctYears(dashboard?.registrations) >= 2 ? "Monthly Pet Registrations (Year-over-Year)" : "Monthly Pet Registrations"}
@@ -636,11 +618,7 @@ export default function AnalyticsReports() {
                 </div>
 
                 <div className="chart-grid chart-grid--1col">
-                  <ChartCard
-                    title="Top Barangays Registration Cabuyao"
-                    tall
-                    isEmpty={!hasChartData(dashboard?.barangays)}
-                  >
+                  <ChartCard title="Top 10 Barangays" tall isEmpty={!hasChartData(dashboard?.barangays)}>
                     <Bar
                       options={horizontalBarChartOptions}
                       data={{
@@ -692,48 +670,33 @@ export default function AnalyticsReports() {
                   </ChartCard>
 
                   <ChartCard
-                    title={distinctYears(dashboard?.paymentRevenue) >= 2 ? "Revenue Collected Per Month (Year-over-Year)" : "Revenue Collected Per Month"}
-                    isEmpty={!hasChartData(dashboard?.paymentRevenue)}
+                    title="Latest Vaccine Due Status (verified pets)"
+                    isEmpty={!hasChartData(dashboard?.vaccinationStatus)}
                   >
-                    <Bar
-                      options={distinctYears(dashboard?.paymentRevenue) >= 2 ? groupedYearRevenueChartOptions : revenueBarChartOptions}
-                      data={
-                        distinctYears(dashboard?.paymentRevenue) >= 2
-                          ? buildGroupedYearDatasets(dashboard?.paymentRevenue)
-                          : {
-                              labels: dashboard?.paymentRevenue.map((x) => x.month) || [],
-                              datasets: [
-                                {
-                                  label: "Revenue",
-                                  data: dashboard?.paymentRevenue.map((x) => x.total) || [],
-                                  backgroundColor: "#c6a15b",
-                                  borderRadius: 6,
-                                },
-                              ],
-                            }
-                      }
-                    />
-                  </ChartCard>
-
-                  <ChartCard title="Latest Vaccine Due Status (verified pets)" isEmpty={!hasChartData(dashboard?.vaccinationStatus)}>
-                    <Doughnut
-                      options={circularChartOptions}
-                      data={{
-                        labels: dashboard?.vaccinationStatus.map((x) => x.status) || [],
-                        datasets: [
-                          {
-                            data: dashboard?.vaccinationStatus.map((x) => x.total) || [],
-                            backgroundColor: dashboard?.vaccinationStatus.map((x) => ({
-                              "Up to Date": "#1e7a46",
-                              "Due Soon": "#b8860b",
-                              Overdue: "#c8102e",
-                              "No Record": "#6b6062",
-                            }[x.status] || "#6b6062")) || [],
+                    {(dashboard.vaccinationStatus || []).filter((row) => Number(row.total) > 0).length >= 3 ? (
+                      <Doughnut
+                        options={circularChartOptions}
+                        data={{
+                          labels: dashboard.vaccinationStatus.map((x) => x.status),
+                          datasets: [{
+                            data: dashboard.vaccinationStatus.map((x) => x.total),
+                            backgroundColor: dashboard.vaccinationStatus.map((x) => ({
+                              "Up to Date": "#1e7a46", "Due Soon": "#b8860b",
+                              Overdue: "#c8102e", "No Record": "#6b6062",
+                            }[x.status] || "#6b6062")),
                             borderWidth: 0,
-                          },
-                        ],
-                      }}
-                    />
+                          }],
+                        }}
+                      />
+                    ) : (
+                      <div className="analytics-status-summary">
+                        {(dashboard.vaccinationStatus || []).map((row) => (
+                          <div key={row.status} className={`analytics-status-summary-row analytics-status-summary-row--${row.status.toLowerCase().replace(/\s+/g, '-')}`}>
+                            <span>{row.status}</span><strong>{fmtNum(row.total)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </ChartCard>
                 </div>
               </section>
@@ -751,11 +714,18 @@ export default function AnalyticsReports() {
         </>
       )}
 
-      {tab === "compliance" && <CompliancePanel />}
-      {tab === "comparison" && <ComparisonPanel />}
-      {tab === "reports" && <ReportsPanel />}
+      {tab === "compliance" && <CompliancePanel from={periodRange.from} to={periodRange.to} includeSynthetic={includeSynthetic} />}
+      {tab === "comparison" && <ComparisonPanel includeSynthetic={includeSynthetic} />}
+      {tab === "reports" && (
+        <ReportsPanel
+          from={periodRange.from}
+          to={periodRange.to}
+          periodLabel={periodLabel}
+          includeSynthetic={includeSynthetic}
+        />
+      )}
 
-      <AdminReportModal open={printOpen} onClose={() => setPrintOpen(false)} />
+      <AdminReportModal open={printOpen} onClose={() => setPrintOpen(false)} includeSynthetic={includeSynthetic} />
     </div>
   );
 }

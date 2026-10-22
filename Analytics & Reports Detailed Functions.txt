@@ -1,0 +1,721 @@
+ANALYTICS & REPORTS PAGE
+DETAILED FUNCTIONS AT GABAY
+============================================================
+Project: City Vet Cabuyao - Pet Registration System
+Module: Admin > Analytics & Reports
+Last documented: October 22, 2026
+
+LAYUNIN NG DOCUMENTO
+------------------------------------------------------------
+Inilalarawan ng file na ito ang mga aktuwal na tab, controls, reports,
+visualizations, metrics, data rules, access controls, at API na ginagamit ng
+Analytics & Reports page. Gabay ito sa pag-unawa at pagpapaliwanag ng page;
+hindi ito kapalit ng clinical advice o opisyal na financial/accounting report.
+
+
+1. BUOD NG PAGE
+------------------------------------------------------------
+May apat na pangunahing tab:
+
+  1. Overview
+     Snapshot at charts ng clinic activity sa napiling period.
+
+  2. Vaccine Compliance
+     Pagsusuri kung nasusunod ang vaccine follow-up schedule, kasama ang
+     service return, retention, at worklist ng follow-ups na kailangang
+     tawagan.
+
+  3. Period Comparison
+     Pagkumpara ng current at baseline periods sa napiling granularity at
+     metric.
+
+  4. Reports
+     Pagbuo ng report preview, print / save as PDF, CSV, at Excel export.
+
+May sariling loading overlay, error message, at Retry action ang mga data panel.
+Kung walang data para sa chart o table, nagpapakita ang UI ng empty-state
+message sa halip na magpakita ng maling value.
+
+
+2. ACCESS AT ROLE LIMITS
+------------------------------------------------------------
+Ang page at analytics read endpoints ay para lamang sa authenticated na:
+
+  - Admin
+  - Staff
+  - Veterinarian
+
+May mga sensitibong contact field sa actionable follow-up list. Admin at Staff
+lamang ang maaaring tumingin sa mga pangalan/numero ng may-ari at magtala ng
+contact outcome. Veterinarian ay maaaring gumamit ng aggregate compliance
+analysis ngunit hindi binibigyan ng personal contact details o actionable
+owner list.
+
+Ang pag-save ng follow-up contact ay Admin/Staff-only. Naka-save ito sa hiwalay
+na vaccine_followup_contacts table; hindi nito binabago ang vaccination record.
+
+
+3. OVERVIEW TAB
+------------------------------------------------------------
+3.1 Period filters
+------------------
+Mga preset:
+
+  - Today
+  - This Week
+  - This Month
+  - This Year
+  - All Time
+
+May custom From at To date fields at Clear button. Kung may custom date range,
+iyon ang ginagamit na date scope. Kailangang parehong may laman ang From at To
+para magamit sa comparison.
+
+Sa page label makikita kung anong period ang ipinapakita. Pagbabago ng preset
+o custom dates ang nagre-reload ng dashboard.
+
+3.2 Compare to
+--------------
+Mga pagpipilian:
+
+  - Off
+  - Same Period Last Year
+  - Previous Period
+
+Naka-disable ang comparison para sa All Time kapag walang custom range at
+kapag isa lang sa From/To ang naibigay. Ipinapakita ng comparison table ang:
+
+  - kasalukuyang window at baseline window
+  - current value at baseline value
+  - absolute change
+  - percent change kung maaasahan ang baseline
+
+Kapag walang baseline o mas mababa sa lima ang baseline, hindi ipinapakita ang
+percent na maaaring magpalabis ng pagbabago; nananatili ang aktuwal na bilang
+at absolute difference.
+
+Ang comparison window ay ini-align sa napiling preset. Ang partial current
+window ay tinatapos sa anchor date para hindi ikumpara ang hindi pa kumpletong
+period sa buong period. Hindi ginagamit ang All Time bilang kapalit ng rolling
+comparison.
+
+3.3 Summary cards
+-----------------
+  - Verified Pet Registrations
+    Bilang ng verified pets na ang registration date ay nasa saklaw.
+  - Vaccinated Pets
+    Bilang ng natatanging pet na may vaccine record sa saklaw.
+  - Lost Pets
+    Bilang ng verified pets na naka-mark lost sa saklaw.
+  - Generated QR
+    Bilang ng QR codes na na-issue sa saklaw.
+
+3.4 Key Findings at Data Quality
+--------------------------------
+Pagkatapos lamang matagumpay na ma-load ang Overview dashboard, lumalabas
+ang Key Findings, recommendations, definitions, at Data Quality cards.
+
+Key Findings ay nagbubuod ng registration at vaccination counts, top barangay
+kung mayroon, at paalala kung may late-encoded records.
+
+Data Quality cards:
+
+  - Verified pets without barangay
+  - Vaccine records without due date
+  - Late-encoded registrations
+  - Late-encoded vaccinations
+
+Late-encoded record: ang naitalang database/creation date ay mas huli sa
+registration o service date. Ipinapakita ito bilang babala sa interpretasyon,
+hindi bilang patunay ng maling data.
+
+Hindi kasama sa analytics totals bilang default ang synthetic Analytics Seed
+2025 records. May opt-in na "Include synthetic 2025 seed data" control para
+isama ang mga ito sa Overview, Compliance, Comparison, Reports, at print/export.
+Kapag naka-on, may malinaw na warning upang hindi mapagkamalan ang seed data
+bilang aktuwal na clinic performance.
+
+3.5 Overview charts
+-------------------
+  - Verified Pets by Species
+    Bilang ng verified pets kada species.
+  - Pet Profile
+    Male/Female/Unknown bilang bilang compact statistics, hindi pie chart.
+  - Monthly Pet Registrations
+    Verified registrations kada buwan.
+  - Top Barangays Registration Cabuyao
+    Mga barangay na may pinakamaraming verified pet records.
+  - Vaccinations Per Month
+    Vaccine doses kada buwan.
+  - Latest Vaccine Due Status (verified pets)
+    Latest vaccine status: Up to Date, Due Soon, Overdue, o No Record.
+
+Kapag may datos mula sa dalawa o higit pang taon, monthly registrations at
+vaccinations ay ipinapakita bilang grouped year-over-year bars para sa
+pinakahuling dalawang taon. Pare-pareho ang Jan-Dec axis.
+Revenue at QR issuance ay hindi hiwalay na Overview charts sa kasalukuyang
+layout.
+
+3.6 Overview actions
+--------------------
+  - Print Report: binubuksan ang Analytics Summary print flow.
+  - Open Reports: dadalhin sa Reports tab.
+  - Retry: muling hinihingi ang dashboard kapag pumalya ang request.
+
+
+4. VACCINE COMPLIANCE TAB
+------------------------------------------------------------
+4.1 Filters at actions
+---------------------
+  - Shared period / From / To: global na date scope na ginagamit din ng
+    Overview at Reports.
+  - Grace period: 0, 15, 30, 60, o 90 araw. Default: 30 araw.
+  - Barangay: lahat o isang barangay.
+  - Reset: nililinis ang search, vaccine/contact filters, at barangay;
+    ibinabalik ang grace sa 30 araw, sort sa pinakamatagal overdue, at page 1.
+    Gamitin ang shared period controls sa itaas para baguhin o i-clear ang dates.
+  - Refresh: inuulit ang compliance at return-rate requests.
+  - Print Report: binubuo at binubuksan ang compliance print report.
+
+4.2 Summary cards
+-----------------
+  - Vaccine Episodes: kabuuang episode, evaluated, pending sa grace period.
+  - On-Time Compliance: on-time rate, on-time count, late count, lapsed count.
+  - No Same-Vaccine Return: walang nakitang kasunod na parehong vaccine return;
+    ipinapakita rin ang bahagi ng evaluated episodes at pets affected.
+  - Any-Service Return Rate: proporsyon ng vaccine episodes na sinundan ng
+    anumang clinic service sa observation window; ipinapakita ang denominator
+    at distinct pets sa saklaw.
+
+4.3 Outcome definitions
+-----------------------
+Ang episode ay isang vaccination record na may due date. Ang pagsusuri ay
+ginagawa batay sa due date at napiling grace period:
+
+  - Pending
+    Hindi pa dapat ituring na missed; hindi pa lumilipas ang due date at grace.
+  - On Time
+    Bumalik para sa parehong vaccine sa loob ng due date/grace criteria.
+  - Late
+    Bumalik para sa parehong vaccine, ngunit lampas sa grace period.
+  - Lapsed
+    Lumampas ang due date at grace period at walang naitalang same-vaccine
+    return.
+  - No Return
+    Walang kasunod na same-vaccine service na nakita sa data.
+
+Hindi isinasama sa denominator ang lost pets at ang episodes na may naitalang
+reason na moved o lost/deceased. Ang Pending ay hiwalay at hindi kasama sa
+evaluated compliance percentage.
+
+4.4 Follow-Up Outcomes chart
+----------------------------
+Doughnut chart ng evaluated On Time, Late, Lapsed, at No Return counts.
+Hindi inilalagay ang Pending sa evaluated outcomes. Kapag wala pang episode na
+dapat suriin, nagpapakita ng empty state.
+
+4.5 Monthly On-Time Rate chart
+------------------------------
+Line chart ng on-time percentage kada buwan. Tooltip ay naglalaman ng:
+
+  - evaluated sample size (n)
+  - bilang na pending
+  - small-sample note kapag n < 30
+
+Ang mga point na may small sample ay may ibang marker upang hindi mapagkamalan
+ang mababang-sample rate bilang matibay na trend.
+
+4.6 Days to Same-Vaccine Return
+-------------------------------
+Histogram/bar chart ng bilang ng returned vaccine episodes ayon sa pagitan ng
+mga araw bago bumalik sa parehong vaccine. Kung walang return interval,
+nagpapakita ng empty state.
+
+4.7 Any-Service Cohort Retention
+--------------------------------
+Pinapangkat ang vaccine episodes ayon sa buwan ng unang vaccine service at
+ipinapakita ang:
+
+  - return rate sa loob ng 30 araw at eligible sample n
+  - return rate sa loob ng 60 araw at eligible sample n
+  - return rate sa loob ng 90 araw at eligible sample n
+
+Isinasama lamang sa denominator ang episodes na may kumpletong observation
+window para sa naturang 30/60/90 araw. Hindi binibilang na failure ang
+follow-up na hindi pa maaaring masubaybayan nang sapat.
+
+4.8 Follow-Up Funnel
+--------------------
+Ipinapakita ang episode counts sa apat na sunod-sunod na yugto:
+
+  1. Vaccine episodes na may due date
+  2. Episodes na lumampas na sa grace at evaluated
+  3. Episodes na bumalik para sa parehong vaccine
+  4. Episodes na bumalik on time
+
+Bawat stage ay may count at proportional bar. Episode count ito, hindi unique
+pet count.
+
+4.9 Key Findings, recommendations at factors
+---------------------------------------------
+Key Findings at Recommended Actions ay binubuo mula sa available na analysis
+data. Kabilang dito ang pending/evaluated context at mga lugar kung saan
+maaaring siyasatin pa ang follow-up process.
+
+Factors Affecting Return table:
+
+  - Factor
+  - Group
+  - Evaluated sample size
+  - Returned count
+  - Return rate
+  - On-time rate
+
+Maaaring magpakita ng factors gaya ng barangay, species, vaccine, pet age,
+owner history, weekday, at vaccination month kung available ang data. Ang mga
+ito ay association lamang; hindi nito pinatutunayan ang sanhi ng pagbabalik o
+hindi pagbabalik. Minamarkahan bilang small sample ang grupong may n < 30.
+
+4.10 Retention Reasons Recorded
+-------------------------------
+Ipinapakita lamang ang reasons na aktuwal na pinili at na-save sa contact
+workflow. Hindi nag-iinfer ng dahilan ang system dahil lamang walang kasunod
+na transaction.
+
+Mga maaaring itala:
+
+  - Forgot / unaware of schedule
+  - Did not receive reminder
+  - Distance / transportation
+  - Clinic hours did not work
+  - Cost
+  - Went to another clinic / private vet
+  - Moved / changed barangay
+  - Pet lost or deceased
+  - Pet illness / fear
+  - Other
+
+Maaaring pumili ng higit sa isang dahilan. Ang Other ay may hiwalay na
+description field. Kapag naitala ang moved o lost/deceased, hindi isinasama
+ang kaugnay na episode sa compliance denominator.
+
+4.11 Outcome by Vaccine at Barangay
+-----------------------------------
+  - Outcome by Vaccine: paghahambing ng On Time at No Return counts kada
+    vaccine.
+  - Compliance by Barangay: episode, outcome counts, at on-time rate kada
+    barangay.
+
+Ginagamit ang mga table/charts na ito upang matukoy kung aling segment ang
+nararapat suriin; hindi sapat ang mga ito para magtakda ng causality.
+
+4.12 Service Return Analysis
+----------------------------
+Sinusukat kung bumalik ang pet para sa anumang service, hindi lamang parehong
+vaccine. Ang service episode ay isang pet + service type + service date.
+
+Summary:
+
+  - Returned within 30 days: rate at bilang ng eligible/mature episodes.
+  - Service episodes with no later service: episodes na walang susunod na
+    naitalang clinic service.
+  - Follow-up adherence: scheduled, pending, honoured, missed, at adherence
+    rate para sa mga naka-schedule na follow-up.
+  - Owner retention: owners served, owners na bumalik sa loob ng 90 araw, at
+    retention rate.
+
+By-service table:
+
+  - Service type
+  - Pet/service/date episodes
+  - Underlying records
+  - Distinct pets
+  - Returned / eligible at rate para sa 30, 60, 90 araw
+  - No Later Service Recorded
+  - Average days to return
+
+Para sa bawat window, tanging episodes na kumpleto na ang observation period
+ang kasama sa eligible denominator.
+
+4.13 Owners To Contact worklist
+-------------------------------
+Ang actionable follow-up list ay para sa overdue o hindi pa natutupad na
+follow-up. May total actionable count at default sort na pinakamatagal overdue.
+
+Mga control:
+
+  - Search sa pet o owner
+  - Filter by vaccine
+  - Filter by contact status
+  - Sort: Most overdue first, Due date, Owner name, o Pet name
+  - Previous / Next pagination
+  - Export page CSV
+
+  Ang Compliance view ay may apat na sub-tab:
+
+    - Summary: pangunahing vaccine outcomes, trend, cohort, funnel, vaccine at
+      barangay analysis.
+    - Service Return: anumang kasunod na clinic service at owner retention.
+    - Why Owners Don't Return: association factors, mga aktuwal na naitalang
+      owner reasons, at suggested actions batay sa pinakakaraniwang reasons.
+    - Follow-Up List: sensitibong actionable list para lamang sa Admin/Staff.
+
+  Sa Follow-Up List, ipinapakita ang contacted progress at 10 rows kada page.
+  Ang Record contact action ay nagbubukas ng dialog para sa contact status,
+  contact date at owner-stated reasons. Ang contact progress at reason counts ay
+  aggregate; hindi ipinapakita ang personal contact details sa Veterinarian.
+
+Mga column:
+
+  - Pet code at pet name
+  - Owner name
+  - Contact number
+  - Barangay
+  - Vaccine
+  - Due date
+  - Days overdue
+  - Last recorded service
+  - Follow-up outcome
+  - Contact status / action
+
+Ang CSV action ay nag-e-export ng kasalukuyang page ng list at ng mga contact
+details/reasons na nakikita ng user. Kapag walang row sa page, ipinapaalam ng UI
+na walang mae-export.
+
+4.14 Record contact workflow
+----------------------------
+Sa bawat row, maaaring piliin ang Record contact. Maaaring itala ang contact
+status, contact date, at owner-stated reasons; kung Other ang pinili, maaaring
+maglagay ng paliwanag. May Save contact at Cancel action.
+
+Ang Save contact ay tumatawag sa role-protected API. Kapag matagumpay, may
+success notification at muling nilo-load ang list; kapag pumalya, may error
+notification.
+
+
+5. PERIOD COMPARISON TAB
+------------------------------------------------------------
+5.1 Controls
+------------
+  - Granularity: Daily, Weekly, Monthly, Yearly
+  - Compare against: Previous Period o Same Period Last Year
+  - Metric selector
+  - Anchor date
+  - Refresh
+  - Print Comparison
+
+Metric choices:
+
+  - Registrations
+  - Vaccinations (doses)
+  - Unique Pets
+  - Unique Owners
+  - Consultations
+  - QR Issued
+  - Revenue
+  - Lost Pets
+  - New Owners
+
+Kapag pinili ang Yearly, awtomatikong itinatakda sa Same Period Last Year ang
+comparison mode. Ang anchor date ay hindi maaaring lumampas sa kasalukuyang
+petsa.
+
+5.2 Window rules
+----------------
+Default window counts:
+
+  - Daily: 14 buckets
+  - Weekly: 8 buckets
+  - Monthly: 6 buckets
+  - Yearly: 4 buckets
+
+Ang current at baseline dates ay ipinapakita sa itaas ng report. May label kung
+partial ang current o baseline. Para sa previous-period, ginagamit ang katapat
+na window bago ang current. Para sa same-period-last-year, inililipat ang
+magkatulad na date range sa nakaraang taon. Ang explicit custom range ay
+ginagamit ayon sa eksaktong dates nito.
+
+5.3 Summary cards at charts
+---------------------------
+Cards:
+
+  - napiling metric — Current
+  - napiling metric — Baseline
+  - Absolute Change
+  - Percent Change (o New / N/A kapag hindi angkop)
+
+Charts:
+
+  - Isang chart lang ang ipinapakita sa bawat pagkakataon: Bars o Line.
+  - Quick metric chips para sa registrations, vaccinations, pets, owners,
+    revenue, at consultations.
+
+Legend label at kulay ay naghihiwalay sa current at baseline. Ang revenue ay
+ipinapakita bilang Philippine peso. Kapag registrations ang metric, may paliwanag
+na registration_date ang pangunahing petsa at encoded date ang fallback.
+
+5.4 Period-by-period table
+--------------------------
+Ipinapakita kada bucket ang:
+
+  - Current period label
+  - Katapat na baseline period label
+  - Current metric
+  - Baseline metric
+  - Absolute change
+  - Percent change
+
+Kung walang katumbas na baseline bucket, ipinapakita ang No data.
+
+5.5 Year-over-Year Summary table
+-------------------------------
+Ipinapakita muna ang pinakahuling limang taon. Maaaring piliin ang "Show
+earlier years" para ipakita ang mas lumang records. Kasama sa bawat taon:
+
+  - Registrations
+  - Vaccinations
+  - Unique Pets
+  - Unique Owners
+  - Consultations
+  - QR Issued
+  - Revenue
+  - Lost Pets
+  - New Owners
+
+Sa ilalim ng yearly value makikita ang absolute delta laban sa nakaraang taon.
+Ang unang taon ay walang prior-year delta. Ang pagbawas sa Lost Pets ay
+positibong pagbabago sa interpretasyon.
+
+
+6. REPORTS TAB
+------------------------------------------------------------
+6.1 Period controls
+-------------------
+Ginagamit ng Reports ang shared date controls ng Analytics page: Today,
+This Week, This Month, This Year (default), All Time, o Custom From/To.
+May grace-period selector na 0, 15, 30, 60, o 90 araw para sa compliance
+report. Binabago ng pagpalit ng report type o relevant filter ang preview.
+
+6.2 Report types
+----------------
+  A. Analytics Summary Report
+     Summary cards, monthly registration/vaccine/revenue table at chart,
+     species distribution, barangay distribution, at synthetic-data warning
+     kung naaangkop.
+
+  B. Vaccine Follow-Up Compliance Report
+     Episode summary, outcome breakdown, monthly on-time trend, findings,
+     recommendations, owner-stated retention reasons, any-service retention,
+     at service-return summary. Sa contact list export/print, nakadepende ang
+     personal contact information sa role ng gumagamit.
+
+  C. Period Comparison Report
+     Current laban sa baseline period, period series chart at table. Ang
+     kasalukuyang Reports preview ay gumagamit ng monthly comparison data.
+
+  D. Yearly Vaccination Report
+     Yearly totals ng doses, pets, owners, on-time rate, at revenue.
+
+Kapag pinili ang report type o binago ang relevant filters, awtomatikong
+nirerequest muli ang preview. May Retry kapag pumalya ang request.
+
+6.3 Print at export actions
+--------------------------
+  - Print / Save PDF: bumubuo ng formatted print report sa browser; maaaring
+    piliin ng user ang Save as PDF sa print dialog.
+  - Export Excel: gumagawa ng workbook na may magkakahiwalay na sheets ayon sa
+    report data.
+  - Export CSV: gumagawa ng CSV download mula sa mga section ng napiling report.
+
+Kasama sa Excel sheets ang mga applicable na summary, monthly series,
+outcomes, retention reasons, factors, service return, contact rows, current vs
+baseline, o yearly data. Ang exact sheets ay nag-iiba ayon sa report type.
+Kung walang data sa sheet, may note na walang data sa section.
+
+6.4 Print content
+-----------------
+Print templates ay gumagamit ng clinic report styling, report title, period,
+at generated timestamp. Kasama sa mga report ang charts/tables at definitions
+kung naaangkop:
+
+  - Analytics summary: summary at distribution/monthly sections.
+  - Compliance: outcome, trend, funnel, factors, cohort/service retention,
+    owner-stated reasons, at actionable follow-ups depende sa role.
+  - Comparison/yearly: period or yearly totals, aligned current/baseline, at
+    yearly comparisons.
+
+
+7. METRIC DEFINITIONS
+------------------------------------------------------------
+Registrations
+  Verified pets grouped by registration_date. Kung walang registration_date,
+  fallback ang DATE(created_at).
+
+Vaccinations / Doses
+  Bilang ng valid vaccination_records sa date_administered. Hindi kabilang ang
+  REGISTRATION FEE line item.
+
+Vaccinated Pets
+  Distinct pet IDs na may vaccination record sa period.
+
+Unique Pets / Unique Owners
+  Distinct IDs sa buong window o bucket. Hindi basta pinagdaragdag ang daily
+  distinct counts dahil magdodoble ang parehong pet/owner sa magkakaibang araw.
+
+Consultations
+  Consultation records na ang consultation date ay nasa window.
+
+QR Issued
+  QR code records grouped ayon sa issue date.
+
+Revenue
+  total_amount mula lamang sa Paid payment_monitoring records. Ginagamit ang
+  consultation_date at DATE(created_at) bilang fallback. Hindi kasama ang
+  Unpaid at Cancelled.
+
+Lost Pets
+  Verified pets na may is_lost flag; lost_date ang pangunahing date at
+  created_at ang fallback.
+
+New Owners
+  Pet owner records grouped ayon sa created_at.
+
+On-Time Rate
+  On Time / evaluated episodes. Hindi kasama ang Pending sa denominator.
+
+Service Return Rate
+  Mga service episodes na may susunod na service sa loob ng 30/60/90 araw,
+  hinati sa episodes na may kumpletong observation window para sa naturang
+  threshold.
+
+Owner Retention
+  Owners na bumalik sa loob ng 90 araw mula sa unang qualifying service, gamit
+  lamang ang may kumpletong 90-araw na observation period.
+
+
+8. DATA QUALITY AT PAG-INTERPRETA
+------------------------------------------------------------
+- Ang Synthetic Analytics Seed 2025 data ay test/demo activity at kasama sa
+  aggregate totals. Tingnan ang warning sa dashboard, comparison, o report.
+- Ang registration date at encoded/created date ay magkaibang konsepto.
+  Maaaring magkaiba ang counts batay sa petsang ginagamit ng isang report.
+- Ang missing due date ay nangangahulugang hindi matitiyak ang follow-up
+  schedule para sa naturang vaccine record.
+- Ang Pending ay hindi missed follow-up; hindi pa kumpleto ang due/grace window.
+- Ang "No Return" ay nangangahulugang walang qualifying return na nakita sa
+  records hanggang ngayon; hindi ito awtomatikong nagpapaliwanag kung bakit.
+- Ang factors table ay association analysis. Hindi ito causal/statistical proof.
+- Walang SMS reminder delivery log na ginagamit; kaya hindi tinutukoy ng system
+  kung talagang naipadala o natanggap ang reminder maliban kung owner mismo ang
+  nagsabi nito sa contact workflow.
+- Revenue ay paid ledger totals, hindi gross billed amount o unpaid balance.
+
+
+9. ERROR, LOADING, AT EMPTY STATES
+------------------------------------------------------------
+- Habang kumukuha ng data, ipinapakita ang loading overlay.
+- Kapag pumalya ang request, ipinapakita ang error at Retry button; hindi
+  dapat ituring na 0 ang failed request.
+- Kapag walang result sa isang chart/table, ipinapakita ang malinaw na empty
+  state.
+- Ang contact save action ay nagbibigay ng success o error notification.
+- Sa overview, ipinapakita lamang ang Key Findings at Data Quality pagkatapos
+  matagumpay na dumating ang dashboard response, upang maiwasan ang pag-access
+  sa null summary habang naglo-load.
+
+
+10. ANALYTICS API REFERENCE
+------------------------------------------------------------
+Lahat ng endpoint ay gumagamit ng /api/analytics prefix at nangangailangan ng
+authentication/role authorization.
+
+GET /api/analytics/dashboard
+  Pangunahing Overview dashboard.
+  Query parameters: filter=today|week|month|year|all, from, to, compare=
+  previous|previousYear.
+  Returns: summary, species/demographics, registrations, vaccinations,
+  paymentRevenue, barangays, registrationStatus, vaccinationStatus,
+  dataQuality, at optional comparison data.
+
+GET /api/analytics/vaccine-compliance
+  Query parameters: from, to, grace, barangay, search, contactStatus, vaccine,
+  sortBy, page, limit.
+  Returns: summary, outcomes/buckets, byBarangay, byVaccine, trend, funnel,
+  cohortRetention, returnDayDistribution, factors, analysis/findings,
+  retentionReasons, actionable worklist at pagination/filter metadata.
+
+PUT /api/analytics/vaccine-follow-up/:episodeId/contact
+  Admin/Staff only.
+  Nagse-save ng contactStatus, contact date, owner-stated reasons, optional
+  Other description, at authenticated caller identity.
+
+GET /api/analytics/return-rate
+  Query parameters: from, to.
+  Returns: 30/60/90-day eligible/returned counts, byService breakdown,
+  scheduled follow-up adherence, at 90-day owner-retention summary.
+
+GET /api/analytics/period-comparison
+  Query parameters: granularity=daily|weekly|monthly|yearly, compare=previous|
+  previousYear, anchor, windows, metric, from, to, baselineFrom, baselineTo.
+  Returns: current/baseline windows, totals/deltas, aligned series, yearly
+  totals, year-by-month matrix, and synthetic seed counts.
+
+GET /api/analytics/vaccination-trends
+  Legacy-compatible comparison endpoint na ginagamit pa ng ilang report
+  consumers. Gumagamit ng shared comparison engine.
+
+GET /api/analytics/summary
+GET /api/analytics/charts
+  Supporting/legacy analytics endpoints.
+
+Iba pang analytics router endpoints para sa traceability, barangay heatmap, at
+geocoding ay naroon para sa kaugnay na page functions, ngunit hindi pangunahing
+control ng apat na Analytics & Reports tabs.
+
+
+11. PANGUNAHING IMPLEMENTATION FILES
+------------------------------------------------------------
+Frontend:
+  frontend/src/pages/admin/AnalyticsReports.jsx
+    Overview, tab switcher, date filters, summary cards, charts, key findings.
+  frontend/src/components/analytics/CompliancePanel.jsx
+    Compliance, service retention, worklist, contact workflow at CSV page export.
+  frontend/src/components/analytics/ComparisonPanel.jsx
+    Granularity, metric controls, comparisons, charts, tables at print.
+  frontend/src/components/analytics/ReportsPanel.jsx
+    Report catalogue, period filters, preview, print/PDF, CSV at Excel.
+  frontend/src/utils/*ReportPrint.js
+    Print layouts ng dashboard, compliance at comparison reports.
+
+Backend:
+  backend/src/routes/analyticsRoutes.js
+    Analytics endpoints at role guards.
+  backend/src/controllers/analyticsController.js
+    Dashboard metrics, summary, charts at data-quality counts.
+  backend/src/controllers/comparisonController.js
+    Shared period comparison data loader.
+  backend/src/controllers/complianceController.js
+    Vaccine outcome, contact, return rate at retention analysis.
+  backend/src/utils/analyticsComparison.js
+    Metric catalogue, aggregation at delta calculations.
+  backend/src/utils/reportPeriods.js
+    Date windows, bucket logic at percentage threshold.
+  backend/src/utils/vaccineEpisodes.js
+    Shared vaccine episode definitions and filtering.
+  backend/src/db/ensureFollowupContacts.js
+    Idempotent setup ng contact-record table para sa supported database dialects.
+
+
+12. MGA KAUGNAY NA IMPLEMENTATION CHANGES
+------------------------------------------------------------
+  - 738c7cd Improve analytics retention reporting
+  - 7e6d90b Fix analytics reports page crash
+  - 2ffdecd Fix analytics seed matching on PostgreSQL
+
+Para sa maikling Tagalog summary, tingnan ang:
+"Analytics & Reports Changes Explanation.txt"
+
+Para sa mas lumang feature/reference notes, tingnan ang:
+"Analytics & Reports Page Exp.txt"
+
+END OF DOCUMENT

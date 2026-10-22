@@ -148,7 +148,9 @@ function windowsForCustomRange(from, to, compare) {
  * distinct rows carry the ids used to count unique pets/owners, and episode
  * rows carry the vaccine follow-up outcomes.
  */
-async function loadDayRows({ includeEpisodes = true } = {}) {
+async function loadDayRows({ includeEpisodes = true, includeSynthetic = false } = {}) {
+  const petFilter = (alias) => includeSynthetic ? "" : `AND COALESCE(LEFT(${alias}.pet_code, 9), '') <> 'ANL-2025-'`;
+  const vaccinationFilter = includeSynthetic ? "" : "AND COALESCE(LEFT(vr.comments, 20), '') <> 'ANALYTICS_SEED_2025:'";
   const queries = [
     // 1) Doses administered, one row per day.
     db.query(`
@@ -157,8 +159,11 @@ async function loadDayRows({ includeEpisodes = true } = {}) {
         COUNT(*) AS doses
       FROM vaccination_records vr
       JOIN vaccines v ON v.id = vr.vaccine_id
+      JOIN pets p ON p.id = vr.pet_id
       WHERE vr.date_administered IS NOT NULL
         AND ${VACCINE_FILTER}
+        ${petFilter("p")}
+        ${vaccinationFilter}
       GROUP BY vr.date_administered
     `),
 
@@ -173,6 +178,8 @@ async function loadDayRows({ includeEpisodes = true } = {}) {
       JOIN vaccines v ON v.id = vr.vaccine_id
       WHERE vr.date_administered IS NOT NULL
         AND ${VACCINE_FILTER}
+        ${petFilter("p")}
+        ${vaccinationFilter}
     `),
 
     // 3) Pet registrations use the service/registration date when available;
@@ -182,6 +189,7 @@ async function loadDayRows({ includeEpisodes = true } = {}) {
         ${dateFormat("COALESCE(p.registration_date, DATE(p.created_at))", "date")} AS service_on,
         COUNT(*) AS registrations
       FROM pets p
+      WHERE 1 = 1 ${petFilter("p")}
       GROUP BY COALESCE(p.registration_date, DATE(p.created_at))
     `),
 
@@ -191,7 +199,9 @@ async function loadDayRows({ includeEpisodes = true } = {}) {
         ${dateFormat("cr.consultation_date", "date")} AS service_on,
         COUNT(*) AS consultations
       FROM consultation_records cr
+      JOIN pets p ON p.id = cr.pet_id
       WHERE cr.consultation_date IS NOT NULL
+        ${petFilter("p")}
       GROUP BY cr.consultation_date
     `),
 
@@ -201,6 +211,8 @@ async function loadDayRows({ includeEpisodes = true } = {}) {
         ${dateFormat("qc.issue_date", "date")} AS service_on,
         COUNT(*) AS qrIssued
       FROM qr_codes qc
+      JOIN pets p ON p.id = qc.pet_id
+      WHERE 1 = 1 ${petFilter("p")}
       GROUP BY ${dateFormat("qc.issue_date", "date")}
     `),
 
@@ -211,6 +223,7 @@ async function loadDayRows({ includeEpisodes = true } = {}) {
         COALESCE(SUM(pm.total_amount), 0) AS revenue
       FROM payment_monitoring pm
       WHERE pm.payment_status = 'Paid'
+        ${includeSynthetic ? "" : "AND COALESCE(LEFT(pm.payment_reference, 13), '') <> 'ANL-2025-PAY-'"}
       GROUP BY COALESCE(pm.consultation_date, DATE(pm.created_at))
     `),
 
@@ -222,6 +235,7 @@ async function loadDayRows({ includeEpisodes = true } = {}) {
       FROM pets p
       WHERE p.is_lost = 1
         AND p.status = 'Verified'
+        ${petFilter("p")}
       GROUP BY COALESCE(p.lost_date, p.created_at)
     `),
 
@@ -231,6 +245,7 @@ async function loadDayRows({ includeEpisodes = true } = {}) {
         ${dateFormat("po.created_at", "date")} AS service_on,
         COUNT(*) AS newOwners
       FROM pet_owners po
+      WHERE ${includeSynthetic ? "1 = 1" : "COALESCE(LEFT(po.full_name, 20), '') <> 'Analytics Seed Owner'"}
       GROUP BY ${dateFormat("po.created_at", "date")}
     `),
   ];
@@ -238,7 +253,7 @@ async function loadDayRows({ includeEpisodes = true } = {}) {
   const episodeIndex = queries.length;
   if (includeEpisodes) {
     // 9) Vaccine follow-up outcomes, one row per episode.
-    queries.push(db.query(buildEpisodeQuery({ graceDays: DEFAULT_GRACE_DAYS })));
+    queries.push(db.query(buildEpisodeQuery({ graceDays: DEFAULT_GRACE_DAYS, includeSynthetic })));
   }
 
   const results = await Promise.all(queries);
@@ -336,6 +351,7 @@ async function buildPeriodComparison(options = {}) {
   const count = windowSize(granularity, options.windows);
   const primaryMetric = resolvePrimary(options.primaryMetric);
   const includeEpisodes = options.includeEpisodes !== false;
+  const includeSynthetic = options.includeSynthetic === true;
   // "Same period last year" is only a fair comparison when both sides cover
   // the same dates, so the window is clamped to the anchor (year-to-date).
   // "Previous period" keeps whole calendar buckets, which is its definition.
@@ -355,7 +371,7 @@ async function buildPeriodComparison(options = {}) {
         : previousWindowRange(currentRange, granularity, count);
   }
 
-  const rows = await loadDayRows({ includeEpisodes });
+  const rows = await loadDayRows({ includeEpisodes, includeSynthetic });
 
   const comparison = buildComparison({
     rows,
@@ -374,6 +390,7 @@ async function buildPeriodComparison(options = {}) {
   ]);
   comparison.syntheticData = {
     label: "Synthetic Analytics Seed 2025",
+    included: includeSynthetic,
     current: currentSynthetic,
     baseline: baselineSynthetic,
   };
@@ -400,6 +417,7 @@ async function getPeriodComparison(req, res) {
           ? { from: req.query.baselineFrom, to: req.query.baselineTo }
           : undefined,
       toDate: !(req.query.from && req.query.to),
+      includeSynthetic: req.query.includeSynthetic === "true",
     });
 
     res.json({ success: true, ...payload });
@@ -424,6 +442,7 @@ async function buildDashboardComparison({
   anchor,
   primaryMetric = "registrations",
   includeEpisodes = false,
+  includeSynthetic = false,
 } = {}) {
   const g = normalizeGranularity(granularity);
   const mode = normalizeCompare(compare);
@@ -437,7 +456,7 @@ async function buildDashboardComparison({
       ? previousYearRange(currentRange)
       : previousWindowRange(currentRange, g, count);
 
-  const rows = await loadDayRows({ includeEpisodes });
+  const rows = await loadDayRows({ includeEpisodes, includeSynthetic });
 
   return buildComparison({
     rows,

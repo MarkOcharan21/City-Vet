@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import SummaryCard from '../SummaryCard';
 import GlobalLoadingOverlay from '../GlobalLoadingOverlay';
+import { useAuth } from '../../context/AuthContext';
 import { printComplianceReport } from '../../utils/complianceReportPrint';
 import './chartSetup';
 
@@ -17,57 +18,6 @@ const OUTCOME_COLORS = {
   Lapsed: '#c8102e',
   'No Return': '#6b6062',
   Pending: '#c6a15b',
-};
-
-const saveContact = async () => {
-  if (!editingContact || !contactDraft) return;
-  try {
-    await api.put(`/analytics/vaccine-follow-up/${editingContact.id}/contact`, contactDraft);
-    toast.success('Follow-up contact saved.');
-    setEditingContact(null);
-    setContactDraft(null);
-    load();
-  } catch (err) {
-    toast.error(err.response?.data?.message || 'Could not save follow-up contact.');
-  }
-};
-
-const exportActionableCsv = () => {
-  const rows = compliance?.actionable || [];
-  if (!rows.length) {
-    toast.error('There are no follow-up rows on this page to export.');
-    return;
-  }
-  const columns = [
-    ['Pet code', 'pet_code'],
-    ['Pet', 'pet_name'],
-    ['Owner', 'owner_name'],
-    ['Contact', 'contact_number'],
-    ['Barangay', 'barangay'],
-    ['Vaccine', 'vaccine_name'],
-    ['Due date', 'due_on'],
-    ['Days overdue', 'days_overdue'],
-    ['Last service', 'last_service_on'],
-    ['Outcome', 'outcome'],
-    ['Contact status', 'contact_status'],
-    ['Reasons', 'reasons'],
-    ['Other reason', 'other_reason'],
-    ['Contact date', 'contacted_at'],
-  ];
-  const csv = [
-    columns.map(([label]) => csvCell(label)).join(','),
-    ...rows.map((row) =>
-      columns
-        .map(([, key]) => csvCell(key === 'reasons' ? (row[key] || []).join('; ') : row[key]))
-        .join(',')
-    ),
-  ].join('\r\n');
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'vaccine-follow-ups-page.csv';
-  link.click();
-  URL.revokeObjectURL(url);
 };
 
 const FUNNEL_STEPS = [
@@ -89,6 +39,19 @@ const RETENTION_REASONS = [
   ['pet_health_fear', 'Pet illness / fear'],
   ['other', 'Other'],
 ];
+
+const REASON_ACTIONS = {
+  forgot_schedule: 'Offer a reminder card or QR-linked vaccine schedule.',
+  no_reminder: 'Review SMS/call reminder delivery before the due date.',
+  distance_transport: 'Consider barangay outreach or a mobile vaccination day.',
+  clinic_hours: 'Review clinic hours and appointment availability.',
+  cost: 'Consider a low-cost or free vaccination outreach program.',
+  other_clinic: 'Verify the owner’s record and update it when confirmed.',
+  moved: 'Update the owner address; this episode is excluded from compliance.',
+  lost_deceased: 'Update the pet status; this episode is excluded from compliance.',
+  pet_health_fear: 'Offer veterinary guidance and discuss a suitable visit time.',
+  other: 'Review the owner-provided note and follow up as appropriate.',
+};
 
 function localISODate() {
   const date = new Date();
@@ -175,9 +138,10 @@ const lineOptions = {
   },
 };
 
-export default function CompliancePanel() {
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+export default function CompliancePanel({ from = '', to = '', includeSynthetic = false }) {
+  const { user } = useAuth();
+  const canManageContacts = ['Admin', 'Staff'].includes(user?.role);
+  const [subTab, setSubTab] = useState('summary');
   const [grace, setGrace] = useState(30);
   const [barangay, setBarangay] = useState('');
 
@@ -192,6 +156,11 @@ export default function CompliancePanel() {
   const [vaccineFilter, setVaccineFilter] = useState('');
   const [sortBy, setSortBy] = useState('daysOverdue');
   const [page, setPage] = useState(1);
+  const [selectedFactor, setSelectedFactor] = useState('Barangay');
+  const [showAllCohorts, setShowAllCohorts] = useState(false);
+  const [showAllServices, setShowAllServices] = useState(false);
+  const [showAllFactors, setShowAllFactors] = useState(false);
+  const [showAllBarangays, setShowAllBarangays] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
   const [contactDraft, setContactDraft] = useState(null);
 
@@ -199,7 +168,8 @@ export default function CompliancePanel() {
     setLoading(true);
     setError(null);
 
-    const params = { grace, limit: 25, page, sortBy };
+    const params = { grace, limit: 10, page, sortBy };
+    if (includeSynthetic) params.includeSynthetic = 'true';
     if (from) params.from = from;
     if (to) params.to = to;
     if (barangay.trim()) params.barangay = barangay.trim();
@@ -228,11 +198,59 @@ export default function CompliancePanel() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, grace, barangay, search, contactStatusFilter, vaccineFilter, sortBy, page]);
+  }, [from, to, grace, barangay, search, contactStatusFilter, vaccineFilter, sortBy, page, includeSynthetic]);
+
+  const saveContact = async () => {
+    if (!editingContact || !contactDraft) return;
+    try {
+      await api.put(`/analytics/vaccine-follow-up/${editingContact.id}/contact`, contactDraft);
+      toast.success('Follow-up contact saved.');
+      setEditingContact(null);
+      setContactDraft(null);
+      await load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not save follow-up contact.');
+    }
+  };
+
+  const exportActionableCsv = () => {
+    const rows = compliance?.actionable || [];
+    if (!rows.length) {
+      toast.error('There are no follow-up rows on this page to export.');
+      return;
+    }
+    const columns = [
+      ['Pet code', 'pet_code'], ['Pet', 'pet_name'], ['Owner', 'owner_name'],
+      ['Contact', 'contact_number'], ['Barangay', 'barangay'], ['Vaccine', 'vaccine_name'],
+      ['Due date', 'due_on'], ['Days overdue', 'days_overdue'], ['Last service', 'last_service_on'],
+      ['Outcome', 'outcome'], ['Contact status', 'contact_status'], ['Reasons', 'reasons'],
+      ['Other reason', 'other_reason'], ['Contact date', 'contacted_at'],
+    ];
+    const csv = [
+      columns.map(([label]) => csvCell(label)).join(','),
+      ...rows.map((row) => columns
+        .map(([, key]) => csvCell(key === 'reasons' ? (row[key] || []).join('; ') : row[key]))
+        .join(',')),
+    ].join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'vaccine-follow-ups-page.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     load();
   }, [load, retryCount]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [from, to]);
+
+  useEffect(() => {
+    if (!canManageContacts && subTab === 'followups') setSubTab('summary');
+  }, [canManageContacts, subTab]);
 
   const summary = compliance?.summary || {};
   const buckets = useMemo(
@@ -249,6 +267,7 @@ export default function CompliancePanel() {
     setPrinting(true);
     try {
       const params = { grace };
+      if (includeSynthetic) params.includeSynthetic = 'true';
       if (from) params.from = from;
       if (to) params.to = to;
       if (barangay.trim()) params.barangay = barangay.trim();
@@ -279,28 +298,28 @@ export default function CompliancePanel() {
     1,
     ...FUNNEL_STEPS.map((step) => Number(funnel[step.key]) || 0)
   );
+  const factorOptions = useMemo(
+    () => Array.from(new Set((compliance?.factors || []).map((row) => row.factor))),
+    [compliance]
+  );
+  const selectedFactors = (compliance?.factors || []).filter((row) => row.factor === selectedFactor);
+  const visibleFactors = showAllFactors ? selectedFactors : selectedFactors.slice(0, 8);
+  const barangayRows = (compliance?.byBarangay || []).slice().sort((a, b) => a.onTimeRate - b.onTimeRate);
+  const visibleBarangays = showAllBarangays ? barangayRows : barangayRows.slice(0, 10);
+  const biggestGaps = selectedFactors
+    .filter((row) => row.sampleSize >= 30 && Number.isFinite(Number(row.returnedRate)))
+    .sort((a, b) => a.returnedRate - b.returnedRate)
+    .slice(0, 5);
+  const contactProgress = compliance?.contactProgress || { contacted: 0, actionable: compliance?.actionableTotal || 0 };
+  const contactedPct = contactProgress.actionable
+    ? Math.round((contactProgress.contacted / contactProgress.actionable) * 100)
+    : 0;
+  const recordedReasons = (compliance?.retentionReasons || []).filter((row) => row.count > 0);
+  const topReasons = recordedReasons.slice().sort((a, b) => b.count - a.count).slice(0, 3);
 
   return (
     <div className="analytics-panel">
       <div className="analytics-filter-row" role="group" aria-label="Compliance filters">
-        <div className="analytics-inline-field">
-          <label htmlFor="compliance-from">From</label>
-          <input
-            id="compliance-from"
-            type="date"
-            value={from}
-            onChange={(e) => { setPage(1); setFrom(e.target.value); }}
-          />
-        </div>
-        <div className="analytics-inline-field">
-          <label htmlFor="compliance-to">To</label>
-          <input
-            id="compliance-to"
-            type="date"
-            value={to}
-            onChange={(e) => { setPage(1); setTo(e.target.value); }}
-          />
-        </div>
         <div className="analytics-inline-field">
           <label htmlFor="compliance-grace">Grace period</label>
           <select
@@ -334,8 +353,6 @@ export default function CompliancePanel() {
           type="button"
           className="btn-secondary analytics-filter-action"
           onClick={() => {
-            setFrom('');
-            setTo('');
             setGrace(30);
             setBarangay('');
             setSearch('');
@@ -344,7 +361,7 @@ export default function CompliancePanel() {
             setSortBy('daysOverdue');
             setPage(1);
           }}
-          disabled={!from && !to && grace === 30 && !barangay && !search && !contactStatusFilter && !vaccineFilter && sortBy === 'daysOverdue'}
+          disabled={grace === 30 && !barangay && !search && !contactStatusFilter && !vaccineFilter && sortBy === 'daysOverdue'}
         >
           Reset
         </button>
@@ -365,8 +382,28 @@ export default function CompliancePanel() {
         </button>
       </div>
 
+      <div className="analytics-subtabs" role="tablist" aria-label="Vaccine compliance sections">
+        {[
+          ['summary', 'Summary'],
+          ['service', 'Service Return'],
+          ['reasons', "Why Owners Don't Return"],
+          ...(canManageContacts ? [['followups', 'Follow-Up List']] : []),
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={subTab === key}
+            className={`analytics-subtab${subTab === key ? ' is-active' : ''}`}
+            onClick={() => setSubTab(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <p className="analytics-period-label">
-        Showing follow-up data for: <strong>{compliance?.filterLabel || 'All Time'}</strong>
+        Showing: <strong>{compliance?.filterLabel || 'All Time'}</strong>
         {compliance?.graceDays !== undefined && (
           <>
             {' '}
@@ -376,6 +413,11 @@ export default function CompliancePanel() {
       </p>
 
       {loading && <GlobalLoadingOverlay visible={true} message="Building compliance report..." />}
+      {!loading && includeSynthetic && compliance?.syntheticData?.vaccineEpisodes > 0 && (
+        <p className="analytics-warning">
+          Synthetic 2025 seed vaccination episodes are included in this compliance view.
+        </p>
+      )}
 
       {!loading && error && (
         <div className="analytics-error-state">
@@ -388,6 +430,8 @@ export default function CompliancePanel() {
 
       {!loading && !error && compliance && (
         <>
+          {subTab === 'summary' && (
+          <>
           <div className="summary-row">
             <SummaryCard
               label="Vaccine Episodes"
@@ -528,7 +572,7 @@ export default function CompliancePanel() {
               <table className="report-table">
                 <thead><tr><th>First vaccine service cohort</th><th>30-day return</th><th>n</th><th>60-day return</th><th>n</th><th>90-day return</th><th>n</th></tr></thead>
                 <tbody>
-                  {(compliance.cohortRetention || []).map((row) => (
+                  {(showAllCohorts ? compliance.cohortRetention || [] : (compliance.cohortRetention || []).slice(-8)).map((row) => (
                     <tr key={row.key}>
                       <td>{row.cohort}</td><td>{fmtPct(row.rate30)}</td><td>{fmtNum(row.eligible30)}</td>
                       <td>{fmtPct(row.rate60)}</td><td>{fmtNum(row.eligible60)}</td>
@@ -538,6 +582,11 @@ export default function CompliancePanel() {
                 </tbody>
               </table>
             </div>
+            {(compliance.cohortRetention || []).length > 8 && (
+                <button type="button" className="btn-secondary" onClick={() => setShowAllCohorts((value) => !value)}>
+                  {showAllCohorts ? 'Show recent 8 cohorts' : `Show all ${compliance.cohortRetention.length} cohorts`}
+                </button>
+            )}
           </section>
 
           <section className="analytics-chart-section">
@@ -579,19 +628,37 @@ export default function CompliancePanel() {
               </div>
             </div>
           </section>
+          </>
+          )}
 
+          {subTab === 'reasons' && (
+          <>
           <section className="analytics-chart-section">
             <h3 className="analytics-chart-section-title">Factors Affecting Return</h3>
             <p className="analytics-chart-section-desc">
               These are associations in recorded clinic data, not proof of why an owner did or did not return. Rates use evaluated vaccine episodes; n &lt; 30 is a small sample.
             </p>
+            <label className="analytics-inline-field">
+              <span>Compare by factor</span>
+              <select value={selectedFactor} onChange={(event) => setSelectedFactor(event.target.value)}>
+                {factorOptions.map((factor) => <option key={factor} value={factor}>{factor}</option>)}
+              </select>
+            </label>
+            {biggestGaps.length > 0 && (
+              <div className="chart-card">
+                <h3>Largest return gaps (n ≥ 30)</h3>
+                <ul>{biggestGaps.map((row) => (
+                  <li key={row.group}>{row.group}: {fmtPct(row.returnedRate)} return rate from {fmtNum(row.sampleSize)} episodes.</li>
+                ))}</ul>
+              </div>
+            )}
             <div className="report-table-wrapper">
               <table className="report-table">
-                <thead><tr><th>Factor</th><th>Group</th><th>n Evaluated</th><th>Returned</th><th>Return Rate</th><th>On-Time Rate</th></tr></thead>
+                <thead><tr><th>Group</th><th>n Evaluated</th><th>Returned</th><th>Return Rate</th><th>On-Time Rate</th></tr></thead>
                 <tbody>
-                  {(compliance.factors || []).map((row) => (
+                  {visibleFactors.map((row) => (
                     <tr key={`${row.factor}-${row.group}`}>
-                      <td>{row.factor}</td><td>{row.group}{row.lowSample ? ' *' : ''}</td>
+                      <td>{row.group}{row.lowSample ? ' *' : ''}</td>
                       <td>{fmtNum(row.sampleSize)}</td><td>{fmtNum(row.returned)}</td>
                       <td>{fmtPct(row.returnedRate)}</td><td>{fmtPct(row.onTimeRate)}</td>
                     </tr>
@@ -599,6 +666,11 @@ export default function CompliancePanel() {
                 </tbody>
               </table>
             </div>
+            {selectedFactors.length > 8 && (
+              <button type="button" className="btn-secondary" onClick={() => setShowAllFactors((value) => !value)}>
+                {showAllFactors ? 'Show top 8 groups' : `Show all ${selectedFactors.length} groups`}
+              </button>
+            )}
           </section>
 
           <section className="analytics-chart-section">
@@ -606,18 +678,52 @@ export default function CompliancePanel() {
             <p className="analytics-chart-section-desc">
               Only reasons explicitly recorded during owner contact are shown. Missing reasons are not inferred from a missed visit.
             </p>
-            <div className="report-table-wrapper">
-              <table className="report-table">
-                <thead><tr><th>Owner-stated reason</th><th>Recorded count</th></tr></thead>
-                <tbody>
-                  {(compliance.retentionReasons || []).map((reason) => (
-                    <tr key={reason.key}><td>{reason.label}</td><td>{fmtNum(reason.count)}</td></tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="chart-card">
+              <div className="chart-card-canvas">
+              {(compliance.retentionReasons || []).some((reason) => reason.count > 0) ? (
+                <Bar
+                  options={{
+                    ...barOptions,
+                    indexAxis: 'y',
+                    plugins: {
+                      ...barOptions.plugins,
+                      tooltip: {
+                        ...barOptions.plugins.tooltip,
+                        callbacks: {
+                          afterLabel: (context) => {
+                            const reason = recordedReasons[context.dataIndex];
+                            const denominator = Number(compliance.reasonContacted) || 0;
+                            return `${denominator ? Math.round((reason.count / denominator) * 100) : 0}% of contacted follow-ups`;
+                          },
+                        },
+                      },
+                    },
+                  }}
+                  data={{
+                    labels: recordedReasons.map((reason) => reason.label),
+                    datasets: [{
+                      label: 'Recorded owner-stated reasons',
+                      data: recordedReasons.map((reason) => reason.count),
+                      backgroundColor: '#2879a8',
+                      borderRadius: 4,
+                    }],
+                  }}
+                />
+              ) : <p className="chart-card-empty">No owner-stated reasons have been recorded yet.</p>}
+              </div>
             </div>
+            <h3>Suggested actions from the top recorded reasons</h3>
+            {topReasons.length ? (
+              <ol>{topReasons.map((reason) => (
+                <li key={reason.key}><strong>{reason.label} ({fmtNum(reason.count)}):</strong> {REASON_ACTIONS[reason.key] || 'Review the recorded reason and follow up as appropriate.'}</li>
+              ))}</ol>
+            ) : <p>Suggested actions will appear once reasons are recorded during follow-up.</p>}
           </section>
+          </>
+          )}
 
+          {subTab === 'summary' && (
+          <>
           <section className="analytics-chart-section">
             <h3 className="analytics-chart-section-title">Outcome By Vaccine</h3>
             <div className="chart-grid chart-grid--1col">
@@ -668,7 +774,11 @@ export default function CompliancePanel() {
               </div>
             </div>
           </section>
+          </>
+          )}
 
+          {subTab === 'summary' && (
+          <>
           <section className="analytics-chart-section">
             <h3 className="analytics-chart-section-title">Compliance By Barangay</h3>
             <div className="report-table-container">
@@ -689,7 +799,7 @@ export default function CompliancePanel() {
                   </thead>
                   <tbody>
                     {(compliance?.byBarangay || []).length ? (
-                      compliance.byBarangay.slice().sort((a, b) => a.onTimeRate - b.onTimeRate).map((row) => (
+                      visibleBarangays.map((row) => (
                         <tr key={row.key}>
                           <td>{row.key}{row.lowSample ? ' *' : ''}</td>
                           <td>{fmtNum(row.evaluable)}</td>
@@ -711,9 +821,18 @@ export default function CompliancePanel() {
                   </tbody>
                 </table>
               </div>
+              {barangayRows.length > 10 && (
+                <button type="button" className="btn-secondary" onClick={() => setShowAllBarangays((value) => !value)}>
+                  {showAllBarangays ? 'Show lowest 10 barangays' : `Show all ${barangayRows.length} barangays`}
+                </button>
+              )}
             </div>
           </section>
+          </>
+          )}
 
+          {subTab === 'service' && (
+          <>
           <section className="analytics-chart-section">
             <h3 className="analytics-chart-section-title">Service Return Analysis</h3>
             <p className="analytics-chart-section-desc">
@@ -771,7 +890,7 @@ export default function CompliancePanel() {
                   </thead>
                   <tbody>
                     {(returns?.byService || []).length ? (
-                      (returns?.byService || []).map((row) => (
+                      (showAllServices ? returns?.byService || [] : (returns?.byService || []).slice(0, 6)).map((row) => (
                         <tr key={row.serviceType}>
                           <td>{row.serviceType}</td>
                           <td>{fmtNum(row.episodes)}</td>
@@ -800,10 +919,24 @@ export default function CompliancePanel() {
                   </tbody>
                 </table>
               </div>
+              {(returns?.byService || []).length > 6 && (
+                <button type="button" className="btn-secondary" onClick={() => setShowAllServices((value) => !value)}>
+                  {showAllServices ? 'Show top 6 services' : `Show all ${returns.byService.length} services`}
+                </button>
+              )}
             </div>
           </section>
+          </>
+          )}
 
+          {canManageContacts && subTab === 'followups' && (
+          <>
           <section className="analytics-chart-section">
+            <div className="analytics-contact-progress" role="status">
+              Contact progress: <strong>{fmtNum(contactProgress.contacted)} / {fmtNum(contactProgress.actionable)}</strong>
+              {' '}follow-ups contacted ({contactedPct}%)
+              <progress value={contactProgress.contacted} max={Math.max(contactProgress.actionable, 1)} aria-label="Follow-up contact progress" />
+            </div>
             <h3 className="analytics-chart-section-title">Owners To Contact</h3>
             <p className="analytics-chart-section-desc">
               Follow-ups that are overdue or were never fulfilled, most overdue first.
@@ -894,8 +1027,19 @@ export default function CompliancePanel() {
                 </table>
               </div>
               {editingContact && contactDraft && (
-                <div className="chart-card followup-contact-editor">
-                  <h3>Contact record — {editingContact.owner_name} ({editingContact.pet_name})</h3>
+                <div
+                  className="followup-contact-backdrop"
+                  role="presentation"
+                  onClick={() => { setEditingContact(null); setContactDraft(null); }}
+                >
+                  <aside
+                    className="followup-contact-editor"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="followup-contact-title"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                  <h3 id="followup-contact-title">Contact record — {editingContact.owner_name} ({editingContact.pet_name})</h3>
                   {editingContact.contact_recorded_by_name && (
                     <p>Last recorded by: {editingContact.contact_recorded_by_name}</p>
                   )}
@@ -932,6 +1076,7 @@ export default function CompliancePanel() {
                     <button type="button" className="btn-primary" onClick={saveContact}>Save contact</button>
                     <button type="button" className="btn-secondary" onClick={() => { setEditingContact(null); setContactDraft(null); }}>Cancel</button>
                   </div>
+                  </aside>
                 </div>
               )}
               <div className="analytics-filter-row" aria-label="Follow-up pagination">
@@ -943,6 +1088,8 @@ export default function CompliancePanel() {
           </section>
         </>
       )}
+          </>
+        )}
     </div>
   );
 }

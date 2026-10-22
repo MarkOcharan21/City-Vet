@@ -112,7 +112,7 @@ export function buildComplianceReportBody(data, {
           : num(summary.avgDaysLate)
       }</div>
     </div>
-    ${Number(data?.syntheticData?.vaccineEpisodes) > 0
+    ${data?.syntheticData?.included && Number(data?.syntheticData?.vaccineEpisodes) > 0
       ? `<div class="notes"><strong>Data notice:</strong> ${num(data.syntheticData.vaccineEpisodes)} vaccine episodes in this report are synthetic 2025 seed records, not real clinic activity.</div>`
       : ''}
 

@@ -31,7 +31,10 @@ const MAX_GRACE_DAYS = 365;
 const OUTCOME_ORDER = ["On Time", "Late", "Lapsed", "No Return", "Pending"];
 
 // Every service event a pet can show up for, as one addressable set.
-const SERVICE_EVENTS_CTE = `
+function buildServiceEventsCTE(includeSynthetic = false) {
+  const petFilter = (alias) => includeSynthetic ? "" : `AND COALESCE(LEFT(${alias}.pet_code, 9), '') <> 'ANL-2025-'`;
+  const vaccinationFilter = includeSynthetic ? "" : "AND COALESCE(LEFT(vr.comments, 20), '') <> 'ANALYTICS_SEED_2025:'";
+  return `
     service_events AS (
       SELECT vr.pet_id, vr.date_administered AS event_date
       FROM vaccination_records vr
@@ -40,22 +43,29 @@ const SERVICE_EVENTS_CTE = `
       WHERE vr.date_administered IS NOT NULL
         AND v.vaccine_name <> 'REGISTRATION FEE'
         AND COALESCE(p.is_lost, 0) = 0
+        ${petFilter("p")}
+        ${vaccinationFilter}
       UNION ALL
       SELECT cr.pet_id, cr.consultation_date
       FROM consultation_records cr
       JOIN pets p ON p.id = cr.pet_id
       WHERE cr.consultation_date IS NOT NULL AND COALESCE(p.is_lost, 0) = 0
+        ${petFilter("p")}
       UNION ALL
       SELECT pc.pet_id, pc.date_administered
       FROM preventive_care_records pc
       JOIN pets p ON p.id = pc.pet_id
       WHERE pc.date_administered IS NOT NULL AND COALESCE(p.is_lost, 0) = 0
+        ${petFilter("p")}
       UNION ALL
       SELECT pp.pet_id, pp.procedure_date
       FROM pet_procedures pp
       JOIN pets p ON p.id = pp.pet_id
       WHERE pp.procedure_date IS NOT NULL AND COALESCE(p.is_lost, 0) = 0
+        ${petFilter("p")}
     )`;
+}
+const SERVICE_EVENTS_CTE = buildServiceEventsCTE(false);
 
 /**
  * Build the episode query.
@@ -64,9 +74,13 @@ const SERVICE_EVENTS_CTE = `
  * @param {number} opts.graceDays grace window in days before a return is "Late"
  * @param {string} [opts.where] extra predicate appended to the outer SELECT
  */
-function buildEpisodeQuery({ graceDays, where = "" }) {
+function buildEpisodeQuery({ graceDays, where = "", includeSynthetic = false }) {
+  const syntheticPredicate = includeSynthetic
+    ? ""
+    : `AND COALESCE(LEFT(p.pet_code, 9), '') <> 'ANL-2025-'
+       AND COALESCE(LEFT(vr.comments, 20), '') <> 'ANALYTICS_SEED_2025:'`;
   return `
-    WITH ${SERVICE_EVENTS_CTE},
+    WITH ${buildServiceEventsCTE(includeSynthetic)},
     episodes AS (
       SELECT
         vr.id,
@@ -94,6 +108,7 @@ function buildEpisodeQuery({ graceDays, where = "" }) {
         AND vr.date_administered IS NOT NULL
         AND COALESCE(p.is_lost, 0) = 0
         AND ${VACCINE_FILTER}
+        ${syntheticPredicate}
     ),
     owner_service_history AS (
       SELECT p.pet_owner_id AS owner_id, se.event_date
@@ -183,5 +198,6 @@ module.exports = {
   MAX_GRACE_DAYS,
   OUTCOME_ORDER,
   SERVICE_EVENTS_CTE,
+  buildServiceEventsCTE,
   buildEpisodeQuery,
 };

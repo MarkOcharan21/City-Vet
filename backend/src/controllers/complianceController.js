@@ -9,7 +9,7 @@ const {
   DEFAULT_GRACE_DAYS,
   MAX_GRACE_DAYS,
   OUTCOME_ORDER,
-  SERVICE_EVENTS_CTE,
+  buildServiceEventsCTE,
   buildEpisodeQuery,
 } = require("../utils/vaccineEpisodes");
 const { buildPeriodComparison } = require("./comparisonController");
@@ -225,6 +225,7 @@ function factorsFor(rows, speciesById) {
 async function getVaccineCompliance(req, res) {
   try {
     const graceDays = clampInt(req.query.grace, DEFAULT_GRACE_DAYS, 0, MAX_GRACE_DAYS);
+    const includeSynthetic = req.query.includeSynthetic === "true";
     const from = safeDate(req.query.from);
     const to = safeDate(req.query.to);
     const vaccineId = Number(req.query.vaccineId);
@@ -256,7 +257,7 @@ async function getVaccineCompliance(req, res) {
     }
 
     const [rows] = await db.query(
-      buildEpisodeQuery({ graceDays, where: clauses.join("\n      ") }),
+      buildEpisodeQuery({ graceDays, where: clauses.join("\n      "), includeSynthetic }),
       params
     );
 
@@ -503,6 +504,7 @@ async function getVaccineCompliance(req, res) {
       graceDays,
       syntheticData: {
         label: "Synthetic Analytics Seed 2025",
+        included: includeSynthetic,
         vaccineEpisodes: syntheticSeedEpisodes,
       },
       filterLabel: from && to ? `${from} to ${to}` : from ? `From ${from}` : to ? `Up to ${to}` : "All Time",
@@ -557,6 +559,11 @@ async function getVaccineCompliance(req, res) {
       actionablePage: page,
       actionablePageSize: limit,
       actionablePages: Math.ceil(filteredActionable.length / limit),
+      contactProgress: {
+        contacted: searchable.filter((row) => row.contact_status !== "Not yet contacted").length,
+        actionable: searchable.length,
+      },
+      reasonContacted: (contactRows || []).filter((row) => row.contact_status !== "Not yet contacted").length,
       actionableFilters: {
         contactStatuses: Array.from(CONTACT_STATUSES),
         vaccines: Array.from(new Set(atRisk.map((row) => row.vaccine_name).filter(Boolean))).sort(),
@@ -662,6 +669,9 @@ async function getReturnRate(req, res) {
   try {
     const from = safeDate(req.query.from);
     const to = safeDate(req.query.to);
+    const includeSynthetic = req.query.includeSynthetic === "true";
+    const syntheticPetFilter = (alias) => includeSynthetic ? "" : `AND COALESCE(LEFT(${alias}.pet_code, 9), '') <> 'ANL-2025-'`;
+    const syntheticVaccinationFilter = includeSynthetic ? "" : "AND COALESCE(LEFT(vr.comments, 20), '') <> 'ANALYTICS_SEED_2025:'";
 
     const clauses = [];
     const params = [];
@@ -676,7 +686,7 @@ async function getReturnRate(req, res) {
     const where = clauses.join("\n      ");
 
     const sql = `
-    WITH ${SERVICE_EVENTS_CTE},
+    WITH ${buildServiceEventsCTE(includeSynthetic)},
     visits AS (
       SELECT 'Vaccination' AS service_type, vr.pet_id, vr.date_administered AS service_date, p.pet_owner_id AS owner_id
       FROM vaccination_records vr
@@ -685,24 +695,29 @@ async function getReturnRate(req, res) {
       WHERE vr.date_administered IS NOT NULL
         AND v.vaccine_name <> 'REGISTRATION FEE'
         AND COALESCE(p.is_lost, 0) = 0
+        ${syntheticPetFilter("p")}
+        ${syntheticVaccinationFilter}
       UNION ALL
       SELECT 'Consultation', cr.pet_id, cr.consultation_date, p.pet_owner_id
       FROM consultation_records cr
       JOIN pets p ON p.id = cr.pet_id
       WHERE cr.consultation_date IS NOT NULL
         AND COALESCE(p.is_lost, 0) = 0
+        ${syntheticPetFilter("p")}
       UNION ALL
       SELECT 'Preventive Care', pc.pet_id, pc.date_administered, p.pet_owner_id
       FROM preventive_care_records pc
       JOIN pets p ON p.id = pc.pet_id
       WHERE pc.date_administered IS NOT NULL
         AND COALESCE(p.is_lost, 0) = 0
+        ${syntheticPetFilter("p")}
       UNION ALL
       SELECT 'Procedure', pp.pet_id, pp.procedure_date, p.pet_owner_id
       FROM pet_procedures pp
       JOIN pets p ON p.id = pp.pet_id
       WHERE pp.procedure_date IS NOT NULL
         AND COALESCE(p.is_lost, 0) = 0
+        ${syntheticPetFilter("p")}
     ),
     visit_days AS (
       SELECT service_type, pet_id, service_date, MIN(owner_id) AS owner_id, COUNT(*) AS visits
@@ -738,7 +753,7 @@ async function getReturnRate(req, res) {
 
     // Consultations that scheduled a follow-up: was the appointment honoured?
     const followUpSql = `
-    WITH ${SERVICE_EVENTS_CTE},
+    WITH ${buildServiceEventsCTE(includeSynthetic)},
     ret AS (
       SELECT cr.id, MIN(se.event_date) AS returned_on
       FROM consultation_records cr
@@ -757,6 +772,7 @@ async function getReturnRate(req, res) {
     LEFT JOIN ret ON ret.id = cr.id
     WHERE cr.follow_up_date IS NOT NULL
       AND COALESCE(p.is_lost, 0) = 0
+      ${syntheticPetFilter("p")}
   `;
     const [followUpRows] = await db.query(followUpSql);
 
@@ -953,6 +969,7 @@ async function getVaccinationTrends(req, res) {
       anchor: req.query.anchor,
       windows: req.query.windows,
       primaryMetric: "doses",
+      includeSynthetic: req.query.includeSynthetic === "true",
       current,
       toDate: !current,
     });
