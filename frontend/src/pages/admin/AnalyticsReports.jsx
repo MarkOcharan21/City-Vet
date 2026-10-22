@@ -351,49 +351,53 @@ export default function AnalyticsReports() {
           </p>
         </div>
 
-        <section className="analytics-chart-section">
-          <h3 className="analytics-chart-section-title">Key Findings</h3>
-          <ul>
-            <li>
-              {fmtNum(dashboard.summary?.totalPets)} verified pets were registered in the selected registration-date range.
-            </li>
-            <li>
-              {fmtNum(dashboard.summary?.vaccinatedPets)} unique pets had at least one vaccine record in the selected service-date range.
-            </li>
-            {dashboard.barangays?.[0] && (
-              <li>
-                {dashboard.barangays[0].barangay} has the most verified pet records in this range ({fmtNum(dashboard.barangays[0].total)}).
-              </li>
-            )}
-            {(dashboard.dataQuality?.lateEncodedRegistrations || dashboard.dataQuality?.lateEncodedVaccinations) > 0 && (
-              <li>
-                Some records were encoded after their service/registration date; interpret encode-date trends separately.
-              </li>
-            )}
-          </ul>
-          <p>Recommendations: verify missing owner location and due-date data, and use recorded owner responses—not missing transactions—to explain missed follow-ups.</p>
-        </section>
+        {tab === "overview" && !loading && !error && dashboard && (
+          <>
+            <section className="analytics-chart-section">
+              <h3 className="analytics-chart-section-title">Key Findings</h3>
+              <ul>
+                <li>
+                  {fmtNum(dashboard.summary?.totalPets)} verified pets were registered in the selected registration-date range.
+                </li>
+                <li>
+                  {fmtNum(dashboard.summary?.vaccinatedPets)} unique pets had at least one vaccine record in the selected service-date range.
+                </li>
+                {dashboard.barangays?.[0] && (
+                  <li>
+                    {dashboard.barangays[0].barangay} has the most verified pet records in this range ({fmtNum(dashboard.barangays[0].total)}).
+                  </li>
+                )}
+                {(dashboard.dataQuality?.lateEncodedRegistrations || dashboard.dataQuality?.lateEncodedVaccinations) > 0 && (
+                  <li>
+                    Some records were encoded after their service/registration date; interpret encode-date trends separately.
+                  </li>
+                )}
+              </ul>
+              <p>Recommendations: verify missing owner location and due-date data, and use recorded owner responses—not missing transactions—to explain missed follow-ups.</p>
+            </section>
 
-        <section className="analytics-chart-section">
-          <h3 className="analytics-chart-section-title">Data Quality</h3>
-          <div className="summary-row">
-            <SummaryCard label="Verified pets without barangay" value={fmtNum(dashboard.dataQuality?.missingBarangay)} />
-            <SummaryCard label="Vaccine records without due date" value={fmtNum(dashboard.dataQuality?.missingDueDate)} />
-            <SummaryCard label="Late-encoded registrations" value={fmtNum(dashboard.dataQuality?.lateEncodedRegistrations)} />
-            <SummaryCard label="Late-encoded vaccinations" value={fmtNum(dashboard.dataQuality?.lateEncodedVaccinations)} />
-          </div>
-          <p className="analytics-chart-section-desc">
-            Registrations use registration_date (fallback: encoded date); vaccination trends use date_administered. Late encoding is counted when the stored date is later than the service date.
-          </p>
-        </section>
+            <section className="analytics-chart-section">
+              <h3 className="analytics-chart-section-title">Data Quality</h3>
+              <div className="summary-row">
+                <SummaryCard label="Verified pets without barangay" value={fmtNum(dashboard.dataQuality?.missingBarangay)} />
+                <SummaryCard label="Vaccine records without due date" value={fmtNum(dashboard.dataQuality?.missingDueDate)} />
+                <SummaryCard label="Late-encoded registrations" value={fmtNum(dashboard.dataQuality?.lateEncodedRegistrations)} />
+                <SummaryCard label="Late-encoded vaccinations" value={fmtNum(dashboard.dataQuality?.lateEncodedVaccinations)} />
+              </div>
+              <p className="analytics-chart-section-desc">
+                Registrations use registration_date (fallback: encoded date); vaccination trends use date_administered. Late encoding is counted when the stored date is later than the service date.
+              </p>
+            </section>
 
-        <p className="analytics-chart-section-desc">
-          Definitions: verified pets = verified records registered in range; vaccinated pets = distinct pets with a vaccination in range; doses = vaccine records; revenue = paid ledger entries only.
-        </p>
-        {(dashboard.dataQuality?.syntheticSeedPets || dashboard.dataQuality?.syntheticSeedVaccinations || dashboard.dataQuality?.syntheticSeedPayments) > 0 && (
-          <p className="analytics-warning">
-            Synthetic 2025 seed data is included in this period: {fmtNum(dashboard.dataQuality.syntheticSeedPets)} pets, {fmtNum(dashboard.dataQuality.syntheticSeedVaccinations)} vaccine records, and {fmtNum(dashboard.dataQuality.syntheticSeedPayments)} payments. Do not treat these rows as real clinic activity.
-          </p>
+            <p className="analytics-chart-section-desc">
+              Definitions: verified pets = verified records registered in range; vaccinated pets = distinct pets with a vaccination in range; doses = vaccine records; revenue = paid ledger entries only.
+            </p>
+            {(dashboard.dataQuality?.syntheticSeedPets || dashboard.dataQuality?.syntheticSeedVaccinations || dashboard.dataQuality?.syntheticSeedPayments) > 0 && (
+              <p className="analytics-warning">
+                Synthetic 2025 seed data is included in this period: {fmtNum(dashboard.dataQuality.syntheticSeedPets)} pets, {fmtNum(dashboard.dataQuality.syntheticSeedVaccinations)} vaccine records, and {fmtNum(dashboard.dataQuality.syntheticSeedPayments)} payments. Do not treat these rows as real clinic activity.
+              </p>
+            )}
+          </>
         )}
       </div>
 
