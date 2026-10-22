@@ -468,11 +468,12 @@ export default function AnalyticsReports() {
                     {!buildOverviewFindings(dashboard).length && <li>Not enough verified records in this period to identify a meaningful trend.</li>}
                   </ul>
                   {Number(dashboard.vaccinationStatus?.find((row) => row.status === 'Overdue')?.total || 0) > 0 && (
-                    <button type="button" className="analytics-inline-link" onClick={() => {
+                    <button type="button" className="analytics-inline-link analytics-overdue-action" onClick={() => {
                       setComplianceSubTab("summary");
                       setTab("compliance");
                     }}>
-                      Review overdue vaccine follow-ups →
+                      <span>Review overdue vaccine follow-ups</span>
+                      <span className="analytics-overdue-action-arrow" aria-hidden="true">→</span>
                     </button>
                   )}
                 </div>
@@ -564,6 +565,7 @@ export default function AnalyticsReports() {
                   <ChartCard
                     title={distinctYears(dashboard?.registrations) >= 2 ? "Monthly Pet Registrations (Year-over-Year)" : "Monthly Pet Registrations"}
                     description="Compares verified registrations by month. When two years are available, each color represents a year; use the trend to spot seasonal changes."
+                    tall
                     isEmpty={!hasChartData(dashboard?.registrations)}
                   >
                     <Bar
@@ -585,9 +587,6 @@ export default function AnalyticsReports() {
                       }
                     />
                   </ChartCard>
-                </div>
-
-                <div className="chart-grid">
                   <ChartCard title="Top 10 Barangays" description="Ranks barangays by verified pets in this period. Higher counts show where registered pets are concentrated and can help guide outreach planning." tall isEmpty={!hasChartData(dashboard?.barangays)}>
                     <Bar
                       options={horizontalBarChartOptions}
