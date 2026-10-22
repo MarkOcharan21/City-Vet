@@ -311,6 +311,9 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
           </button>
         ))}
       </div>
+      <p className="analytics-visual-explanation">
+        Select a metric above to update the chart and totals. Each point or bar compares the selected current period with its matching baseline period; positive change means a higher count or amount, while lower Lost Pets is generally favorable. Percentage change is suppressed when the baseline is too small to be reliable.
+      </p>
       {data?.syntheticData?.included && (data?.syntheticData?.current?.pets || data?.syntheticData?.current?.vaccinations || data?.syntheticData?.current?.payments ||
         data?.syntheticData?.baseline?.pets || data?.syntheticData?.baseline?.vaccinations || data?.syntheticData?.baseline?.payments) > 0 && (
         <p className="analytics-warning">
@@ -365,6 +368,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
           <div className="chart-grid chart-grid--1col">
             <div className="chart-card">
               <h3>{activeMetric.label} — Current vs Baseline ({chartStyle === 'bars' ? 'Bars' : 'Line'})</h3>
+              <p className="analytics-visual-explanation">The horizontal axis shows each period in the selected granularity; the vertical axis shows {activeMetric.money ? 'paid revenue in pesos' : activeMetric.label.toLowerCase()}. Matching colors identify the current and baseline series.</p>
               <div className="chart-card-canvas">
                 {series.length ? (
                   chartStyle === 'bars' ? <Bar
@@ -399,7 +403,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
                     />
                   )
                 ) : (
-                  <p className="chart-card-empty">No comparison data available.</p>
+                  <p className="chart-card-empty">No comparison data is available for these windows. Choose another anchor date or granularity, or check that records exist in both periods.</p>
                 )}
               </div>
             </div>
@@ -408,6 +412,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
 
           <section className="analytics-chart-section">
             <h3 className="analytics-chart-section-title">Period By Period</h3>
+            <p className="analytics-chart-section-desc">Use this table to find which individual periods account for the overall change shown above. “No data” means that baseline period has no recorded value.</p>
             <div className="report-table-container">
               <h3>Current period vs baseline</h3>
               <div className="report-table-wrapper">
@@ -441,7 +446,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
                     ) : (
                       <tr>
                         <td className="report-table-empty" colSpan={6}>
-                          No comparison rows available.
+                          No period rows are available for this selection. Try another granularity or anchor date.
                         </td>
                       </tr>
                     )}
@@ -459,7 +464,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
           <section className="analytics-chart-section">
             <h3 className="analytics-chart-section-title">Year-over-Year Summary</h3>
             <p className="analytics-chart-section-desc">
-              The latest five years are shown first. The small figure under each value is the change against the year before it.
+              The latest five years are shown first. The small figure under each value is the change against the year before it. Current year is year-to-date (YTD), so compare it cautiously with a complete prior year.
             </p>
             <div className="report-table-container">
               <h3>Yearly totals</h3>
@@ -513,7 +518,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
                     ) : (
                       <tr>
                         <td className="report-table-empty" colSpan={10}>
-                          No yearly data available.
+                          No yearly data is available yet. Check that records have been entered for multiple years.
                         </td>
                       </tr>
                     )}

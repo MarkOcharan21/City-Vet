@@ -138,10 +138,10 @@ const lineOptions = {
   },
 };
 
-export default function CompliancePanel({ from = '', to = '', includeSynthetic = false }) {
+export default function CompliancePanel({ from = '', to = '', includeSynthetic = false, initialSubTab = '' }) {
   const { user } = useAuth();
   const canManageContacts = ['Admin', 'Staff'].includes(user?.role);
-  const [subTab, setSubTab] = useState('summary');
+  const [subTab, setSubTab] = useState(['summary', 'service', 'reasons', 'followups'].includes(initialSubTab) ? initialSubTab : 'summary');
   const [grace, setGrace] = useState(30);
   const [barangay, setBarangay] = useState('');
 
@@ -483,10 +483,20 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
               ]}
             />
           </div>
+          {Number(compliance.actionableTotal) > 0 && (
+            <div className="analytics-action-callout">
+              <div>
+                <strong>{fmtNum(compliance.actionableTotal)} follow-ups need review</strong>
+                <p>Open the list to check the due date, owner contact progress, and recorded outcome for each follow-up.</p>
+              </div>
+              <button type="button" className="btn-primary" onClick={() => setSubTab('followups')}>Open Follow-Up List</button>
+            </div>
+          )}
 
           <div className="chart-grid chart-grid--1col">
             <div className="chart-card">
               <h3>Follow-Up Outcomes</h3>
+              <p className="analytics-visual-explanation">Each slice is an evaluated vaccine follow-up, not a unique pet. On Time and Late mean the same vaccine was given; Lapsed and No Return have no matching dose after the due date and grace period. Pending episodes are excluded.</p>
               <div className="chart-card-canvas">
                 {buckets.length ? (
                   <Doughnut
@@ -503,7 +513,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
                     }}
                   />
                 ) : (
-                  <p className="chart-card-empty">No follow-ups due in this period.</p>
+                  <p className="chart-card-empty">No follow-ups are due in this period. Choose a wider date range to review earlier due episodes.</p>
                 )}
               </div>
               {Number(summary.pending) > 0 && (
@@ -515,6 +525,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
 
             <div className="chart-card">
               <h3>Monthly On-Time Rate</h3>
+              <p className="analytics-visual-explanation">Shows the share of evaluated follow-ups returned on time each month. Hover a point for the sample size; treat periods with fewer than 30 evaluated follow-ups as directional only.</p>
               <p className="analytics-chart-section-desc">
                 The tooltip shows evaluated sample size and follow-ups still pending; periods with n &lt; 30 are small samples.
               </p>
@@ -555,7 +566,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
                     }}
                   />
                 ) : (
-                  <p className="chart-card-empty">No trend data available.</p>
+                  <p className="chart-card-empty">No monthly trend is available yet. Choose a wider date range or wait until more follow-ups are evaluated.</p>
                 )}
               </div>
             </div>
@@ -635,6 +646,9 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
                       <td>{fmtPct(row.returnedRate)}</td><td>{fmtPct(row.onTimeRate)}</td>
                     </tr>
                   ))}
+                  {!visibleFactors.length && (
+                    <tr><td className="report-table-empty" colSpan={5}>No evaluated follow-ups match this factor and period. Try a broader date range or another factor.</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -683,7 +697,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
                 />
               ) : (
                 <div className="chart-card-empty">
-                  <p>No owner-stated reasons have been recorded yet.</p>
+                  <p>No owner-stated reasons have been recorded yet. Record an owner contact in the Follow-Up List to add a reason.</p>
                   {canManageContacts && (
                     <button type="button" className="analytics-inline-link" onClick={() => setSubTab('followups')}>
                       Record contact in the Follow-Up List →
@@ -708,6 +722,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
           <>
           <section className="analytics-chart-section">
             <h3 className="analytics-chart-section-title">Outcome By Vaccine</h3>
+            <p className="analytics-chart-section-desc">Compare on-time and no-return follow-up counts by vaccine. Hover a group for its evaluated sample size and rates; low-sample groups need cautious interpretation.</p>
             <div className="chart-grid chart-grid--1col">
               <div className="chart-card">
                 <h3>On Time vs No Return</h3>
@@ -750,7 +765,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
                       }}
                     />
                   ) : (
-                    <p className="chart-card-empty">No vaccine breakdown available.</p>
+                    <p className="chart-card-empty">No vaccine breakdown is available for this period. Choose a wider date range or check that vaccine follow-ups have due dates.</p>
                   )}
                 </div>
               </div>
@@ -766,7 +781,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
             <div className="report-table-container">
               <h3>Barangay breakdown</h3>
               <p className="analytics-chart-section-desc">
-                Sorted by the lowest on-time rate first. Groups with fewer than 30 evaluated follow-ups are tagged as small samples.
+                Sorted by the lowest on-time rate first to surface possible follow-up gaps. Groups with fewer than 30 evaluated follow-ups are tagged as small samples and should not be treated as stable rankings.
               </p>
               <div className="report-table-wrapper analytics-table-scroll">
                 <table className="report-table">
@@ -800,7 +815,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
                     ) : (
                       <tr>
                         <td className="report-table-empty" colSpan={7}>
-                          No barangay data available.
+                          No evaluated follow-ups have a barangay value in this period. Choose a wider date range or review the registration address data.
                         </td>
                       </tr>
                     )}
@@ -822,6 +837,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
             <summary>Funnel & days to return</summary>
             <section className="analytics-chart-section">
               <h3 className="analytics-chart-section-title">Days to Same-Vaccine Return</h3>
+              <p className="analytics-chart-section-desc">Counts how many evaluated follow-ups returned within each day range after the due date. This helps distinguish quick returns from long delays; it excludes episodes that have not matured beyond the grace period.</p>
               <div className="chart-card-canvas">
                 {(compliance.returnDayDistribution || []).some((bucket) => bucket.count > 0) ? (
                   <Bar
@@ -836,7 +852,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
                       }],
                     }}
                   />
-                ) : <p className="chart-card-empty">No same-vaccine return intervals are recorded.</p>}
+                ) : <p className="chart-card-empty">No same-vaccine returns have a complete interval in this period yet. Broaden the date range or check again after more due dates have passed.</p>}
               </div>
             </section>
 
@@ -872,7 +888,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
           <section className="analytics-chart-section">
             <h3 className="analytics-chart-section-title">Service Return Analysis</h3>
             <p className="analytics-chart-section-desc">
-              Unlike vaccine follow-up (returning for the same vaccine), this counts whether a pet had any later service. One service episode is one pet, service type, and service date.
+              This measures whether a pet had any later clinic service, not whether it returned for the same vaccine. One episode is one pet, service type, and service date; only episodes with a complete observation window count toward each return rate.
             </p>
 
             <div className="summary-row">
@@ -910,7 +926,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
             <section className="analytics-chart-section">
               <h3 className="analytics-chart-section-title">Any-Service Cohort Retention</h3>
               <p className="analytics-chart-section-desc">
-                Cohorts are grouped by month of vaccine service. Only episodes with a complete 30/60/90-day observation window are included in that window&apos;s denominator.
+                Cohorts are grouped by month of first vaccine service. Each 30/60/90-day rate uses only episodes with the full observation window; use lower rates to identify cohorts that may need reminder or outreach review.
               </p>
               <div className="report-table-wrapper analytics-table-scroll">
                 <table className="report-table">
@@ -923,6 +939,9 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
                         <td>{fmtPct(row.rate90)}</td><td>{fmtNum(row.eligible90)}</td>
                       </tr>
                     ))}
+                    {!(compliance.cohortRetention || []).length && (
+                      <tr><td className="report-table-empty" colSpan={7}>No completed vaccine-service cohorts yet. Cohorts appear after enough time has passed to observe the 30, 60, or 90-day return windows.</td></tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -935,6 +954,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
 
             <div className="report-table-container">
               <h3>Return rate by service type</h3>
+              <p className="analytics-chart-section-desc">Compare services by the share of matured episodes followed by another clinic service. The returned / eligible values show the numerator and denominator behind each percentage.</p>
               <div className="report-table-wrapper">
                 <table className="report-table">
                   <thead>
@@ -974,7 +994,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
                     ) : (
                       <tr>
                         <td className="report-table-empty" colSpan={9}>
-                          No service data available.
+                          No service episodes are available in this period. Choose a wider date range or check that clinic services have been recorded.
                         </td>
                       </tr>
                     )}
@@ -1094,7 +1114,18 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
                     ) : (
                       <tr>
                         <td className="report-table-empty" colSpan={8}>
-                          No follow-ups match these filters.
+                          <>
+                            No follow-ups match these filters. {compliance.actionableTotal > 0 ? 'Clear the search or filters to see the available follow-ups.' : 'There are no actionable follow-ups for the selected period and grace setting.'}
+                            {compliance.actionableTotal > 0 && (search || vaccineFilter || contactStatusFilter) && (
+                              <button type="button" className="analytics-inline-link" onClick={() => {
+                                setSearch('');
+                                setVaccineFilter('');
+                                setContactStatusFilter('');
+                                setSortBy('daysOverdue');
+                                setPage(1);
+                              }}>Clear list filters</button>
+                            )}
+                          </>
                         </td>
                       </tr>
                     )}

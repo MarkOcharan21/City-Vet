@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../../services/api";
 
 import { Bar, Doughnut } from "react-chartjs-2";
@@ -304,7 +305,9 @@ function buildOverviewFindings(dashboard) {
 }
 
 export default function AnalyticsReports() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState("overview");
+  const [complianceSubTab, setComplianceSubTab] = useState("summary");
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -490,13 +493,23 @@ export default function AnalyticsReports() {
                     {buildOverviewFindings(dashboard).map((finding) => <li key={finding}>{finding}</li>)}
                     {!buildOverviewFindings(dashboard).length && <li>Not enough verified records in this period to identify a meaningful trend.</li>}
                   </ul>
-                  <button type="button" className="analytics-inline-link" onClick={() => setTab('compliance')}>
-                    Review overdue follow-ups in Vaccine Compliance →
-                  </button>
+                  {Number(dashboard.vaccinationStatus?.find((row) => row.status === 'Overdue')?.total || 0) > 0 && (
+                    <button type="button" className="analytics-inline-link" onClick={() => {
+                      setComplianceSubTab("summary");
+                      setTab("compliance");
+                    }}>
+                      Review overdue vaccine follow-ups →
+                    </button>
+                  )}
                 </div>
                 <div className="analytics-pending-stat">
                   <strong>{fmtNum(dashboard.registrationStatus?.find((row) => /pending/i.test(row.status))?.total || 0)}</strong>
                   <span>Pending verification</span>
+                  {Number(dashboard.registrationStatus?.find((row) => /pending/i.test(row.status))?.total) > 0 && (
+                    <button type="button" className="analytics-inline-link" onClick={() => navigate('/admin/registration-records')}>
+                      Open registration records →
+                    </button>
+                  )}
                 </div>
               </section>
 
@@ -506,6 +519,7 @@ export default function AnalyticsReports() {
                     Comparison details — {dashboard.comparison.current?.label} vs {dashboard.comparison.baseline?.label}
                     {dashboard.comparison.current?.partial ? ' (partial current period)' : ''}
                   </summary>
+                  <p className="analytics-chart-section-desc">Changes compare the selected period with its baseline. Percentage change is unavailable for baselines below five; “New” means the current period has a value while the baseline is zero.</p>
                   <div className="report-table-wrapper analytics-table-scroll">
                     <table className="report-table">
                       <thead><tr><th>Metric</th><th>Current</th><th>Baseline</th><th>Change</th><th>% Change</th></tr></thead>
@@ -538,13 +552,12 @@ export default function AnalyticsReports() {
 
               <h2>Analytics Graphs</h2>
               <p className="page-intro">
-                Visual breakdown of registrations, demographics, vaccination activity,
-                and vaccine due status for the selected period.
+                Each chart answers a different question: what pets are registered, where they live, how activity changes over time, and which pets need vaccine attention. Use the descriptions below to interpret the counts and decide where to follow up.
               </p>
 
               <section className="analytics-chart-section">
                 <div className="chart-grid">
-                  <ChartCard title="Verified Pets by Species" isEmpty={!hasChartData(dashboard?.species)}>
+                  <ChartCard title="Verified Pets by Species" description="Counts verified pets by species for this period. Use the mix to understand which animals are served and plan species-specific supplies or outreach." isEmpty={!hasChartData(dashboard?.species)}>
                     <Bar
                       options={barChartOptions}
                       data={{
@@ -561,7 +574,7 @@ export default function AnalyticsReports() {
                     />
                   </ChartCard>
 
-                  <ChartCard title="Pet Profile by Sex" isEmpty={!hasChartData(dashboard?.petsBySex)}>
+                  <ChartCard title="Pet Profile by Sex" description="Shows verified pets in each recorded sex category. “Unknown” means the record has no usable sex value." isEmpty={!hasChartData(dashboard?.petsBySex)}>
                     <Doughnut
                       options={circularChartOptions}
                       data={{
@@ -577,6 +590,7 @@ export default function AnalyticsReports() {
 
                   <ChartCard
                     title={distinctYears(dashboard?.registrations) >= 2 ? "Monthly Pet Registrations (Year-over-Year)" : "Monthly Pet Registrations"}
+                    description="Compares verified registrations by month. When two years are available, each color represents a year; use the trend to spot seasonal changes."
                     isEmpty={!hasChartData(dashboard?.registrations)}
                   >
                     <Bar
@@ -601,7 +615,7 @@ export default function AnalyticsReports() {
                 </div>
 
                 <div className="chart-grid">
-                  <ChartCard title="Top 10 Barangays" tall isEmpty={!hasChartData(dashboard?.barangays)}>
+                  <ChartCard title="Top 10 Barangays" description="Ranks barangays by verified pets in this period. Higher counts show where registered pets are concentrated and can help guide outreach planning." tall isEmpty={!hasChartData(dashboard?.barangays)}>
                     <Bar
                       options={horizontalBarChartOptions}
                       data={{
@@ -630,6 +644,7 @@ export default function AnalyticsReports() {
                 <div className="chart-grid">
                   <ChartCard
                     title={distinctYears(dashboard?.vaccinations) >= 2 ? "Vaccinations Per Month (Year-over-Year)" : "Vaccinations Per Month"}
+                    description="Counts vaccine doses by service month, not unique pets. Compare months to understand changes in clinic vaccination workload."
                     isEmpty={!hasChartData(dashboard?.vaccinations)}
                   >
                     <Bar
@@ -654,6 +669,7 @@ export default function AnalyticsReports() {
 
                   <ChartCard
                     title="Latest Vaccine Due Status (verified pets)"
+                    description="Groups verified pets by their latest recorded vaccine status. Overdue and No Record counts can guide follow-up; use Vaccine Compliance to review due episodes."
                     isEmpty={!hasChartData(dashboard?.vaccinationStatus)}
                   >
                     {(dashboard.vaccinationStatus || []).filter((row) => Number(row.total) > 0).length >= 3 ? (
@@ -701,7 +717,7 @@ export default function AnalyticsReports() {
         </>
       )}
 
-      {tab === "compliance" && <CompliancePanel from={periodRange.from} to={periodRange.to} includeSynthetic={includeSynthetic} />}
+      {tab === "compliance" && <CompliancePanel from={periodRange.from} to={periodRange.to} includeSynthetic={includeSynthetic} initialSubTab={complianceSubTab} />}
       {tab === "comparison" && <ComparisonPanel includeSynthetic={includeSynthetic} />}
       {tab === "reports" && (
         <ReportsPanel
@@ -709,6 +725,10 @@ export default function AnalyticsReports() {
           to={periodRange.to}
           periodLabel={periodLabel}
           includeSynthetic={includeSynthetic}
+          onOpenFollowups={() => {
+            setComplianceSubTab("followups");
+            setTab("compliance");
+          }}
         />
       )}
 
@@ -717,13 +737,14 @@ export default function AnalyticsReports() {
   );
 }
 
-function ChartCard({ title, children, isEmpty = false, tall = false }) {
+function ChartCard({ title, description, children, isEmpty = false, tall = false }) {
   return (
     <div className="chart-card">
       <h3>{title}</h3>
+      {description && <p className="analytics-visual-explanation">{description}</p>}
       <div className={`chart-card-canvas${tall ? " chart-card-canvas--tall" : ""}`}>
         {isEmpty ? (
-          <p className="chart-card-empty">No data available for this period.</p>
+          <div className="chart-card-empty"><p>No data available for this period.</p><small>Try a wider date range or check that records have been verified or entered for the selected dates.</small></div>
         ) : (
           children
         )}

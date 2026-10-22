@@ -72,7 +72,7 @@ function fmtRange(range) {
   return `${start.toLocaleDateString('en-US', options)} – ${end.toLocaleDateString('en-US', options)}`;
 }
 
-export default function ReportsPanel({ from = '', to = '', periodLabel, includeSynthetic = false }) {
+export default function ReportsPanel({ from = '', to = '', periodLabel, includeSynthetic = false, onOpenFollowups }) {
   const [grace, setGrace] = useState(30);
 
   const [selected, setSelected] = useState('summary');
@@ -431,25 +431,27 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
                   ],
                 }} />
               </div>
-              <p>Pet registrations use registration date when available. Revenue includes paid ledger records only.</p>
+              <p className="analytics-visual-explanation">Each month compares verified registrations with vaccine doses recorded by service date. These are event counts, not unique pets. Pet registrations use registration date when available; revenue includes paid ledger records only.</p>
             </div>
             <div className="analytics-insight-grid">
               <div className="chart-card">
                 <h3>Top 5 barangays</h3>
+                <p className="analytics-visual-explanation">Ranks the five barangays with the most verified pet registrations in this report period.</p>
                 <ol>
                   {(preview.barangays || []).slice(0, 5).map((row) => (
                     <li key={row.barangay}>{row.barangay}: <strong>{fmtNum(row.total)}</strong> verified pets</li>
                   ))}
-                  {!(preview.barangays || []).length && <li>No barangay data available.</li>}
+                  {!(preview.barangays || []).length && <li>No verified pets with barangay data are available in this period. Check the date range or registration address records.</li>}
                 </ol>
               </div>
               <div className="chart-card">
                 <h3>Species split</h3>
+                <p className="analytics-visual-explanation">Shows the verified pet count by species to summarize which animals make up the registered population.</p>
                 <ul>
                   {(preview.species || []).slice(0, 5).map((row) => (
                     <li key={row.species}>{row.species}: <strong>{fmtNum(row.total)}</strong> verified pets</li>
                   ))}
-                  {!(preview.species || []).length && <li>No species data available.</li>}
+                  {!(preview.species || []).length && <li>No verified pet species data is available in this period. Check the date range or pet records.</li>}
                 </ul>
               </div>
             </div>
@@ -483,6 +485,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
             <div className="chart-grid">
               <div className="chart-card">
                 <h3>Follow-up outcomes</h3>
+                <p className="analytics-visual-explanation">Breaks down evaluated vaccine follow-ups by outcome. Follow-ups still inside the grace period are pending and excluded from these shares.</p>
                 <div className="chart-card-canvas">
                   <Doughnut
                     options={{
@@ -506,6 +509,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
               </div>
               <div className="chart-card">
                 <h3>Monthly on-time rate</h3>
+                <p className="analytics-visual-explanation">Shows the monthly share of evaluated follow-ups returned on time. Lower values can indicate a need to review reminder and contact practices.</p>
                 <div className="chart-card-canvas">
                   <Line
                     options={{
@@ -572,6 +576,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
                   color="#c6a15b"
                 />
               </div>
+              <p className="analytics-visual-explanation">The x-axis is the report period; each bar shows the selected measure for current and baseline periods. Review the table below to find which periods drove the difference.</p>
               <div className="chart-card-canvas">
                 <Bar options={reportChartOptions} data={{
                   labels: (preview.series || []).map((row) => row.label),
@@ -586,6 +591,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
                 <h3>
                   {activeReport.key === 'yearly' ? 'Yearly totals' : 'Period by period'}
                 </h3>
+                <p className="analytics-chart-section-desc">This table contains the records included in the preview. “Change vs previous year” is the dose change; the remaining columns show current values or current and baseline values by period.</p>
                 <div className="report-table-wrapper">
                   <table className="report-table">
                     <thead>
@@ -641,14 +647,14 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
                       {activeReport.key === 'yearly' && !(preview.yearly || []).length ? (
                         <tr>
                           <td className="report-table-empty" colSpan={activeReport.key === 'yearly' ? 7 : 8}>
-                            No yearly data available.
+                            No yearly vaccination data is available. Choose another report period or check that vaccine service records have been entered.
                           </td>
                         </tr>
                       ) : null}
                       {activeReport.key !== 'yearly' && !(preview.series || []).length ? (
                         <tr>
                           <td className="report-table-empty" colSpan={8}>
-                            No comparison data available.
+                            No period comparison data is available. Choose a wider report period or check that vaccination records exist for both periods.
                           </td>
                         </tr>
                       ) : null}
@@ -661,6 +667,15 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
           <p className="analytics-preview-note">
             Summary preview only. Full tables, definitions and signature blocks are included in Print / Save PDF and the exports.
           </p>
+          {activeReport.key === 'compliance' && Number(preview.actionableTotal) > 0 && (
+            <div className="analytics-action-callout">
+              <div>
+                <strong>{fmtNum(preview.actionableTotal)} follow-ups need review</strong>
+                <p>Open the follow-up list to review due episodes, owner contact details, and recorded outcomes.</p>
+              </div>
+              <button type="button" className="btn-primary" onClick={onOpenFollowups}>Open Follow-Up List</button>
+            </div>
+          )}
         </section>
       )}
     </div>
