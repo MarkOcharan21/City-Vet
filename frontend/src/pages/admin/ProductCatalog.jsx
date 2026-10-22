@@ -3,7 +3,7 @@ import api from '../../services/api';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import useMinLoading from '../../hooks/useMinLoading';
 import {
-  Search, Plus, Pencil, UserX, UserCheck, Trash2, Package, X, Eye,
+  Search, Plus, Pencil, UserX, UserCheck, Trash2, Package, X, Eye, CalendarDays,
 } from 'lucide-react';
 import FieldError from '../../components/ui/FieldError';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -126,6 +126,13 @@ function daysUntilExpiry(value, today) {
   return Math.floor((expiry.getTime() - today.getTime()) / 86400000);
 }
 
+function toDateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export default function ProductCatalog() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -146,6 +153,11 @@ export default function ProductCatalog() {
   const [stampPreview, setStampPreview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [successModal, setSuccessModal] = useState({ open: false, title: '', message: '' });
+  const [expiryFilter, setExpiryFilter] = useState('All');
+  const [expiryEditing, setExpiryEditing] = useState(null);
+  const [expiryEditDate, setExpiryEditDate] = useState('');
+  const [expiryEditError, setExpiryEditError] = useState('');
+  const [expirySaving, setExpirySaving] = useState(false);
 
   async function loadCatalog() {
     setLoading(true);
@@ -213,6 +225,15 @@ export default function ProductCatalog() {
       .filter((product) => product.daysUntilExpiry !== null && product.daysUntilExpiry <= 30)
       .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
   }, [products]);
+
+  const filteredExpiryWatchProducts = useMemo(
+    () => expiryWatchProducts.filter((product) => {
+      if (expiryFilter === 'Expired') return product.daysUntilExpiry < 0;
+      if (expiryFilter === 'Expiring Soon') return product.daysUntilExpiry >= 0;
+      return true;
+    }),
+    [expiryWatchProducts, expiryFilter]
+  );
 
   const unitOptions = useMemo(
     () => Array.from(new Set([...UNIT_OPTIONS, ...products.map((p) => p.unit).filter(Boolean)])),
@@ -310,6 +331,37 @@ export default function ProductCatalog() {
       setFormError(err.response?.data?.message || 'Unable to save the product.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  function openExpiryEditor(product) {
+    setExpiryEditing(product);
+    setExpiryEditDate(product.expiry_date ? String(product.expiry_date).slice(0, 10) : '');
+    setExpiryEditError('');
+  }
+
+  async function handleExpiryUpdate(e) {
+    e.preventDefault();
+    setExpiryEditError('');
+    if (!expiryEditDate || expiryEditDate < toDateInputValue(new Date())) {
+      setExpiryEditError('Choose today or a future date to clear the expired status.');
+      return;
+    }
+
+    setExpirySaving(true);
+    try {
+      await api.put(`/catalog/${expiryEditing.id}`, { expiry_date: expiryEditDate });
+      setExpiryEditing(null);
+      await loadCatalog();
+      setSuccessModal({
+        open: true,
+        title: 'Expiration Date Updated',
+        message: `"${expiryEditing.name}" expiration date is now ${formatCatalogDate(expiryEditDate)}.`,
+      });
+    } catch (err) {
+      setExpiryEditError(err.response?.data?.message || 'Unable to update the expiration date.');
+    } finally {
+      setExpirySaving(false);
     }
   }
 
@@ -528,13 +580,26 @@ export default function ProductCatalog() {
       <div className="page-card catalog-expiry-watch">
         <div className="table-header-row">
           <div>
-            <h2>Medicine Expiration Watch</h2>
+            <h2>Medicine Expiration Monitoring</h2>
             <p className="page-intro">Active medicines and vaccines expiring within 30 days or already expired.</p>
           </div>
           <div className="table-meta">
             {expiryWatchProducts.filter((product) => product.daysUntilExpiry < 0).length} expired ·{' '}
             {expiryWatchProducts.filter((product) => product.daysUntilExpiry >= 0).length} expiring soon
           </div>
+        </div>
+        <div className="catalog-expiry-toolbar">
+          <label htmlFor="catalog-expiry-filter">Show</label>
+          <select
+            id="catalog-expiry-filter"
+            className="toolbar-select"
+            value={expiryFilter}
+            onChange={(event) => setExpiryFilter(event.target.value)}
+          >
+            <option value="All">All statuses</option>
+            <option value="Expired">Expired</option>
+            <option value="Expiring Soon">Expiring soon (within 30 days)</option>
+          </select>
         </div>
         <div className="table-wrapper catalog-expiry-table-wrapper">
           <table className="data-table catalog-expiry-table">
@@ -547,14 +612,19 @@ export default function ProductCatalog() {
                 <th>Expiration Date</th>
                 <th>Status</th>
                 <th>Days</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="7"><LoadingSpinner text="Loading expiration data..." fullPage={false} /></td></tr>
-              ) : expiryWatchProducts.length === 0 ? (
-                <tr><td colSpan="7">No active medicines are expired or expiring within 30 days.</td></tr>
-              ) : expiryWatchProducts.map((product) => {
+                <tr><td colSpan="8"><LoadingSpinner text="Loading expiration data..." fullPage={false} /></td></tr>
+              ) : filteredExpiryWatchProducts.length === 0 ? (
+                <tr><td colSpan="8">
+                  {expiryWatchProducts.length === 0
+                    ? 'No active medicines are expired or expiring within 30 days.'
+                    : `No ${expiryFilter.toLowerCase()} products found.`}
+                </td></tr>
+              ) : filteredExpiryWatchProducts.map((product) => {
                 const expired = product.daysUntilExpiry < 0;
                 return (
                   <tr key={`expiry-${product.id}`} className={expired ? 'catalog-expiry-row--expired' : ''}>
@@ -573,6 +643,17 @@ export default function ProductCatalog() {
                       </span>
                     </td>
                     <td>{expired ? `${Math.abs(product.daysUntilExpiry)} days ago` : `${product.daysUntilExpiry} days`}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn-secondary catalog-expiry-update"
+                        onClick={() => openExpiryEditor(product)}
+                        aria-label={`Update expiration date for ${product.name}`}
+                      >
+                        <CalendarDays size={15} />
+                        Update date
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -580,6 +661,72 @@ export default function ProductCatalog() {
           </table>
         </div>
       </div>
+
+      {expiryEditing && (
+        <div
+          className="logout-modal-overlay"
+          onClick={() => !expirySaving && setExpiryEditing(null)}
+        >
+          <div
+            className="aat-modal catalog-expiry-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="catalog-expiry-modal-title"
+          >
+            <div className="aat-modal-header">
+              <div>
+                <h3 id="catalog-expiry-modal-title">Update Expiration Date</h3>
+                <p><CalendarDays size={14} />{expiryEditing.name}</p>
+              </div>
+              <button
+                type="button"
+                className="aat-modal-close"
+                onClick={() => setExpiryEditing(null)}
+                aria-label="Close"
+                disabled={expirySaving}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleExpiryUpdate}>
+              <div className="vaccination-modal-body">
+                <div className="field-group">
+                  <label htmlFor="catalog-expiry-edit-date">New expiration date</label>
+                  <input
+                    id="catalog-expiry-edit-date"
+                    type="date"
+                    min={toDateInputValue(new Date())}
+                    value={expiryEditDate}
+                    onChange={(event) => {
+                      setExpiryEditDate(event.target.value);
+                      setExpiryEditError('');
+                    }}
+                    required
+                  />
+                  <p className="vaccination-calc-helper">
+                    Choose today or a future date. Updating this date will remove the expired status.
+                  </p>
+                </div>
+                {expiryEditError && <p className="form-error" role="alert">{expiryEditError}</p>}
+              </div>
+              <div className="catalog-modal-footer">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setExpiryEditing(null)}
+                  disabled={expirySaving}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={expirySaving || !expiryEditDate}>
+                  {expirySaving ? 'Saving...' : 'Save Expiration Date'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {stampPreview && (
         <div
