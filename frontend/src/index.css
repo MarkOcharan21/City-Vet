@@ -13923,8 +13923,22 @@ body {
 }
 
 .catalog-sticky-table {
+  display: table;
   min-width: 1433px;
   table-layout: fixed;
+}
+.catalog-sticky-table thead {
+  display: table-header-group;
+}
+.catalog-sticky-table tbody {
+  display: table-row-group;
+}
+.catalog-sticky-table tbody tr {
+  display: table-row;
+}
+.catalog-sticky-table th,
+.catalog-sticky-table td {
+  display: table-cell;
 }
 .catalog-sticky-table th,
 .catalog-sticky-table td {
@@ -14064,6 +14078,7 @@ body {
 
 /* Sticky header cells */
 .catalog-sticky-thead th {
+  display: table-cell;
   position: sticky;
   top: 0;
   z-index: 3;
