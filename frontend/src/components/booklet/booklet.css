@@ -1636,15 +1636,14 @@
 .booklet-edit__btn--secondary:disabled {
   cursor: wait;
   opacity: 0.65;
-} 
- / *   D y n a m i c   s t a m p   c o l o r   p e r   m e d i c i n e   -   o v e r r i d e s   t h e   d e f a u l t   b a c k g r o u n d   * /  
- . s t a m p - r o w _ _ s e a l - i c o n - - m e d i c i n e   {  
-     - w e b k i t - t r a n s i t i o n :   b a c k g r o u n d   0 . 1 5 s   e a s e ;  
-     t r a n s i t i o n :   b a c k g r o u n d   0 . 1 5 s   e a s e ;  
- }  
-  
- . s t a m p - r o w _ _ t r a n s a c t i o n   {  
-     f o n t - w e i g h t :   7 0 0 ;  
-     f o n t - s i z e :   1 4 p x ;  
- }  
- 
+}
+/* Dynamic stamp color per medicine - overrides the default background */
+.stamp-row__seal-icon--medicine {
+  -webkit-transition: background 0.15s ease;
+  transition: background 0.15s ease;
+}
+
+.stamp-row__transaction {
+  font-weight: 700;
+  font-size: 14px;
+}

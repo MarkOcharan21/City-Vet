@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import {
   BarChart3,
   CalendarRange,
@@ -53,6 +53,13 @@ function fmtPeso(value) {
   return Number.isFinite(n) ? `₱${n.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—';
 }
 
+function fmtDelta(value) {
+  if (value === null || value === undefined) return '—';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  return `${n > 0 ? '+' : ''}${n.toLocaleString('en-US')}`;
+}
+
 /** "May 1, 2026 – Oct 31, 2026" — the full window, not just its first day. */
 function fmtRange(range) {
   if (!range?.from || !range?.to) return null;
@@ -74,7 +81,6 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
   const [printing, setPrinting] = useState(false);
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [showAllPreviewRows, setShowAllPreviewRows] = useState(false);
 
   const REPORTS = useMemo(
     () => [
@@ -299,31 +305,29 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
     ...(preview?.vaccinations || []).map((row) => row.month),
     ...(preview?.paymentRevenue || []).map((row) => row.month),
   ])).sort((a, b) => new Date(`${a} 1`).getTime() - new Date(`${b} 1`).getTime());
-  const visibleMonths = showAllPreviewRows ? previewMonths : previewMonths.slice(-12);
-  const distributionRows = Array.from({
-    length: Math.max(preview?.species?.length || 0, preview?.barangays?.length || 0),
-  }, (_, index) => index);
-  const visibleDistributionRows = showAllPreviewRows ? distributionRows : distributionRows.slice(0, 10);
+  const visibleMonths = previewMonths.slice(-12);
   const comparisonRows = activeReport.key === 'yearly' ? preview?.yearly || [] : preview?.series || [];
-  const visibleComparisonRows = showAllPreviewRows ? comparisonRows : comparisonRows.slice(-10);
+  const visibleComparisonRows = comparisonRows.slice(activeReport.key === 'yearly' ? -5 : -6);
 
   return (
     <div className="analytics-panel">
       <div className="analytics-filter-row" role="group" aria-label="Report period">
-        <div className="analytics-inline-field">
-          <label htmlFor="report-grace">Grace period</label>
-          <select
-            id="report-grace"
-            value={grace}
-            onChange={(e) => setGrace(Number(e.target.value))}
-          >
-            {GRACE_OPTIONS.map((days) => (
-              <option key={days} value={days}>
-                {days === 0 ? 'No grace' : `${days} day${days === 1 ? '' : 's'}`}
-              </option>
-            ))}
-          </select>
-        </div>
+        {selected === 'compliance' && (
+          <div className="analytics-inline-field">
+            <label htmlFor="report-grace">Grace period</label>
+            <select
+              id="report-grace"
+              value={grace}
+              onChange={(e) => setGrace(Number(e.target.value))}
+            >
+              {GRACE_OPTIONS.map((days) => (
+                <option key={days} value={days}>
+                  {days === 0 ? 'No grace' : `${days} day${days === 1 ? '' : 's'}`}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <button
           type="button"
           className="btn-secondary analytics-filter-action"
@@ -427,31 +431,27 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
                   ],
                 }} />
               </div>
-              <div className="report-table-wrapper">
-                <table className="report-table">
-                  <thead><tr><th>Month</th><th>Verified registrations</th><th>Vaccine doses</th><th>Paid revenue</th></tr></thead>
-                  <tbody>{visibleMonths.map((month) => {
-                    const registrations = preview.registrations?.find((entry) => entry.month === month);
-                    const vaccinations = preview.vaccinations?.find((entry) => entry.month === month);
-                    const revenue = preview.paymentRevenue?.find((entry) => entry.month === month);
-                    return <tr key={month}><td>{month}</td><td>{fmtNum(registrations?.total)}</td><td>{fmtNum(vaccinations?.total)}</td><td>{fmtPeso(revenue?.total)}</td></tr>;
-                  })}</tbody>
-                </table>
-              </div>
-              {previewMonths.length > 12 && <button type="button" className="btn-secondary" onClick={() => setShowAllPreviewRows((show) => !show)}>{showAllPreviewRows ? 'Show recent 12 months' : `Show all ${previewMonths.length} months`}</button>}
               <p>Pet registrations use registration date when available. Revenue includes paid ledger records only.</p>
             </div>
-            <div className="report-table-container">
-              <h3>Species and barangay distribution</h3>
-              <div className="report-table-wrapper">
-                <table className="report-table">
-                  <thead><tr><th>Species</th><th>Verified pets</th><th>Barangay</th><th>Verified pets</th></tr></thead>
-                  <tbody>{visibleDistributionRows.map((index) => (
-                    <tr key={index}><td>{preview.species?.[index]?.species || '—'}</td><td>{fmtNum(preview.species?.[index]?.total)}</td><td>{preview.barangays?.[index]?.barangay || '—'}</td><td>{fmtNum(preview.barangays?.[index]?.total)}</td></tr>
-                  ))}</tbody>
-                </table>
+            <div className="analytics-insight-grid">
+              <div className="chart-card">
+                <h3>Top 5 barangays</h3>
+                <ol>
+                  {(preview.barangays || []).slice(0, 5).map((row) => (
+                    <li key={row.barangay}>{row.barangay}: <strong>{fmtNum(row.total)}</strong> verified pets</li>
+                  ))}
+                  {!(preview.barangays || []).length && <li>No barangay data available.</li>}
+                </ol>
               </div>
-              {distributionRows.length > 10 && <button type="button" className="btn-secondary" onClick={() => setShowAllPreviewRows((show) => !show)}>{showAllPreviewRows ? 'Show top 10' : `Show all ${distributionRows.length}`}</button>}
+              <div className="chart-card">
+                <h3>Species split</h3>
+                <ul>
+                  {(preview.species || []).slice(0, 5).map((row) => (
+                    <li key={row.species}>{row.species}: <strong>{fmtNum(row.total)}</strong> verified pets</li>
+                  ))}
+                  {!(preview.species || []).length && <li>No species data available.</li>}
+                </ul>
+              </div>
             </div>
             </>
           )}
@@ -460,9 +460,9 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
             <>
             <div className="summary-row">
               <SummaryCard
-                label="Episodes Evaluated"
+                label="Follow-ups Evaluated"
                 value={fmtNum(preview.summary?.evaluable)}
-                sub={[{ label: 'Episodes', value: fmtNum(preview.summary?.episodes) }]}
+                sub={[{ label: 'Follow-ups', value: fmtNum(preview.summary?.episodes) }]}
               />
               <SummaryCard
                 label="On-Time Rate"
@@ -480,51 +480,76 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
                 color="#c6a15b"
               />
             </div>
+            <div className="chart-grid">
+              <div className="chart-card">
+                <h3>Follow-up outcomes</h3>
+                <div className="chart-card-canvas">
+                  <Doughnut
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
+                        datalabels: { display: false },
+                      },
+                    }}
+                    data={{
+                      labels: (preview.buckets || []).filter((row) => row.status !== 'Pending').map((row) => row.status),
+                      datasets: [{
+                        data: (preview.buckets || []).filter((row) => row.status !== 'Pending').map((row) => row.total),
+                        backgroundColor: ['#1e7a46', '#b8860b', '#c8102e', '#6b6062'],
+                        borderWidth: 0,
+                      }],
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="chart-card">
+                <h3>Monthly on-time rate</h3>
+                <div className="chart-card-canvas">
+                  <Line
+                    options={{
+                      ...reportChartOptions,
+                      plugins: { legend: { display: false }, datalabels: { display: false } },
+                      scales: { x: { grid: { display: false } }, y: { beginAtZero: true, max: 100, ticks: { callback: (v) => `${v}%` } } },
+                    }}
+                    data={{
+                      labels: (preview.trend || []).map((row) => row.period),
+                      datasets: [{
+                        label: 'On-time rate (%)',
+                        data: (preview.trend || []).map((row) => row.onTimeRate),
+                        borderColor: '#1e7a46',
+                        backgroundColor: 'rgba(30, 122, 70, 0.12)',
+                        fill: true,
+                        tension: 0,
+                        pointRadius: 3,
+                      }],
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
             <div className="report-table-container">
-              <h3>Follow-up outcome breakdown</h3>
-              <div className="chart-card-canvas">
-                <Bar options={reportChartOptions} data={{
-                  labels: (preview.buckets || []).map((row) => row.status),
-                  datasets: [{ label: 'Vaccine episodes', data: (preview.buckets || []).map((row) => row.total), backgroundColor: ['#1e7a46', '#b8860b', '#c8102e', '#6b6062', '#c6a15b'] }],
-                }} />
-              </div>
-              <div className="report-table-wrapper"><table className="report-table">
-                <thead><tr><th>Outcome</th><th>Episodes</th><th>Share</th></tr></thead>
-                <tbody>{(preview.buckets || []).map((row) => <tr key={row.status}><td>{row.status}</td><td>{fmtNum(row.total)}</td><td>{fmtPct(row.pct)}</td></tr>)}</tbody>
-              </table></div>
-              <h3>Key findings</h3><ul>{(preview.analysis?.findings || []).map((item) => <li key={item}>{item}</li>)}</ul>
-              <h3>Recommendations</h3><ul>{(preview.analysis?.recommendations || []).map((item) => <li key={item}>{item}</li>)}</ul>
-              <h3>Monthly on-time trend (evaluated n and pending shown)</h3>
-              <div className="chart-card-canvas">
-                <Bar options={reportChartOptions} data={{
-                  labels: (preview.trend || []).map((row) => row.period),
-                  datasets: [{ label: 'On-time rate (%)', data: (preview.trend || []).map((row) => row.onTimeRate), backgroundColor: '#1e7a46' }],
-                }} />
-              </div>
-              <h3>Owner-stated retention reasons</h3><div className="report-table-wrapper"><table className="report-table">
-                <thead><tr><th>Reason</th><th>Count</th></tr></thead>
-                <tbody>{(preview.retentionReasons || []).map((row) => <tr key={row.key}><td>{row.label}</td><td>{fmtNum(row.count)}</td></tr>)}</tbody>
-              </table></div>
-              <h3>Any-service retention and follow-up</h3>
-              <p>
-                {fmtPct(preview.serviceReturn?.summary?.returnRate30)} of mature service episodes had any-service return within 30 days;
-                owner retention within 90 days was {fmtPct(preview.serviceReturn?.retention?.retentionRate)}.
-              </p>
+              <h3>Key findings</h3>
+              <ul>{(preview.analysis?.findings || []).slice(0, 3).map((item) => <li key={item}>{item}</li>)}</ul>
+              {(preview.retentionReasons || []).some((row) => Number(row.count) > 0) && (
+                <>
+                  <h3>Top owner-stated reasons</h3>
+                  <ul>
+                    {(preview.retentionReasons || [])
+                      .filter((row) => Number(row.count) > 0)
+                      .sort((a, b) => b.count - a.count)
+                      .slice(0, 3)
+                      .map((row) => <li key={row.key}>{row.label}: <strong>{fmtNum(row.count)}</strong></li>)}
+                  </ul>
+                </>
+              )}
             </div>
             </>
           )}
 
           {(activeReport.key === 'comparison' || activeReport.key === 'yearly') && (
             <>
-              <div className="chart-card-canvas">
-                <Bar options={reportChartOptions} data={{
-                  labels: (preview.series || []).map((row) => row.label),
-                  datasets: [
-                    { label: preview.current?.label || 'Current', data: (preview.series || []).map((row) => Number(row.current?.[preview.primaryMetric]) || 0), backgroundColor: '#c8102e' },
-                    { label: preview.baseline?.label || 'Baseline', data: (preview.series || []).map((row) => Number(row.baseline?.[preview.primaryMetric]) || 0), backgroundColor: '#c6a15b' },
-                  ],
-                }} />
-              </div>
               <div className="summary-row">
                 <SummaryCard
                   label="Doses"
@@ -547,6 +572,15 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
                   color="#c6a15b"
                 />
               </div>
+              <div className="chart-card-canvas">
+                <Bar options={reportChartOptions} data={{
+                  labels: (preview.series || []).map((row) => row.label),
+                  datasets: [
+                    { label: preview.current?.label || 'Current', data: (preview.series || []).map((row) => Number(row.current?.[preview.primaryMetric]) || 0), backgroundColor: '#c8102e' },
+                    { label: preview.baseline?.label || 'Baseline', data: (preview.series || []).map((row) => Number(row.baseline?.[preview.primaryMetric]) || 0), backgroundColor: '#c6a15b' },
+                  ],
+                }} />
+              </div>
 
               <div className="report-table-container">
                 <h3>
@@ -562,6 +596,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
                         <th>Owners</th>
                         <th>On-Time Rate</th>
                         <th>Revenue</th>
+                        {activeReport.key === 'yearly' && <th>Change vs previous year</th>}
                         {activeReport.key !== 'yearly' && <><th>Baseline doses</th><th>Baseline revenue</th></>}
                       </tr>
                     </thead>
@@ -575,6 +610,17 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
                               <td>{fmtNum(row.owners)}</td>
                               <td>{fmtPct(row.onTimeRate)}</td>
                               <td>{fmtPeso(row.revenue)}</td>
+                              {activeReport.key === 'yearly' && (
+                                <td>
+                                  {fmtDelta(row.deltas?.doses?.delta)}
+                                  {row.deltas?.doses?.pctChange != null && (
+                                    <small className="analytics-table-delta">
+                                      {Number(row.deltas.doses.pctChange) > 0 ? '+' : ''}
+                                      {Number(row.deltas.doses.pctChange).toFixed(1)}%
+                                    </small>
+                                  )}
+                                </td>
+                              )}
                               {activeReport.key !== 'yearly' && <><td>—</td><td>—</td></>}
                             </tr>
                           ))
@@ -594,7 +640,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
                           ))}
                       {activeReport.key === 'yearly' && !(preview.yearly || []).length ? (
                         <tr>
-                          <td className="report-table-empty" colSpan={activeReport.key === 'yearly' ? 6 : 8}>
+                          <td className="report-table-empty" colSpan={activeReport.key === 'yearly' ? 7 : 8}>
                             No yearly data available.
                           </td>
                         </tr>
@@ -609,10 +655,12 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
                     </tbody>
                   </table>
                 </div>
-                {comparisonRows.length > 10 && <button type="button" className="btn-secondary" onClick={() => setShowAllPreviewRows((show) => !show)}>{showAllPreviewRows ? 'Show latest 10 rows' : `Show all ${comparisonRows.length} rows`}</button>}
               </div>
             </>
           )}
+          <p className="analytics-preview-note">
+            Summary preview only. Full tables, definitions and signature blocks are included in Print / Save PDF and the exports.
+          </p>
         </section>
       )}
     </div>

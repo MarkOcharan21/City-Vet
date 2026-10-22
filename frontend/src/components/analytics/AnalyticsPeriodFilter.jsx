@@ -122,11 +122,15 @@ export default function AnalyticsPeriodFilter({
               <button
                 key={option.key || 'off'}
                 type="button"
-                title={compareDisabled ? 'All Time or an incomplete custom range cannot be compared.' : undefined}
-                aria-pressed={!compareDisabled && compare === option.key}
+                title={compareDisabled && option.key !== '' ? 'All Time or an incomplete custom range cannot be compared.' : undefined}
+                aria-pressed={(!compareDisabled && compare === option.key) || (compareDisabled && option.key === '')}
                 onClick={() => onCompareChange(option.key)}
                 disabled={compareDisabled && option.key !== ''}
-                className={`analytics-filter-btn${!compareDisabled && compare === option.key ? ' is-active' : ''}`}
+                className={`analytics-filter-btn${
+                  (!compareDisabled && compare === option.key) || (compareDisabled && option.key === '')
+                    ? ' is-active'
+                    : ''
+                }`}
               >
                 {option.label}
               </button>

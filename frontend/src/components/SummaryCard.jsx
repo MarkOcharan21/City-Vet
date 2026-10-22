@@ -1,8 +1,13 @@
-export default function SummaryCard({ label, value, color, sub }) {
+import InfoTooltip from './InfoTooltip';
+
+export default function SummaryCard({ label, value, color, sub, hint }) {
   return (
     <div className="summary-card" style={{ borderTopColor: color || '#c8102e' }}>
       <p className="summary-card-value">{value}</p>
-      <p className="summary-card-label">{label}</p>
+      <p className="summary-card-label">
+        {label}
+        {hint && <InfoTooltip text={hint} label={`About ${label}`} />}
+      </p>
       {Array.isArray(sub) && sub.length > 0 && (
         <div className="summary-card-sub">
           {sub.map((s) => (

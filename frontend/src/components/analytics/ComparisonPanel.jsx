@@ -161,6 +161,35 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
 
   const activeMetric = METRIC_OPTIONS.find((m) => m.key === chartData.metric) || METRIC_OPTIONS[1];
 
+  const chipDelta = (option) => {
+    const change = totals[option.key] || {};
+    const currentValue = Number(current[option.key]) || 0;
+    const baselineValue = Number(baseline[option.key]) || 0;
+    if (baselineValue < 5) {
+      if (!baselineValue && !currentValue) return 'No data';
+      return `${fmtDelta(change.delta)} vs baseline`;
+    }
+    if (change.pctChange == null) return '—';
+    return `${Number(change.pctChange) > 0 ? '+' : ''}${Number(change.pctChange).toFixed(1)}%`;
+  };
+
+  const comparisonChartOptions = useMemo(() => {
+    if (!activeMetric.money) return groupedBarOptions;
+    return {
+      ...groupedBarOptions,
+      scales: {
+        ...groupedBarOptions.scales,
+        y: {
+          ...groupedBarOptions.scales.y,
+          ticks: {
+            ...groupedBarOptions.scales.y.ticks,
+            callback: (value) => `₱${Number(value).toLocaleString('en-US')}`,
+          },
+        },
+      },
+    };
+  }, [activeMetric.money]);
+
   const handlePrint = async () => {
     setPrinting(true);
     try {
@@ -269,9 +298,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
         {data?.baseline?.partial && <strong> · Partial baseline period</strong>}
       </p>
       <div className="analytics-metric-chips" role="group" aria-label="Quick comparison metrics">
-        {METRIC_OPTIONS.filter((option) =>
-          ['registrations', 'doses', 'pets', 'owners', 'revenue', 'consultations'].includes(option.key)
-        ).map((option) => (
+        {METRIC_OPTIONS.map((option) => (
           <button
             key={option.key}
             type="button"
@@ -280,6 +307,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
             onClick={() => setMetric(option.key)}
           >
             {option.label}
+            <small>{chipDelta(option)}</small>
           </button>
         ))}
       </div>
@@ -340,7 +368,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
               <div className="chart-card-canvas">
                 {series.length ? (
                   chartStyle === 'bars' ? <Bar
-                    options={groupedBarOptions}
+                    options={comparisonChartOptions}
                     data={{
                       labels: chartData.labels,
                       datasets: [
@@ -360,7 +388,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
                     }}
                   /> : (
                     <Line
-                      options={groupedBarOptions}
+                      options={comparisonChartOptions}
                       data={{
                         labels: chartData.labels,
                         datasets: [
@@ -404,9 +432,9 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
                           <td>{row.baseline ? fmtMetric(row.baseline[chartData.metric], activeMetric.money) : 'No data'}</td>
                           <td>{fmtDelta(row.deltas?.[chartData.metric]?.delta ?? row.delta)}</td>
                           <td>
-                            {(row.deltas?.[chartData.metric]?.pctChange ?? row.pctChange) === null
+                            {(row.deltas?.[chartData.metric]?.pctChange ?? row.pctChange) == null
                               ? '—'
-                              : `${Number(row.deltas?.[chartData.metric]?.pctChange ?? row.pctChange).toFixed(1)}%`}
+                              : `${Number(row.deltas?.[chartData.metric]?.pctChange ?? row.pctChange) > 0 ? '+' : ''}${Number(row.deltas?.[chartData.metric]?.pctChange ?? row.pctChange).toFixed(1)}%`}
                           </td>
                         </tr>
                       ))
@@ -462,7 +490,14 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
                         );
                         return (
                           <tr key={row.year}>
-                            <td>{row.year}</td>
+                            <td>
+                              {row.year}
+                              {Number(row.year) === new Date().getFullYear() && (
+                                <span className="analytics-small-sample" title="Year to date; the change is against the full previous year.">
+                                  YTD
+                                </span>
+                              )}
+                            </td>
                             <td>{cell('registrations')}</td>
                             <td>{cell('doses')}</td>
                             <td>{cell('pets')}</td>

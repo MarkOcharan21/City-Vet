@@ -133,6 +133,7 @@ test('user directory creates a staff account requiring activation via setup link
     queries.push({ sql, params });
     if (sql.includes('SELECT id, role, full_name FROM users')) return [[]];
     if (sql.includes('SUBSTRING_INDEX(account_id')) return [[{ maxSeq: 0 }]];
+    if (sql.includes('SUBSTRING(account_id')) return [[{ maxSeq: 0 }]];
     if (sql.includes('INSERT INTO audit_logs')) return [{ affectedRows: 1 }];
     if (sql.includes('INSERT INTO users')) return [{ insertId: 20 }];
     throw new Error(`Unexpected query: ${sql}`);

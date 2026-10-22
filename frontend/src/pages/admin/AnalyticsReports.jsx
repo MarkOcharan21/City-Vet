@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import api from "../../services/api";
 
-import { Bar, Pie, Doughnut } from "react-chartjs-2";
+import { Bar, Doughnut } from "react-chartjs-2";
 
-import { Printer } from "lucide-react";
 import toast from "react-hot-toast";
 import SummaryCard from "../../components/SummaryCard";
 import GlobalLoadingOverlay from "../../components/GlobalLoadingOverlay";
@@ -17,8 +16,6 @@ import AnalyticsPeriodFilter, {
 } from "../../components/analytics/AnalyticsPeriodFilter";
 import "../../components/analytics/chartSetup";
 
-const CHART_PALETTE = ["#c8102e", "#c6a15b", "#1e7a46", "#b8860b", "#7a0c1e"];
-
 const TABS = [
   { key: "overview", label: "Overview" },
   { key: "compliance", label: "Vaccine Compliance" },
@@ -27,6 +24,13 @@ const TABS = [
 ];
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function barLabelFormatter(value, context) {
+  const labels = context?.chart?.data?.labels || [];
+  if (Number(value) === 0) return '';
+  if (labels.length > 12) return '';
+  return value;
+}
 
 const barChartOptions = {
   responsive: true,
@@ -48,7 +52,7 @@ const barChartOptions = {
       textStrokeWidth: 3,
       clamp: false,
       clip: false,
-      formatter: (value) => Number(value) === 0 ? '' : value,
+      formatter: barLabelFormatter,
     },
   },
   scales: {
@@ -158,7 +162,11 @@ const revenueBarChartOptions = {
       color: '#ffffff',
       textStrokeColor: 'rgba(36, 20, 22, 0.9)',
       textStrokeWidth: 3,
-      formatter: (value) => Number(value) === 0 ? '' : `₱${Number(value).toLocaleString()}`,
+      formatter: (value, context) => {
+        if (Number(value) === 0) return '';
+        if ((context?.chart?.data?.labels || []).length > 12) return '';
+        return `₱${Number(value).toLocaleString()}`;
+      },
       clamp: false,
       clip: false,
     },
@@ -228,23 +236,6 @@ function fmtDelta(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '—';
   return `${n > 0 ? '+' : ''}${n.toLocaleString('en-US')}`;
-}
-
-function fmtPct(value) {
-  if (value === null || value === undefined) return '—';
-  const n = Number(value);
-  return Number.isFinite(n) ? `${n > 0 && !String(value).startsWith('-') ? '+' : ''}${n.toFixed(1)}%` : '—';
-}
-
-function deltaTone(delta, invert = false) {
-  const n = Number(delta);
-  if (!Number.isFinite(n) || n === 0) return 'flat';
-  const up = invert ? n < 0 : n > 0;
-  return up ? 'up' : 'down';
-}
-
-function getComparisonMetric(dashboard, key) {
-  return dashboard?.comparison?.totals?.[key] || null;
 }
 
 function buildGroupedYearDatasets(rows) {
@@ -466,24 +457,28 @@ export default function AnalyticsReports() {
                 <SummaryCard
                   label="Verified Pet Registrations"
                   value={dashboard.summary?.totalPets ?? '-'}
+                  hint="Verified pet records grouped by registration date (encoded date is used when registration date is missing)."
                   sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getComparisonLabel(dashboard.comparison, 'registrations') }] : undefined}
                 />
                 <SummaryCard
                   label="Vaccinated Pets"
                   value={dashboard?.summary?.vaccinatedPets ?? '-'}
                   color="#1e7a46"
+                  hint="Distinct pets with at least one vaccine record in the selected service-date range."
                   sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getComparisonLabel(dashboard.comparison, 'pets') }] : undefined}
                 />
                 <SummaryCard
                   label="Lost Pets"
                   value={dashboard?.summary?.lostPets ?? '-'}
                   color="#c8102e"
+                  hint="Verified pets with a recorded lost date inside the selected period."
                   sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getComparisonLabel(dashboard.comparison, 'lostPets') }] : undefined}
                 />
                 <SummaryCard
                   label="Generated QR"
                   value={dashboard?.summary?.totalQr ?? '-'}
                   color="#c6a15b"
+                  hint="QR codes generated for verified pets in the selected period."
                   sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getComparisonLabel(dashboard.comparison, 'qrIssued') }] : undefined}
                 />
               </div>
@@ -500,31 +495,18 @@ export default function AnalyticsReports() {
                   </button>
                 </div>
                 <div className="analytics-pending-stat">
-                  <strong>{fmtNum(dashboard.registrationStatus?.find((row) => /pending|registered/i.test(row.status))?.total || 0)}</strong>
+                  <strong>{fmtNum(dashboard.registrationStatus?.find((row) => /pending/i.test(row.status))?.total || 0)}</strong>
                   <span>Pending verification</span>
                 </div>
               </section>
 
-              <details className="analytics-data-notes" id="analytics-data-notes">
-                <summary>Data notes</summary>
-                <div className="summary-row">
-                  <SummaryCard label="Verified pets without barangay" value={fmtNum(dashboard.dataQuality?.missingBarangay)} />
-                  <SummaryCard label="Vaccine records without due date" value={fmtNum(dashboard.dataQuality?.missingDueDate)} />
-                  <SummaryCard label="Late-encoded registrations" value={fmtNum(dashboard.dataQuality?.lateEncodedRegistrations)} />
-                  <SummaryCard label="Late-encoded vaccinations" value={fmtNum(dashboard.dataQuality?.lateEncodedVaccinations)} />
-                </div>
-                <p className="analytics-chart-section-desc">
-                  Verified pets are grouped by registration date; vaccination counts use service date and exclude registration fees. Revenue is paid ledger activity only.
-                </p>
-              </details>
-
               {compare && dashboard?.comparison && (
-                <section className="analytics-chart-section">
-                  <h3 className="analytics-chart-section-title">
-                    Comparing {dashboard.comparison.current?.label} vs {dashboard.comparison.baseline?.label}
-                    {dashboard.comparison.current?.partial ? ' · Partial current period' : ''}
-                  </h3>
-                  <div className="report-table-wrapper">
+                <details className="analytics-details">
+                  <summary>
+                    Comparison details — {dashboard.comparison.current?.label} vs {dashboard.comparison.baseline?.label}
+                    {dashboard.comparison.current?.partial ? ' (partial current period)' : ''}
+                  </summary>
+                  <div className="report-table-wrapper analytics-table-scroll">
                     <table className="report-table">
                       <thead><tr><th>Metric</th><th>Current</th><th>Baseline</th><th>Change</th><th>% Change</th></tr></thead>
                       <tbody>
@@ -551,13 +533,13 @@ export default function AnalyticsReports() {
                       </tbody>
                     </table>
                   </div>
-                </section>
+                </details>
               )}
 
               <h2>Analytics Graphs</h2>
               <p className="page-intro">
                 Visual breakdown of registrations, demographics, vaccination activity,
-                and QR records for the selected period.
+                and vaccine due status for the selected period.
               </p>
 
               <section className="analytics-chart-section">
@@ -579,18 +561,19 @@ export default function AnalyticsReports() {
                     />
                   </ChartCard>
 
-                  <div className="chart-card">
-                    <h3>Pet Profile</h3>
-                    <div className="analytics-profile-stats">
-                      {(dashboard.petsBySex || []).map((row) => (
-                        <div className="analytics-profile-stat" key={row.sex || 'Unknown'}>
-                          <span>{row.sex || 'Unknown'}</span>
-                          <strong>{fmtNum(row.total)}</strong>
-                        </div>
-                      ))}
-                      {!dashboard.petsBySex?.length && <p className="chart-card-empty">No profile data available.</p>}
-                    </div>
-                  </div>
+                  <ChartCard title="Pet Profile by Sex" isEmpty={!hasChartData(dashboard?.petsBySex)}>
+                    <Doughnut
+                      options={circularChartOptions}
+                      data={{
+                        labels: (dashboard.petsBySex || []).map((row) => row.sex || 'Unknown'),
+                        datasets: [{
+                          data: (dashboard.petsBySex || []).map((row) => row.total),
+                          backgroundColor: ["#c6a15b", "#7a0c1e", "#1e7a46", "#6b6062"],
+                          borderWidth: 0,
+                        }],
+                      }}
+                    />
+                  </ChartCard>
 
                   <ChartCard
                     title={distinctYears(dashboard?.registrations) >= 2 ? "Monthly Pet Registrations (Year-over-Year)" : "Monthly Pet Registrations"}
@@ -701,14 +684,18 @@ export default function AnalyticsReports() {
                 </div>
               </section>
 
-              <div className="analytics-print-row">
-                <button type="button" className="btn-primary" onClick={() => setPrintOpen(true)}>
-                  <Printer size={16} /> Print Report
-                </button>
-                <button type="button" className="btn-secondary" onClick={() => setTab("reports")}>
-                  Open Reports
-                </button>
-              </div>
+              <details className="analytics-data-notes analytics-details" id="analytics-data-notes">
+                <summary>Data notes</summary>
+                <div className="summary-row">
+                  <SummaryCard label="Verified pets without barangay" value={fmtNum(dashboard.dataQuality?.missingBarangay)} />
+                  <SummaryCard label="Vaccine records without due date" value={fmtNum(dashboard.dataQuality?.missingDueDate)} />
+                  <SummaryCard label="Late-encoded registrations" value={fmtNum(dashboard.dataQuality?.lateEncodedRegistrations)} />
+                  <SummaryCard label="Late-encoded vaccinations" value={fmtNum(dashboard.dataQuality?.lateEncodedVaccinations)} />
+                </div>
+                <p className="analytics-chart-section-desc">
+                  Verified pets are grouped by registration date; vaccination counts use service date and exclude registration fees. Revenue is paid ledger activity only.
+                </p>
+              </details>
             </>
           )}
         </>

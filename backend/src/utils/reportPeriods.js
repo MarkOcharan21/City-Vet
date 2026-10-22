@@ -219,15 +219,19 @@ function bucketKey(date, granularity) {
 
   if (g === "daily") {
     const iso = toISODate(d);
-    return { key: iso, label: `${MONTH_LABELS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`, sort: d.getTime(), start: iso };
+    return { key: iso, label: `${MONTH_LABELS[d.getMonth()]} ${d.getDate()}`, sort: d.getTime(), start: iso };
   }
 
   if (g === "weekly") {
     const start = startOfWeek(d);
+    const end = addDays(start, 6);
     const iso = toISODate(start);
+    const endLabel = end.getMonth() === start.getMonth()
+      ? String(end.getDate())
+      : `${MONTH_LABELS[end.getMonth()]} ${end.getDate()}`;
     return {
       key: iso,
-      label: `Week of ${MONTH_LABELS[start.getMonth()]} ${start.getDate()}, ${start.getFullYear()}`,
+      label: `${MONTH_LABELS[start.getMonth()]} ${start.getDate()}-${endLabel}`,
       sort: start.getTime(),
       start: iso,
     };
