@@ -127,9 +127,10 @@ Late-encoded record: ang naitalang database/creation date ay mas huli sa
 registration o service date. Ipinapakita ito bilang babala sa interpretasyon,
 hindi bilang patunay ng maling data.
 
-Hindi isinasama sa Analytics & Reports ang synthetic Analytics Seed 2025
-records. Walang UI toggle para idagdag ang demo records sa official totals;
-mananatili silang available sa seed data para sa development at QA.
+Isinasama bilang default sa Analytics & Reports ang existing Analytics Seed
+2025 records sa dashboard, compliance, comparison, vaccination trends at report
+previews para mapuno ang historical period sa feature review. Walang hiwalay na
+UI toggle para sa seed records.
 
 3.5 Overview charts
 -------------------

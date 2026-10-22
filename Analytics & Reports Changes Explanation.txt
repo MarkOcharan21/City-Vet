@@ -57,8 +57,10 @@ owner-retention analysis, at mas kumpletong report previews at exports.
   charts, at tables bago mag-print o mag-export.
 - May browser Print / Save PDF, Excel workbook, at CSV export para sa reports;
   may hiwalay ding CSV export ang follow-up worklist.
-- May babala kapag kasama sa totals ang synthetic Analytics Seed 2025 data,
-  para hindi mapagkamalang totoong clinic activity ang mga test record.
+- Isinasama na bilang default ang naka-seed na Analytics 2025 records sa
+  dashboard, vaccine compliance, period comparison at report previews para may
+  laman ang historical period habang sinusuri ang mga feature. Walang dagdag na
+  toggle sa page.
 
 
 5. PAGWAWASTO NG METRIC AT UI

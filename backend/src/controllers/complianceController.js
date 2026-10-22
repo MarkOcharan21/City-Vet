@@ -225,7 +225,7 @@ function factorsFor(rows, speciesById) {
 async function getVaccineCompliance(req, res) {
   try {
     const graceDays = clampInt(req.query.grace, DEFAULT_GRACE_DAYS, 0, MAX_GRACE_DAYS);
-    const includeSynthetic = req.query.includeSynthetic === "true";
+    const includeSynthetic = req.query.includeSynthetic !== "false";
     const from = safeDate(req.query.from);
     const to = safeDate(req.query.to);
     const vaccineId = Number(req.query.vaccineId);
@@ -669,7 +669,7 @@ async function getReturnRate(req, res) {
   try {
     const from = safeDate(req.query.from);
     const to = safeDate(req.query.to);
-    const includeSynthetic = req.query.includeSynthetic === "true";
+    const includeSynthetic = req.query.includeSynthetic !== "false";
     const syntheticPetFilter = (alias) => includeSynthetic ? "" : `AND COALESCE(LEFT(${alias}.pet_code, 9), '') <> 'ANL-2025-'`;
     const syntheticVaccinationFilter = includeSynthetic ? "" : "AND COALESCE(LEFT(vr.comments, 20), '') <> 'ANALYTICS_SEED_2025:'";
 
@@ -969,7 +969,7 @@ async function getVaccinationTrends(req, res) {
       anchor: req.query.anchor,
       windows: req.query.windows,
       primaryMetric: "doses",
-      includeSynthetic: req.query.includeSynthetic === "true",
+      includeSynthetic: req.query.includeSynthetic !== "false",
       current,
       toDate: !current,
     });

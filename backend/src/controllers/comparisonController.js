@@ -417,7 +417,7 @@ async function getPeriodComparison(req, res) {
           ? { from: req.query.baselineFrom, to: req.query.baselineTo }
           : undefined,
       toDate: !(req.query.from && req.query.to),
-      includeSynthetic: req.query.includeSynthetic === "true",
+      includeSynthetic: req.query.includeSynthetic !== "false",
     });
 
     res.json({ success: true, ...payload });

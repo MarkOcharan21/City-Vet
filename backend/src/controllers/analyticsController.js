@@ -140,7 +140,9 @@ async function getDashboardAnalytics(req, res) {
         const from = String(req.query.from || "").trim() || null;
         const to = String(req.query.to || "").trim() || null;
         const hasRange = !!(from || to);
-        const includeSynthetic = req.query.includeSynthetic === "true";
+        // Analytics seed records are already present in the configured database
+        // and should be visible in the reports without a separate UI toggle.
+        const includeSynthetic = req.query.includeSynthetic !== "false";
         const petSeedFilter = (alias) => includeSynthetic ? "" : `AND COALESCE(LEFT(${alias}.pet_code, 9), '') <> 'ANL-2025-'`;
         const vaccinationSeedFilter = includeSynthetic ? "" : "AND COALESCE(LEFT(vr.comments, 20), '') <> 'ANALYTICS_SEED_2025:'";
         const paymentSeedFilter = includeSynthetic ? "" : "AND COALESCE(LEFT(payment_reference, 13), '') <> 'ANL-2025-PAY-'";
