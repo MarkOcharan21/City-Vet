@@ -10,6 +10,8 @@
     "demo:prep": "node auto-detect-url.js",
     "demo:seed": "node src/utils/seedDemoData.js",
     "seed:bulk": "node src/utils/seedBulkData.js",
+    "analytics:seed:2025:preview": "node src/utils/seedAnalytics2025.js",
+    "analytics:seed:2025": "node src/utils/seedAnalytics2025.js --apply",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
