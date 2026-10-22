@@ -213,7 +213,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
 
   return (
     <div className="analytics-panel">
-      <div className="analytics-filter-row" role="group" aria-label="Comparison controls">
+      <div className="analytics-filter-row analytics-filter-row--comparison" role="group" aria-label="Comparison controls">
         <div className="analytics-toggle-group">
           <span className="analytics-toggle-label">Granularity</span>
           {GRANULARITIES.map((option) => (

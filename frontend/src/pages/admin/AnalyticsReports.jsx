@@ -370,7 +370,7 @@ export default function AnalyticsReports() {
   }, [tab, period, periodRange.from, periodRange.to, compare, compareDisabled, retryCount, includeSynthetic]);
 
   return (
-    <div className="page">
+    <div className="page analytics-page">
       <div className="page-header-row admin-page-header">
         <div>
           <h1>Analytics & Reports</h1>
@@ -600,7 +600,7 @@ export default function AnalyticsReports() {
                   </ChartCard>
                 </div>
 
-                <div className="chart-grid chart-grid--1col">
+                <div className="chart-grid">
                   <ChartCard title="Top 10 Barangays" tall isEmpty={!hasChartData(dashboard?.barangays)}>
                     <Bar
                       options={horizontalBarChartOptions}
@@ -627,7 +627,7 @@ export default function AnalyticsReports() {
                   registered pets.
                 </p>
 
-                <div className="chart-grid chart-grid--1col">
+                <div className="chart-grid">
                   <ChartCard
                     title={distinctYears(dashboard?.vaccinations) >= 2 ? "Vaccinations Per Month (Year-over-Year)" : "Vaccinations Per Month"}
                     isEmpty={!hasChartData(dashboard?.vaccinations)}
