@@ -13501,6 +13501,13 @@ body {
   .booklet-medicine-stamp-overlay { display: none !important; }
   .booklet-medicine-stamp-trigger { display: none !important; }
   .booklet-medicine-stamp-print { display: inline-flex; }
+  .booklet-table--medications th:last-child,
+  .booklet-table--medications td:last-child {
+    display: none !important;
+  }
+  .booklet-table--medications .booklet-medicine-stamp-print {
+    display: none !important;
+  }
 }
 
 .catalog-unit {

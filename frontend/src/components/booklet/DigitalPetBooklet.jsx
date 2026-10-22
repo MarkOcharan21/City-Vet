@@ -501,7 +501,7 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
       <BookletSection id="medications" number={7} icon={<Pill size={20} />} title="Medications" subtitle="Prescribed medicines and dosage instructions" count={b.prescriptions.length}>
         {b.prescriptions.length ? (
           <div className="table-wrap">
-            <table className="booklet-table">
+            <table className="booklet-table booklet-table--medications">
               <thead>
                 <tr>
                   <th>Medicine</th>
