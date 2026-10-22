@@ -72,7 +72,7 @@ function fmtRange(range) {
   return `${start.toLocaleDateString('en-US', options)} – ${end.toLocaleDateString('en-US', options)}`;
 }
 
-export default function ReportsPanel({ from = '', to = '', periodLabel, includeSynthetic = false, onOpenFollowups }) {
+export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFollowups }) {
   const [grace, setGrace] = useState(30);
 
   const [selected, setSelected] = useState('summary');
@@ -94,7 +94,6 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
           const params = {};
           if (from) params.from = from;
           if (to) params.to = to;
-          if (includeSynthetic) params.includeSynthetic = 'true';
           const res = await api.get('/analytics/dashboard', { params });
           return res.data;
         },
@@ -114,7 +113,6 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
           const params = { grace, limit: 1000, page: 1 };
           if (from) params.from = from;
           if (to) params.to = to;
-          if (includeSynthetic) params.includeSynthetic = 'true';
           const [res, serviceReturn] = await Promise.all([
             api.get('/analytics/vaccine-compliance', { params }),
             api.get('/analytics/return-rate', { params }),
@@ -139,7 +137,6 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
             params.from = from;
             params.to = to;
           }
-          if (includeSynthetic) params.includeSynthetic = 'true';
           const res = await api.get('/analytics/vaccination-trends', { params });
           return res.data;
         },
@@ -161,7 +158,6 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
               granularity: 'yearly',
               compare: 'previousYear',
               anchor: toISO(new Date()),
-              ...(includeSynthetic ? { includeSynthetic: 'true' } : {}),
             },
           });
           return res.data;
@@ -173,7 +169,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
           }),
       },
     ],
-    [from, to, grace, includeSynthetic]
+    [from, to, grace]
   );
 
   const activeReport = REPORTS.find((report) => report.key === selected) || REPORTS[0];
@@ -226,7 +222,6 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
         sheets['Summary'] = [
           { Metric: 'Verified pet registrations', Value: data.summary?.totalPets },
           { Metric: 'Unique vaccinated pets', Value: data.summary?.vaccinatedPets },
-          { Metric: 'Lost pets', Value: data.summary?.lostPets },
           { Metric: 'QR codes issued', Value: data.summary?.totalQr },
         ];
         sheets['Registrations'] = data.registrations || [];
@@ -391,28 +386,14 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, includeS
               <button type="button" className="btn-secondary" onClick={() => handleExport('xlsx')} disabled={loading || !preview}>Export Excel</button>
             </div>
           </div>
-          {includeSynthetic && (((preview.dataQuality?.syntheticSeedPets || 0) + (preview.dataQuality?.syntheticSeedVaccinations || 0) +
-            (preview.dataQuality?.syntheticSeedPayments || 0) + (preview.syntheticData?.current?.pets || 0) +
-            (preview.syntheticData?.current?.vaccinations || 0) + (preview.syntheticData?.current?.payments || 0) +
-            (preview.syntheticData?.vaccineEpisodes || 0)) > 0) && (
-            <p className="analytics-warning">
-              Synthetic 2025 seed data is included. Clearly exclude or disclose these records before using this as an official clinic report.
-            </p>
-          )}
-
           {activeReport.key === 'summary' && (
             <>
-            <div className="summary-row">
+            <div className="summary-row summary-row--three">
               <SummaryCard label="Verified Pet Registrations" value={fmtNum(preview.summary?.totalPets)} />
               <SummaryCard
                 label="Vaccinated Pets"
                 value={fmtNum(preview.summary?.vaccinatedPets)}
                 color="#1e7a46"
-              />
-              <SummaryCard
-                label="Lost Pets"
-                value={fmtNum(preview.summary?.lostPets)}
-                color="#c8102e"
               />
               <SummaryCard
                 label="Generated QR"

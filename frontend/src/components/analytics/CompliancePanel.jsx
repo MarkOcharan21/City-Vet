@@ -138,7 +138,7 @@ const lineOptions = {
   },
 };
 
-export default function CompliancePanel({ from = '', to = '', includeSynthetic = false, initialSubTab = '' }) {
+export default function CompliancePanel({ from = '', to = '', initialSubTab = '' }) {
   const { user } = useAuth();
   const canManageContacts = ['Admin', 'Staff'].includes(user?.role);
   const [subTab, setSubTab] = useState(['summary', 'service', 'reasons', 'followups'].includes(initialSubTab) ? initialSubTab : 'summary');
@@ -170,7 +170,6 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
     setError(null);
 
     const params = { grace, limit: 10, page, sortBy };
-    if (includeSynthetic) params.includeSynthetic = 'true';
     if (from) params.from = from;
     if (to) params.to = to;
     if (barangay.trim()) params.barangay = barangay.trim();
@@ -199,7 +198,7 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
     } finally {
       setLoading(false);
     }
-  }, [from, to, grace, barangay, search, contactStatusFilter, vaccineFilter, sortBy, page, includeSynthetic]);
+  }, [from, to, grace, barangay, search, contactStatusFilter, vaccineFilter, sortBy, page]);
 
   const saveContact = async () => {
     if (!editingContact || !contactDraft) return;
@@ -268,7 +267,6 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
     setPrinting(true);
     try {
       const params = { grace };
-      if (includeSynthetic) params.includeSynthetic = 'true';
       if (from) params.from = from;
       if (to) params.to = to;
       if (barangay.trim()) params.barangay = barangay.trim();
@@ -422,12 +420,6 @@ export default function CompliancePanel({ from = '', to = '', includeSynthetic =
       </p>
 
       {loading && <GlobalLoadingOverlay visible={true} message="Building compliance report..." />}
-      {!loading && includeSynthetic && compliance?.syntheticData?.vaccineEpisodes > 0 && (
-        <p className="analytics-warning">
-          Synthetic 2025 seed follow-up records are included in this compliance view.
-        </p>
-      )}
-
       {!loading && error && (
         <div className="analytics-error-state">
           <p>{error}</p>

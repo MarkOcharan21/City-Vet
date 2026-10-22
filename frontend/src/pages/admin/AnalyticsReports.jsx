@@ -315,7 +315,6 @@ export default function AnalyticsReports() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [compare, setCompare] = useState("");
-  const [includeSynthetic, setIncludeSynthetic] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [printOpen, setPrintOpen] = useState(false);
 
@@ -339,7 +338,6 @@ export default function AnalyticsReports() {
     if (periodRange.from) url += `&from=${periodRange.from}`;
     if (periodRange.to) url += `&to=${periodRange.to}`;
     if (compare && !compareDisabled) url += `&compare=${compare}`;
-    if (includeSynthetic) url += "&includeSynthetic=true";
 
     api
       .get(url)
@@ -370,7 +368,7 @@ export default function AnalyticsReports() {
       .finally(() => {
         setLoading(false);
       });
-  }, [tab, period, periodRange.from, periodRange.to, compare, compareDisabled, retryCount, includeSynthetic]);
+  }, [tab, period, periodRange.from, periodRange.to, compare, compareDisabled, retryCount]);
 
   return (
     <div className="page analytics-page">
@@ -420,23 +418,6 @@ export default function AnalyticsReports() {
           onReports={tab === 'overview' ? () => setTab('reports') : undefined}
         />
       )}
-      <label className="analytics-synthetic-toggle">
-        <input
-          type="checkbox"
-          checked={includeSynthetic}
-          onChange={(event) => setIncludeSynthetic(event.target.checked)}
-        />
-        Include synthetic 2025 seed data
-      </label>
-      {tab === 'overview' && includeSynthetic && dashboard &&
-        ((Number(dashboard.dataQuality?.syntheticSeedPets) || 0) +
-          (Number(dashboard.dataQuality?.syntheticSeedVaccinations) || 0) +
-          (Number(dashboard.dataQuality?.syntheticSeedPayments) || 0)) > 0 && (
-        <p className="analytics-warning analytics-warning--slim">
-          Synthetic 2025 seed data is included in these totals. <a href="#analytics-data-notes">Data notes</a>
-        </p>
-      )}
-
       {tab === "overview" && (
         <>
           <p className="analytics-period-label">
@@ -456,7 +437,7 @@ export default function AnalyticsReports() {
 
           {!loading && !error && dashboard && (
             <>
-              <div className="summary-row">
+              <div className="summary-row summary-row--three">
                 <SummaryCard
                   label="Verified Pet Registrations"
                   value={dashboard.summary?.totalPets ?? '-'}
@@ -469,13 +450,6 @@ export default function AnalyticsReports() {
                   color="#1e7a46"
                   hint="Distinct pets with at least one vaccine record in the selected service-date range."
                   sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getComparisonLabel(dashboard.comparison, 'pets') }] : undefined}
-                />
-                <SummaryCard
-                  label="Lost Pets"
-                  value={dashboard?.summary?.lostPets ?? '-'}
-                  color="#c8102e"
-                  hint="Verified pets with a recorded lost date inside the selected period."
-                  sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getComparisonLabel(dashboard.comparison, 'lostPets') }] : undefined}
                 />
                 <SummaryCard
                   label="Generated QR"
@@ -530,7 +504,6 @@ export default function AnalyticsReports() {
                           ['revenue', 'Paid revenue'],
                           ['consultations', 'Consultations'],
                           ['qrIssued', 'QR codes issued'],
-                          ['lostPets', 'Verified lost pets'],
                           ['newOwners', 'New owners'],
                         ].map(([key, label]) => {
                           const currentValue = dashboard.comparison.totals?.current?.[key] ?? 0;
@@ -717,14 +690,13 @@ export default function AnalyticsReports() {
         </>
       )}
 
-      {tab === "compliance" && <CompliancePanel from={periodRange.from} to={periodRange.to} includeSynthetic={includeSynthetic} initialSubTab={complianceSubTab} />}
-      {tab === "comparison" && <ComparisonPanel includeSynthetic={includeSynthetic} />}
+      {tab === "compliance" && <CompliancePanel from={periodRange.from} to={periodRange.to} initialSubTab={complianceSubTab} />}
+      {tab === "comparison" && <ComparisonPanel />}
       {tab === "reports" && (
         <ReportsPanel
           from={periodRange.from}
           to={periodRange.to}
           periodLabel={periodLabel}
-          includeSynthetic={includeSynthetic}
           onOpenFollowups={() => {
             setComplianceSubTab("followups");
             setTab("compliance");
@@ -732,7 +704,7 @@ export default function AnalyticsReports() {
         />
       )}
 
-      <AdminReportModal open={printOpen} onClose={() => setPrintOpen(false)} includeSynthetic={includeSynthetic} />
+      <AdminReportModal open={printOpen} onClose={() => setPrintOpen(false)} />
     </div>
   );
 }

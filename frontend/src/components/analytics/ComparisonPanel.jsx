@@ -29,7 +29,6 @@ const METRIC_OPTIONS = [
   { key: 'consultations', label: 'Consultations', money: false, invert: false },
   { key: 'qrIssued', label: 'QR Issued', money: false, invert: false },
   { key: 'revenue', label: 'Revenue', money: true, invert: false },
-  { key: 'lostPets', label: 'Lost Pets', money: false, invert: true },
   { key: 'newOwners', label: 'New Owners', money: false, invert: false },
 ];
 
@@ -103,7 +102,7 @@ const groupedBarOptions = {
   },
 };
 
-export default function ComparisonPanel({ includeSynthetic = false }) {
+export default function ComparisonPanel() {
   const [granularity, setGranularity] = useState('monthly');
   const [compare, setCompare] = useState('previous');
   const [metric, setMetric] = useState('doses');
@@ -122,7 +121,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
     setError(null);
     try {
       const res = await api.get('/analytics/period-comparison', {
-        params: { granularity, compare, anchor, metric, ...(includeSynthetic ? { includeSynthetic: 'true' } : {}) },
+        params: { granularity, compare, anchor, metric },
       });
       if (!res.data?.success) throw new Error(res.data?.message || 'Failed to load comparison');
       setData(res.data);
@@ -135,7 +134,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
     } finally {
       setLoading(false);
     }
-  }, [granularity, compare, anchor, metric, includeSynthetic]);
+  }, [granularity, compare, anchor, metric]);
 
   useEffect(() => {
     load();
@@ -194,7 +193,7 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
     setPrinting(true);
     try {
       const res = await api.get('/analytics/period-comparison', {
-        params: { granularity, compare, anchor, metric, ...(includeSynthetic ? { includeSynthetic: 'true' } : {}) },
+        params: { granularity, compare, anchor, metric },
       });
       if (!res.data?.success) {
         toast.error(res.data?.message || 'Could not build the comparison report.');
@@ -312,14 +311,8 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
         ))}
       </div>
       <p className="analytics-visual-explanation">
-        Select a metric above to update the chart and totals. Each point or bar compares the selected current period with its matching baseline period; positive change means a higher count or amount, while lower Lost Pets is generally favorable. Percentage change is suppressed when the baseline is too small to be reliable.
+        Select a metric above to update the chart and totals. Each point or bar compares the selected current period with its matching baseline period. Percentage change is suppressed when the baseline is too small to be reliable.
       </p>
-      {data?.syntheticData?.included && (data?.syntheticData?.current?.pets || data?.syntheticData?.current?.vaccinations || data?.syntheticData?.current?.payments ||
-        data?.syntheticData?.baseline?.pets || data?.syntheticData?.baseline?.vaccinations || data?.syntheticData?.baseline?.payments) > 0 && (
-        <p className="analytics-warning">
-          Synthetic 2025 seed data is included in this comparison. Current: {fmtNum(data.syntheticData.current.pets)} pets / {fmtNum(data.syntheticData.current.vaccinations)} vaccine records; baseline: {fmtNum(data.syntheticData.baseline.pets)} pets / {fmtNum(data.syntheticData.baseline.vaccinations)} vaccine records.
-        </p>
-      )}
 
       {loading && <GlobalLoadingOverlay visible={true} message="Building comparison..." />}
 
@@ -480,7 +473,6 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
                       <th>Consultations</th>
                       <th>QR Issued</th>
                       <th>Revenue</th>
-                      <th>Lost Pets</th>
                       <th>New Owners</th>
                     </tr>
                   </thead>
@@ -510,14 +502,13 @@ export default function ComparisonPanel({ includeSynthetic = false }) {
                             <td>{cell('consultations')}</td>
                             <td>{cell('qrIssued')}</td>
                             <td>{cell('revenue', true)}</td>
-                            <td>{cell('lostPets')}</td>
                             <td>{cell('newOwners')}</td>
                           </tr>
                         );
                       })
                     ) : (
                       <tr>
-                        <td className="report-table-empty" colSpan={10}>
+                        <td className="report-table-empty" colSpan={9}>
                           No yearly data is available yet. Check that records have been entered for multiple years.
                         </td>
                       </tr>

@@ -49,7 +49,7 @@ function presetRange(preset) {
   }
 }
 
-export default function AdminReportModal({ open, onClose, includeSynthetic = false }) {
+export default function AdminReportModal({ open, onClose }) {
   const [preset, setPreset] = useState('thisYear');
   const [month, setMonth] = useState('');
   const [year, setYear] = useState('');
@@ -103,7 +103,6 @@ export default function AdminReportModal({ open, onClose, includeSynthetic = fal
       const params = { compare: 'previousYear' };
       if (from) params.from = from;
       if (to) params.to = to;
-      if (includeSynthetic) params.includeSynthetic = 'true';
       const res = await api.get('/analytics/dashboard', { params });
       if (!res.data.success) {
         toast.error(res.data.message || 'Could not generate the report.');

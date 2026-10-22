@@ -114,7 +114,6 @@ Four headline cards are always shown for the selected period:
 
   - Verified Pets
   - Vaccinated Pets
-  - Lost Pets
   - Generated QR
 
 Each card uses the dashboard summary totals, not the comparison window. The
@@ -163,7 +162,6 @@ returns them:
   - Revenue
   - Consultations
   - QR Issued
-  - Lost Pets
   - New Owners
 
 Each badge shows the absolute change and, when the baseline is at least five,
@@ -172,8 +170,6 @@ the percentage change. Colors follow meaning:
   - Green: improvement
   - Red: decline
   - Grey: no change or insufficient baseline data
-
-Lost Pets uses inverted coloring: fewer lost pets is treated as an improvement.
 
 Percentage change is suppressed when the baseline is below five to avoid
 overstating movement in a very small sample. Raw values and absolute changes
@@ -338,7 +334,7 @@ metrics, with no reliance on the Overview filters.
   - Granularity: Daily, Weekly, Monthly, Yearly
   - Compare against: Previous Period or Same Period Last Year
   - Metric selector: Registrations, Vaccinations, Unique Pets, Unique Owners,
-    Consultations, QR Issued, Revenue, Lost Pets, New Owners
+    Consultations, QR Issued, Revenue, New Owners
   - Anchor date: the reference date for the comparison window
   - Refresh
   - Print Comparison
@@ -362,8 +358,8 @@ Four cards show the current value plus the baseline and change:
   - Unique Pets
   - Unique Owners
 
-A delta row below the cards reports Consultations, QR Issued, Revenue, Lost
-Pets, New Owners, and On-Time Rate. Lost Pets is inverted (a drop is good).
+A delta row below the cards reports Consultations, QR Issued, Revenue,
+New Owners, and On-Time Rate.
 
 6.3 Charts
 --------------------------------------------------------------------------------
@@ -390,7 +386,7 @@ its baseline bucket. Missing baseline buckets are labelled "No data".
 The full history table has one row per year and these columns:
 
   Year, Registrations, Vaccinations, Unique Pets, Unique Owners, Consultations,
-  QR Issued, Revenue, Lost Pets, New Owners
+  QR Issued, Revenue, New Owners
 
 Each value shows the year's total with the change against the previous year
 underneath it in smaller text. This provides a complete yearly narrative while
@@ -452,7 +448,7 @@ Analytics Summary print
 
 Period Comparison print
   Includes the full comparison summary (registrations, doses, unique pets,
-  unique owners, consultations, QR issued, revenue, lost pets, new owners,
+  unique owners, consultations, QR issued, revenue, new owners,
   follow-ups on time, on-time rate), the period-by-period rows, and the
   year-over-year table.
 
@@ -494,9 +490,6 @@ Revenue
   Sum of total_amount for Paid records in payment_monitoring, dated by
   consultation_date and falling back to created_at. Unpaid and Cancelled
   records are excluded.
-
-Lost Pets
-  Pets flagged is_lost, dated by lost_date and falling back to created_at.
 
 New Owners
   Pet owner records created in the period. Source: pet_owners.created_at.
@@ -658,10 +651,9 @@ Reports and synthetic data
     charts/tables, browser Print / Save PDF, multi-sheet Excel, and full-data
     CSV export. Comparison and yearly previews show current and baseline
     values.
-  - Synthetic Analytics Seed 2025 records are identified by their seed
-    markers and displayed as a warning in analytics and reports; they are
-    included in totals, so they must be disclosed or excluded before presenting
-    figures as real clinic activity.
+  - Synthetic Analytics Seed 2025 records are excluded from Analytics & Reports
+    totals; there is no UI toggle to mix development/demo activity into official
+    clinic reporting.
   - No SMS reminder log is currently used by this analysis. Reminder-related
     factors are not reported until a reliable reminder delivery log exists.
 

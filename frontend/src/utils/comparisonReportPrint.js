@@ -91,7 +91,6 @@ const METRIC_LABELS = {
   consultations: 'Consultations',
   qrIssued: 'QR Issued',
   revenue: 'Revenue',
-  lostPets: 'Lost Pets',
   newOwners: 'New Owners',
 };
 
@@ -118,14 +117,6 @@ export function buildComparisonReportBody(data, {
   const totals = data?.totals || {};
   const current = totals.current || {};
   const baseline = totals.baseline || {};
-  const hasSyntheticRecords = data?.syntheticData?.included && [
-    data.syntheticData.current?.pets,
-    data.syntheticData.current?.vaccinations,
-    data.syntheticData.current?.payments,
-    data.syntheticData.baseline?.pets,
-    data.syntheticData.baseline?.vaccinations,
-    data.syntheticData.baseline?.payments,
-  ].some((value) => Number(value) > 0);
   const granularity = GRANULARITY_LABELS[data?.granularity] || data?.granularity || '';
   const compareLabel = COMPARE_LABELS[data?.compare] || data?.compare || '';
   const currentWindow = fmtRange(data?.current) || data?.current?.label || period;
@@ -144,10 +135,6 @@ export function buildComparisonReportBody(data, {
       Generated ${esc(dateStr)}. Doses are vaccination records; unique pets and owners are distinct IDs within the reporting window.
       Revenue is paid-ledger revenue. Percent changes are omitted when the baseline is zero or fewer than five records.
     </div>
-    ${hasSyntheticRecords
-      ? '<div class="notes"><strong>Data notice:</strong> Synthetic Analytics Seed 2025 records are included in one or both comparison windows; do not interpret them as real clinic activity.</div>'
-      : ''}
-
     ${tableBlock(
       1,
       'COMPARISON SUMMARY',
@@ -160,7 +147,6 @@ export function buildComparisonReportBody(data, {
         ['Consultations', num(current.consultations), num(baseline.consultations), delta(totals.consultations?.delta), pct(totals.consultations?.pctChange)],
         ['QR codes issued', num(current.qrIssued), num(baseline.qrIssued), delta(totals.qrIssued?.delta), pct(totals.qrIssued?.pctChange)],
         ['Revenue collected', peso(current.revenue), peso(baseline.revenue), peso(totals.revenue?.delta), pct(totals.revenue?.pctChange)],
-        ['Lost pets', num(current.lostPets), num(baseline.lostPets), delta(totals.lostPets?.delta), pct(totals.lostPets?.pctChange)],
         ['New pet owners', num(current.newOwners), num(baseline.newOwners), delta(totals.newOwners?.delta), pct(totals.newOwners?.pctChange)],
         ['Follow-ups on time', num(current.onTime), num(baseline.onTime), '—', '—'],
         ['On-time rate', pct(current.onTimeRate), pct(baseline.onTimeRate), delta(totals.onTimeRate?.delta), pct(totals.onTimeRate?.pctChange)],
@@ -188,7 +174,7 @@ export function buildComparisonReportBody(data, {
     ${tableBlock(
       3,
       'YEAR-OVER-YEAR SUMMARY',
-      ['Year', 'Registrations', 'Δ', 'Vaccinations', 'Δ', 'Unique Pets', 'Unique Owners', 'Consultations', 'Δ', 'QR Issued', 'Δ', 'Revenue', 'Δ', 'Lost Pets', 'New Owners'],
+      ['Year', 'Registrations', 'Δ', 'Vaccinations', 'Δ', 'Unique Pets', 'Unique Owners', 'Consultations', 'Δ', 'QR Issued', 'Δ', 'Revenue', 'Δ', 'New Owners'],
       (data?.yearly || []).map((y) => [
         y.year,
         num(y.registrations),
@@ -203,7 +189,6 @@ export function buildComparisonReportBody(data, {
         delta(y.deltas?.qrIssued?.delta),
         peso(y.revenue),
         peso(y.deltas?.revenue?.delta),
-        num(y.lostPets),
         num(y.newOwners),
       ]),
       'No yearly data available.'

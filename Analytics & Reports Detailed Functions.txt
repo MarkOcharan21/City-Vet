@@ -105,8 +105,6 @@ comparison.
     Bilang ng verified pets na ang registration date ay nasa saklaw.
   - Vaccinated Pets
     Bilang ng natatanging pet na may vaccine record sa saklaw.
-  - Lost Pets
-    Bilang ng verified pets na naka-mark lost sa saklaw.
   - Generated QR
     Bilang ng QR codes na na-issue sa saklaw.
 
@@ -129,11 +127,9 @@ Late-encoded record: ang naitalang database/creation date ay mas huli sa
 registration o service date. Ipinapakita ito bilang babala sa interpretasyon,
 hindi bilang patunay ng maling data.
 
-Hindi kasama sa analytics totals bilang default ang synthetic Analytics Seed
-2025 records. May opt-in na "Include synthetic 2025 seed data" control para
-isama ang mga ito sa Overview, Compliance, Comparison, Reports, at print/export.
-Kapag naka-on, may malinaw na warning upang hindi mapagkamalan ang seed data
-bilang aktuwal na clinic performance.
+Hindi isinasama sa Analytics & Reports ang synthetic Analytics Seed 2025
+records. Walang UI toggle para idagdag ang demo records sa official totals;
+mananatili silang available sa seed data para sa development at QA.
 
 3.5 Overview charts
 -------------------
@@ -413,7 +409,6 @@ Metric choices:
   - Consultations
   - QR Issued
   - Revenue
-  - Lost Pets
   - New Owners
 
 Kapag pinili ang Yearly, awtomatikong itinatakda sa Same Period Last Year ang
@@ -479,12 +474,10 @@ earlier years" para ipakita ang mas lumang records. Kasama sa bawat taon:
   - Consultations
   - QR Issued
   - Revenue
-  - Lost Pets
   - New Owners
 
 Sa ilalim ng yearly value makikita ang absolute delta laban sa nakaraang taon.
-Ang unang taon ay walang prior-year delta. Ang pagbawas sa Lost Pets ay
-positibong pagbabago sa interpretasyon.
+Ang unang taon ay walang prior-year delta.
 
 
 6. REPORTS TAB
@@ -573,10 +566,6 @@ Revenue
   consultation_date at DATE(created_at) bilang fallback. Hindi kasama ang
   Unpaid at Cancelled.
 
-Lost Pets
-  Verified pets na may is_lost flag; lost_date ang pangunahing date at
-  created_at ang fallback.
-
 New Owners
   Pet owner records grouped ayon sa created_at.
 
@@ -595,8 +584,8 @@ Owner Retention
 
 8. DATA QUALITY AT PAG-INTERPRETA
 ------------------------------------------------------------
-- Ang Synthetic Analytics Seed 2025 data ay test/demo activity at kasama sa
-  aggregate totals. Tingnan ang warning sa dashboard, comparison, o report.
+- Hindi kasama sa official Analytics & Reports totals ang synthetic Analytics
+  Seed 2025 test/demo records.
 - Ang registration date at encoded/created date ay magkaibang konsepto.
   Maaaring magkaiba ang counts batay sa petsang ginagamit ng isang report.
 - Ang missing due date ay nangangahulugang hindi matitiyak ang follow-up

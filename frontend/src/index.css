@@ -6282,19 +6282,6 @@ body:has(.clinic-access-page)::before {
   overflow-x: auto;
   border-bottom: 1px solid var(--color-border, #e8e2e0);
 }
-.analytics-synthetic-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  width: fit-content;
-  margin: 0.5rem 0 1rem;
-  padding: 0.6rem 0.8rem;
-  color: #704f00;
-  background: #fff7df;
-  border: 1px solid rgba(184, 134, 11, 0.3);
-  border-radius: 8px;
-  font-weight: 600;
-}
 .analytics-report-preview-header {
   display: flex;
   align-items: flex-start;
@@ -17406,12 +17393,6 @@ body:has(.owner-welcome-page)::before {
   gap: 0.6rem;
 }
 
-.analytics-page .analytics-synthetic-toggle {
-  margin: 0.75rem 0 1rem;
-  padding: 0.45rem 0.7rem;
-  font-size: 0.82rem;
-}
-
 .analytics-page .analytics-period-label {
   margin: 0 0 1rem;
   font-size: 0.88rem;
@@ -17421,6 +17402,10 @@ body:has(.owner-welcome-page)::before {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1rem;
   margin: 0 0 1.25rem;
+}
+
+.analytics-page .summary-row.summary-row--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .analytics-page .summary-card {
@@ -17836,6 +17821,10 @@ body:has(.owner-welcome-page)::before {
 
 @media (max-width: 980px) {
   .analytics-page .summary-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .analytics-page .summary-row.summary-row--three {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

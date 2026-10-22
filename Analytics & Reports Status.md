@@ -13,6 +13,8 @@
 
 ### Overview
 - 6 charts, kasama ang bagong Pet Profile by Sex doughnut.
+- Tatlong Overview KPI card; inalis ang Lost Pets metric at ang Include synthetic 2025 seed data toggle.
+- Synthetic 2025 demo rows ay nananatiling hindi kasama sa official analytics/report totals.
 - Nasa collapsed `Comparison details` ang comparison table; nasa pinakailalim ang Data notes.
 - Naka-hide ang data labels kapag zero o kapag higit 12 bars; walang bottom print row (nasa filter row na ang actions).
 
@@ -25,12 +27,12 @@
 - Reasons tab: contact progress → owner-stated reasons → factors ang visual order; may empty-state link.
 
 ### Period Comparison
-- 9 quick-compare metric chips na may delta; baseline < 5 ay raw change ang ipinapakita.
+- 8 quick-compare metric chips na may delta; baseline < 5 ay raw change ang ipinapakita.
 - Bars/Line toggle, peso ticks para sa Revenue, naka-sign ang percent changes.
 - YTD badge sa kasalukuyang taon ng Year-over-Year Summary; last 6 rows ng period table at last 5 years ng yearly table.
 
 ### Reports
-- Summary preview lang: KPIs, monthly chart, Top 5 barangays, species split; walang month-by-month table.
+- Summary preview lang: KPIs, monthly chart, Top 5 barangays, species split; walang month-by-month table o Lost Pets KPI.
 - Compliance preview: KPI, outcome doughnut, on-time line, Top 3 findings, Top owner-stated reasons.
 - Grace period selector ay lumalabas lang para sa compliance report.
 - Comparison preview: cards bago ang chart; yearly preview may “Change vs previous year” column.
@@ -38,7 +40,7 @@
 - Print footer: “Prepared by” at “Noted by: City Veterinarian” signature blocks at page numbers.
 
 ### Data, tests, at QA
-- Default-off pa rin ang synthetic 2025 seed data at ipinapasa sa lahat ng analytics/print paths.
+- Synthetic 2025 seed data ay hindi ipinapasa sa official analytics/print paths at walang UI toggle para ihalo ito.
 - Inayos ang `backend/test/petRegistrationValidation.test.js` (dynamic Manila dates) at `backend/test/security.test.js` (MySQL/Postgres `SUBSTRING_INDEX`/`SUBSTRING` mock).
 - Weekly chart labels ay “Oct 12-18” at daily ay “Oct 9” na.
 - **Frontend production build:** pumasa (pre-existing CSS/chunk warnings lang).
