@@ -277,13 +277,13 @@ async function getDashboardAnalytics(req, res) {
 
         const [qrStats] = await db.query(`
             SELECT
-                status,
+                qc.status AS status,
                 COUNT(*) AS total
-            FROM qr_codes
-            JOIN pets p ON p.id = qr_codes.pet_id
-            WHERE ${qrDate}
+            FROM qr_codes qc
+            JOIN pets p ON p.id = qc.pet_id
+            WHERE ${condition("qc.issue_date")}
             ${petSeedFilter("p")}
-            GROUP BY status
+            GROUP BY qc.status
         `);
 
         const [barangays] = await db.query(`
