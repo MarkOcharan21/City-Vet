@@ -260,6 +260,13 @@ export function getPrintStyles() {
       font-size: 0.84rem;
     }
 
+    .print-bar-chart { margin: 8px 0 18px; page-break-inside: avoid; }
+    .print-bar-row { display: grid; grid-template-columns: 135px 1fr 55px; gap: 8px; align-items: center; margin: 6px 0; font-size: 0.78rem; }
+    .print-bar-label { overflow-wrap: anywhere; }
+    .print-bar-track { height: 12px; background: ${PRINT_THEME.border}; border-radius: 6px; overflow: hidden; }
+    .print-bar-fill { display: block; height: 100%; border-radius: 6px; }
+    .print-bar-value { text-align: right; }
+
     .notes {
       margin: 8px 0 16px;
       padding: 12px 14px;
@@ -471,6 +478,32 @@ export function getPrintHeader(reportTitle = '', dateGenerated = '') {
 
 export function getSectionHeader(number, title) {
   return `<h2 class="section-title">${number}. ${title}</h2>`;
+}
+
+export function getPrintBarChart(sectionNumber, title, rows, labelKey, valueKey, color = PRINT_THEME.accent) {
+  const entries = Array.isArray(rows) ? rows.filter((row) => Number(row?.[valueKey]) > 0) : [];
+  if (!entries.length) {
+    return `${getSectionHeader(sectionNumber, title)}<p class="empty-state">No data available.</p>`;
+  }
+  const maximum = Math.max(...entries.map((row) => Number(row[valueKey]) || 0), 1);
+  const escape = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  return `
+    ${getSectionHeader(sectionNumber, title)}
+    <div class="print-bar-chart">
+      ${entries.slice(0, 16).map((row) => `
+        <div class="print-bar-row">
+          <span class="print-bar-label">${escape(row[labelKey])}</span>
+          <span class="print-bar-track"><span class="print-bar-fill" style="width:${Math.max(1, (Number(row[valueKey]) / maximum) * 100)}%;background:${color}"></span></span>
+          <strong class="print-bar-value">${escape(Number(row[valueKey]).toLocaleString('en-US'))}</strong>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 export function getFieldRow(label, value) {

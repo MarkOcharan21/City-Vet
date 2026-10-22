@@ -502,7 +502,7 @@ function pctChange(current, baseline) {
     return { delta: null, pct: null };
   }
   const delta = cur - base;
-  const pct = base === 0 ? (cur === 0 ? 0 : null) : (delta / base) * 100;
+  const pct = base === 0 ? (cur === 0 ? 0 : null) : base < 5 ? null : (delta / base) * 100;
   return {
     delta,
     pct: pct === null ? null : Math.round(pct * 10) / 10,

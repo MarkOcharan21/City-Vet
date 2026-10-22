@@ -58,6 +58,7 @@ const barChartOptions = {
       textStrokeWidth: 3,
       clamp: false,
       clip: false,
+      formatter: (value) => Number(value) === 0 ? '' : value,
     },
   },
   scales: {
@@ -123,12 +124,13 @@ const horizontalBarChartOptions = {
       textStrokeWidth: 3,
       clamp: false,
       clip: false,
+      formatter: (value) => Number(value) === 0 ? '' : value,
     },
   },
   scales: {
     x: {
       beginAtZero: true,
-      ticks: { stepSize: 1, font: { family: "Inter" } },
+      ticks: { stepSize: 10, font: { family: "Inter" } },
       grid: { color: 'rgba(36, 20, 22, 0.06)' },
       suggestedMax: (context) => {
         const max = Math.max(...(context.chart.data.datasets[0]?.data || [0]));
@@ -166,7 +168,7 @@ const revenueBarChartOptions = {
       color: '#ffffff',
       textStrokeColor: 'rgba(36, 20, 22, 0.9)',
       textStrokeWidth: 3,
-      formatter: (value) => `₱${Number(value).toLocaleString()}`,
+      formatter: (value) => Number(value) === 0 ? '' : `₱${Number(value).toLocaleString()}`,
       clamp: false,
       clip: false,
     },
@@ -297,6 +299,7 @@ export default function AnalyticsReports() {
     dashboard?.filterLabel ||
     FILTER_OPTIONS.find((option) => option.key === filter)?.label ||
     "All Time";
+  const compareDisabled = (filter === 'all' && !from && !to) || Boolean(from) !== Boolean(to);
 
   useEffect(() => {
     if (tab !== "overview") return;
@@ -308,7 +311,7 @@ export default function AnalyticsReports() {
     let url = `/analytics/dashboard?filter=${filter}`;
     if (from) url += `&from=${from}`;
     if (to) url += `&to=${to}`;
-    if (compare) url += `&compare=${compare}`;
+    if (compare && !compareDisabled) url += `&compare=${compare}`;
 
     api
       .get(url)
@@ -335,7 +338,7 @@ export default function AnalyticsReports() {
       .finally(() => {
         setLoading(false);
       });
-  }, [tab, filter, from, to, compare, retryCount]);
+  }, [tab, filter, from, to, compare, compareDisabled, retryCount]);
 
   return (
     <div className="page">
@@ -347,6 +350,51 @@ export default function AnalyticsReports() {
             periods, and export printable reports.
           </p>
         </div>
+
+        <section className="analytics-chart-section">
+          <h3 className="analytics-chart-section-title">Key Findings</h3>
+          <ul>
+            <li>
+              {fmtNum(dashboard.summary?.totalPets)} verified pets were registered in the selected registration-date range.
+            </li>
+            <li>
+              {fmtNum(dashboard.summary?.vaccinatedPets)} unique pets had at least one vaccine record in the selected service-date range.
+            </li>
+            {dashboard.barangays?.[0] && (
+              <li>
+                {dashboard.barangays[0].barangay} has the most verified pet records in this range ({fmtNum(dashboard.barangays[0].total)}).
+              </li>
+            )}
+            {(dashboard.dataQuality?.lateEncodedRegistrations || dashboard.dataQuality?.lateEncodedVaccinations) > 0 && (
+              <li>
+                Some records were encoded after their service/registration date; interpret encode-date trends separately.
+              </li>
+            )}
+          </ul>
+          <p>Recommendations: verify missing owner location and due-date data, and use recorded owner responses—not missing transactions—to explain missed follow-ups.</p>
+        </section>
+
+        <section className="analytics-chart-section">
+          <h3 className="analytics-chart-section-title">Data Quality</h3>
+          <div className="summary-row">
+            <SummaryCard label="Verified pets without barangay" value={fmtNum(dashboard.dataQuality?.missingBarangay)} />
+            <SummaryCard label="Vaccine records without due date" value={fmtNum(dashboard.dataQuality?.missingDueDate)} />
+            <SummaryCard label="Late-encoded registrations" value={fmtNum(dashboard.dataQuality?.lateEncodedRegistrations)} />
+            <SummaryCard label="Late-encoded vaccinations" value={fmtNum(dashboard.dataQuality?.lateEncodedVaccinations)} />
+          </div>
+          <p className="analytics-chart-section-desc">
+            Registrations use registration_date (fallback: encoded date); vaccination trends use date_administered. Late encoding is counted when the stored date is later than the service date.
+          </p>
+        </section>
+
+        <p className="analytics-chart-section-desc">
+          Definitions: verified pets = verified records registered in range; vaccinated pets = distinct pets with a vaccination in range; doses = vaccine records; revenue = paid ledger entries only.
+        </p>
+        {(dashboard.dataQuality?.syntheticSeedPets || dashboard.dataQuality?.syntheticSeedVaccinations || dashboard.dataQuality?.syntheticSeedPayments) > 0 && (
+          <p className="analytics-warning">
+            Synthetic 2025 seed data is included in this period: {fmtNum(dashboard.dataQuality.syntheticSeedPets)} pets, {fmtNum(dashboard.dataQuality.syntheticSeedVaccinations)} vaccine records, and {fmtNum(dashboard.dataQuality.syntheticSeedPayments)} payments. Do not treat these rows as real clinic activity.
+          </p>
+        )}
       </div>
 
       <div className="report-tabs" role="tablist" aria-label="Analytics sections">
@@ -363,6 +411,11 @@ export default function AnalyticsReports() {
           </button>
         ))}
       </div>
+      {compareDisabled && (
+        <p className="analytics-chart-section-desc">
+          Choose a date range or a finite time filter to compare periods; an all-time total cannot be compared to a single rolling window.
+        </p>
+      )}
 
       {tab === "overview" && (
         <>
@@ -419,6 +472,7 @@ export default function AnalyticsReports() {
                   type="button"
                   aria-pressed={compare === option.key}
                   onClick={() => setCompare(option.key)}
+                  disabled={compareDisabled}
                   className={`analytics-filter-btn${compare === option.key ? " is-active" : ""}`}
                 >
                   {option.label}
@@ -441,7 +495,7 @@ export default function AnalyticsReports() {
           {!loading && !error && dashboard && (
             <>
               <div className="summary-row">
-                <SummaryCard label="Verified Pets" value={dashboard?.summary?.totalPets ?? '-'} />
+                <SummaryCard label="Verified Pet Registrations" value={dashboard?.summary?.totalPets ?? '-'} />
                 <SummaryCard
                   label="Vaccinated Pets"
                   value={dashboard?.summary?.vaccinatedPets ?? '-'}
@@ -460,32 +514,39 @@ export default function AnalyticsReports() {
               </div>
 
               {compare && dashboard?.comparison && (
-                <div className="analytics-delta-row">
-                  <span className="analytics-delta-row-label">
-                    Comparing <strong>{dashboard.comparison.current?.label}</strong> vs <strong>{dashboard.comparison.baseline?.label}</strong>
-                  </span>
-                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.registrations?.delta > 0 ? 'up' : dashboard?.comparison?.totals?.registrations?.delta < 0 ? 'down' : 'flat'}`}>
-                    Registrations {fmtDelta(dashboard?.comparison?.totals?.registrations?.delta)}{dashboard?.comparison?.totals?.registrations?.pctChange != null ? ` (${Number(dashboard.comparison.totals.registrations.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.registrations.pctChange).toFixed(1)}%)` : ''}
-                  </span>
-                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.doses?.delta > 0 ? 'up' : dashboard?.comparison?.totals?.doses?.delta < 0 ? 'down' : 'flat'}`}>
-                    Vaccinations {fmtDelta(dashboard?.comparison?.totals?.doses?.delta)}{dashboard?.comparison?.totals?.doses?.pctChange != null ? ` (${Number(dashboard.comparison.totals.doses.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.doses.pctChange).toFixed(1)}%)` : ''}
-                  </span>
-                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.revenue?.delta > 0 ? 'up' : dashboard?.comparison?.totals?.revenue?.delta < 0 ? 'down' : 'flat'}`}>
-                    Revenue {fmtDelta(dashboard?.comparison?.totals?.revenue?.delta)}{dashboard?.comparison?.totals?.revenue?.pctChange != null ? ` (${Number(dashboard.comparison.totals.revenue.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.revenue.pctChange).toFixed(1)}%)` : ''}
-                  </span>
-                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.consultations?.delta > 0 ? 'up' : dashboard?.comparison?.totals?.consultations?.delta < 0 ? 'down' : 'flat'}`}>
-                    Consultations {fmtDelta(dashboard?.comparison?.totals?.consultations?.delta)}{dashboard?.comparison?.totals?.consultations?.pctChange != null ? ` (${Number(dashboard.comparison.totals.consultations.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.consultations.pctChange).toFixed(1)}%)` : ''}
-                  </span>
-                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.qrIssued?.delta > 0 ? 'up' : dashboard?.comparison?.totals?.qrIssued?.delta < 0 ? 'down' : 'flat'}`}>
-                    QR Issued {fmtDelta(dashboard?.comparison?.totals?.qrIssued?.delta)}{dashboard?.comparison?.totals?.qrIssued?.pctChange != null ? ` (${Number(dashboard.comparison.totals.qrIssued.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.qrIssued.pctChange).toFixed(1)}%)` : ''}
-                  </span>
-                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.lostPets?.delta > 0 ? 'down' : dashboard?.comparison?.totals?.lostPets?.delta < 0 ? 'up' : 'flat'}`}>
-                    Lost Pets {fmtDelta(dashboard?.comparison?.totals?.lostPets?.delta)}{dashboard?.comparison?.totals?.lostPets?.pctChange != null ? ` (${Number(dashboard.comparison.totals.lostPets.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.lostPets.pctChange).toFixed(1)}%)` : ''}
-                  </span>
-                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.newOwners?.delta > 0 ? 'up' : dashboard?.comparison?.totals?.newOwners?.delta < 0 ? 'down' : 'flat'}`}>
-                    New Owners {fmtDelta(dashboard?.comparison?.totals?.newOwners?.delta)}{dashboard?.comparison?.totals?.newOwners?.pctChange != null ? ` (${Number(dashboard.comparison.totals.newOwners.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.newOwners.pctChange).toFixed(1)}%)` : ''}
-                  </span>
-                </div>
+                <section className="analytics-chart-section">
+                  <h3 className="analytics-chart-section-title">
+                    Comparing {dashboard.comparison.current?.label} vs {dashboard.comparison.baseline?.label}
+                    {dashboard.comparison.current?.partial ? ' · Partial current period' : ''}
+                  </h3>
+                  <div className="report-table-wrapper">
+                    <table className="report-table">
+                      <thead><tr><th>Metric</th><th>Current</th><th>Baseline</th><th>Change</th><th>% Change</th></tr></thead>
+                      <tbody>
+                        {[
+                          ['registrations', 'Verified pet registrations'],
+                          ['doses', 'Vaccine doses'],
+                          ['revenue', 'Paid revenue'],
+                          ['consultations', 'Consultations'],
+                          ['qrIssued', 'QR codes issued'],
+                          ['lostPets', 'Verified lost pets'],
+                          ['newOwners', 'New owners'],
+                        ].map(([key, label]) => {
+                          const currentValue = dashboard.comparison.totals?.current?.[key] ?? 0;
+                          const baselineValue = dashboard.comparison.totals?.baseline?.[key] ?? 0;
+                          const change = dashboard.comparison.totals?.[key] || {};
+                          const format = (value) => key === 'revenue'
+                            ? `₱${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                            : fmtNum(value);
+                          const percent = change.pctChange == null
+                            ? (Number(baselineValue) === 0 && Number(currentValue) > 0 ? 'New' : 'N/A (baseline <5)')
+                            : `${Number(change.pctChange) > 0 ? '+' : ''}${Number(change.pctChange).toFixed(1)}%`;
+                          return <tr key={key}><td>{label}</td><td>{format(currentValue)}</td><td>{format(baselineValue)}</td><td>{fmtDelta(change.delta)}</td><td>{percent}</td></tr>;
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
               )}
 
               <h2>Analytics Graphs</h2>
@@ -495,8 +556,8 @@ export default function AnalyticsReports() {
               </p>
 
               <section className="analytics-chart-section">
-                <div className="chart-grid chart-grid--1col">
-                  <ChartCard title="Pets by Species" isEmpty={!hasChartData(dashboard?.species)}>
+                <div className="chart-grid">
+                  <ChartCard title="Verified Pets by Species" isEmpty={!hasChartData(dashboard?.species)}>
                     <Bar
                       options={barChartOptions}
                       data={{
@@ -529,7 +590,7 @@ export default function AnalyticsReports() {
                     />
                   </ChartCard>
 
-                  <ChartCard title="Registration Status" isEmpty={!hasChartData(dashboard?.registrationStatus)}>
+                  <ChartCard title="Pet Verification Status" isEmpty={!hasChartData(dashboard?.registrationStatus)}>
                     <Pie
                       options={circularChartOptions}
                       data={{
@@ -650,7 +711,7 @@ export default function AnalyticsReports() {
                     />
                   </ChartCard>
 
-                  <ChartCard title="Vaccination Compliance" isEmpty={!hasChartData(dashboard?.vaccinationStatus)}>
+                  <ChartCard title="Latest Vaccine Due Status (verified pets)" isEmpty={!hasChartData(dashboard?.vaccinationStatus)}>
                     <Doughnut
                       options={circularChartOptions}
                       data={{
@@ -658,23 +719,12 @@ export default function AnalyticsReports() {
                         datasets: [
                           {
                             data: dashboard?.vaccinationStatus.map((x) => x.total) || [],
-                            backgroundColor: ["#c8102e", "#b8860b", "#1e7a46", "#6b6062"],
-                            borderWidth: 0,
-                          },
-                        ],
-                      }}
-                    />
-                  </ChartCard>
-
-                  <ChartCard title="QR Statistics" isEmpty={!hasChartData(dashboard?.qrStats)}>
-                    <Doughnut
-                      options={circularChartOptions}
-                      data={{
-                        labels: dashboard?.qrStats.map((x) => x.status) || [],
-                        datasets: [
-                          {
-                            data: dashboard?.qrStats.map((x) => x.total) || [],
-                            backgroundColor: CHART_PALETTE,
+                            backgroundColor: dashboard?.vaccinationStatus.map((x) => ({
+                              "Up to Date": "#1e7a46",
+                              "Due Soon": "#b8860b",
+                              Overdue: "#c8102e",
+                              "No Record": "#6b6062",
+                            }[x.status] || "#6b6062")) || [],
                             borderWidth: 0,
                           },
                         ],
@@ -683,51 +733,6 @@ export default function AnalyticsReports() {
                   </ChartCard>
                 </div>
               </section>
-
-              {compare && dashboard?.comparison?.yearly && Array.isArray(dashboard.comparison.yearly) && dashboard.comparison.yearly.length > 0 && (
-                <section className="analytics-chart-section">
-                  <h3 className="analytics-chart-section-title">Year-over-Year Summary</h3>
-                  <p className="analytics-chart-section-desc">
-                    Totals by year with change vs previous year for core metrics.
-                  </p>
-                  <div className="analytics-table-wrapper">
-                    <table className="analytics-table analytics-table--yoy">
-                      <thead>
-                        <tr>
-                          <th>Year</th>
-                          <th>Registrations</th>
-                          <th>Δ vs prev</th>
-                          <th>Vaccinations (doses)</th>
-                          <th>Δ vs prev</th>
-                          <th>Revenue</th>
-                          <th>Δ vs prev</th>
-                          <th>Consultations</th>
-                          <th>Δ vs prev</th>
-                          <th>QR Issued</th>
-                          <th>Δ vs prev</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dashboard.comparison.yearly.map((row) => (
-                          <tr key={row.year}>
-                            <td>{row.year}</td>
-                            <td>{fmtNum(row.registrations)}</td>
-                            <td>{fmtDelta(row.deltas?.registrations?.delta)}</td>
-                            <td>{fmtNum(row.doses)}</td>
-                            <td>{fmtDelta(row.deltas?.doses?.delta)}</td>
-                            <td>₱{fmtNum(row.revenue)}</td>
-                            <td>{fmtDelta(row.deltas?.revenue?.delta)}</td>
-                            <td>{fmtNum(row.consultations)}</td>
-                            <td>{fmtDelta(row.deltas?.consultations?.delta)}</td>
-                            <td>{fmtNum(row.qrIssued)}</td>
-                            <td>{fmtDelta(row.deltas?.qrIssued?.delta)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-              )}
 
               <div className="analytics-print-row">
                 <button type="button" className="btn-primary" onClick={() => setPrintOpen(true)}>

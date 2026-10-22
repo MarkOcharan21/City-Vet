@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
+import { Bar } from 'react-chartjs-2';
 import {
   BarChart3,
   CalendarRange,
@@ -16,6 +18,7 @@ import GlobalLoadingOverlay from '../GlobalLoadingOverlay';
 import { printAdminReport } from '../../utils/adminReportPrint';
 import { printComplianceReport } from '../../utils/complianceReportPrint';
 import { printComparisonReport } from '../../utils/comparisonReportPrint';
+import './chartSetup';
 
 const PRESETS = [
   { key: 'thisMonth', label: 'This Month' },
@@ -26,6 +29,15 @@ const PRESETS = [
 ];
 
 const GRACE_OPTIONS = [0, 15, 30, 60, 90];
+const reportChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { position: 'bottom' }, datalabels: { display: false } },
+  scales: {
+    x: { grid: { display: false } },
+    y: { beginAtZero: true, ticks: { precision: 0 } },
+  },
+};
 
 function toISO(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
@@ -129,11 +141,14 @@ export default function ReportsPanel() {
           'Did owners come back for the next dose? On-time, late, lapsed and never-returned follow-ups, with the owners to contact.',
         icon: Syringe,
         load: async () => {
-          const params = { grace };
+          const params = { grace, limit: 1000, page: 1 };
           if (from) params.from = from;
           if (to) params.to = to;
-          const res = await api.get('/analytics/vaccine-compliance', { params });
-          return res.data;
+          const [res, serviceReturn] = await Promise.all([
+            api.get('/analytics/vaccine-compliance', { params }),
+            api.get('/analytics/return-rate', { params }),
+          ]);
+          return { ...res.data, serviceReturn: serviceReturn.data };
         },
         print: (data) =>
           printComplianceReport(data, {
@@ -148,9 +163,12 @@ export default function ReportsPanel() {
           'Current window against the previous period, broken down daily, weekly, monthly or yearly.',
         icon: FileBarChart,
         load: async () => {
-          const res = await api.get('/analytics/vaccination-trends', {
-            params: { granularity: 'monthly', compare: 'previous', anchor: toISO(new Date()) },
-          });
+          const params = { granularity: 'monthly', compare: 'previous', anchor: toISO(new Date()), windows: 60 };
+          if (from && to) {
+            params.from = from;
+            params.to = to;
+          }
+          const res = await api.get('/analytics/vaccination-trends', { params });
           return res.data;
         },
         print: (data) =>
@@ -167,7 +185,7 @@ export default function ReportsPanel() {
         icon: ClipboardList,
         load: async () => {
           const res = await api.get('/analytics/vaccination-trends', {
-            params: { granularity: 'yearly', compare: 'previous', anchor: toISO(new Date()) },
+            params: { granularity: 'yearly', compare: 'previousYear', anchor: toISO(new Date()) },
           });
           return res.data;
         },
@@ -219,6 +237,89 @@ export default function ReportsPanel() {
     }
   };
 
+  const handleExport = async (format) => {
+    try {
+      const data = await activeReport.load();
+      if (!data?.success) {
+        toast.error(data?.message || 'Could not build the report.');
+        return;
+      }
+      const sheets = {};
+      if (activeReport.key === 'summary') {
+        sheets['Summary'] = [
+          { Metric: 'Verified pet registrations', Value: data.summary?.totalPets },
+          { Metric: 'Unique vaccinated pets', Value: data.summary?.vaccinatedPets },
+          { Metric: 'Lost pets', Value: data.summary?.lostPets },
+          { Metric: 'QR codes issued', Value: data.summary?.totalQr },
+        ];
+        sheets['Registrations'] = data.registrations || [];
+        sheets['Vaccinations'] = data.vaccinations || [];
+        sheets['Revenue'] = data.paymentRevenue || [];
+        sheets['Species'] = data.species || [];
+        sheets['Barangays'] = data.barangays || [];
+        sheets['Data Quality'] = [data.dataQuality || {}];
+      } else if (activeReport.key === 'compliance') {
+        sheets['Summary'] = [data.summary || {}];
+        sheets['Outcomes'] = data.buckets || [];
+        sheets['Monthly Trend'] = data.trend || [];
+        sheets['Cohort Retention'] = data.cohortRetention || [];
+        sheets['Retention Reasons'] = data.retentionReasons || [];
+        sheets['Factors'] = data.factors || [];
+        sheets['Service Return'] = data.serviceReturn?.byService || [];
+        sheets['Service Retention'] = [data.serviceReturn?.retention || {}];
+        sheets['Owners to Contact'] = (data.actionable || []).map((row) => ({
+          ...row,
+          reasons: (row.reasons || []).join('; '),
+        }));
+      } else {
+        sheets['Current vs Baseline'] = [
+          { Period: 'Current', ...(data.totals?.current || {}) },
+          { Period: 'Baseline', ...(data.totals?.baseline || {}) },
+        ];
+        sheets[activeReport.key === 'yearly' ? 'Yearly' : 'Period Series'] =
+          activeReport.key === 'yearly' ? data.yearly || [] : (data.series || []).map((row) => ({
+            Period: row.label,
+            'Baseline period': row.baselineLabel,
+            'Current value': row.current?.[data.primaryMetric],
+            'Baseline value': row.baseline?.[data.primaryMetric],
+            Change: row.delta,
+            'Percent change': row.pctChange,
+            'Current on-time rate': row.current?.onTimeRate,
+            'Baseline on-time rate': row.baseline?.onTimeRate,
+            'Current revenue': row.current?.revenue,
+            'Baseline revenue': row.baseline?.revenue,
+          }));
+      }
+
+      const workbook = XLSX.utils.book_new();
+      for (const [name, rows] of Object.entries(sheets)) {
+        XLSX.utils.book_append_sheet(
+          workbook,
+          XLSX.utils.json_to_sheet(rows.length ? rows : [{ Note: 'No data for this section.' }]),
+          name.slice(0, 31)
+        );
+      }
+      const extension = format === 'csv' ? 'csv' : 'xlsx';
+      const fileName = `${activeReport.key}-analytics-report.${extension}`;
+      if (format === 'csv') {
+        const csvWorkbook = XLSX.utils.book_new();
+        const allRows = Object.entries(sheets).flatMap(([section, rows]) =>
+          rows.map((row) => ({ Section: section, Data: JSON.stringify(row) }))
+        );
+        XLSX.utils.book_append_sheet(
+          csvWorkbook,
+          XLSX.utils.json_to_sheet(allRows.length ? allRows : [{ Note: 'No data for this report.' }]),
+          'Report Data'
+        );
+        XLSX.writeFile(csvWorkbook, fileName, { bookType: 'csv' });
+      } else {
+        XLSX.writeFile(workbook, fileName);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not export this report.');
+    }
+  };
+
   const applyPreset = (key) => {
     setPreset(key);
     const range = presetRange(key);
@@ -226,7 +327,14 @@ export default function ReportsPanel() {
     setTo(range.to);
   };
 
-  const periodLabel = preview?.filterLabel || (from || to ? `${from || '…'} → ${to || '…'}` : 'All Time');
+  const periodLabel = preview?.filterLabel ||
+    (preview?.current ? fmtRange(preview.current) || preview.current.label :
+      from || to ? `${from || '…'} → ${to || '…'}` : 'All Time');
+  const previewMonths = Array.from(new Set([
+    ...(preview?.registrations || []).map((row) => row.month),
+    ...(preview?.vaccinations || []).map((row) => row.month),
+    ...(preview?.paymentRevenue || []).map((row) => row.month),
+  ])).sort((a, b) => new Date(`${a} 1`).getTime() - new Date(`${b} 1`).getTime());
 
   return (
     <div className="analytics-panel">
@@ -329,8 +437,10 @@ export default function ReportsPanel() {
           disabled={loading || printing || !preview}
         >
           <Printer size={16} />{' '}
-          {printing ? 'Preparing report…' : `Print ${activeReport.title}`}
+          {printing ? 'Preparing report…' : `Print / Save PDF`}
         </button>
+        <button type="button" className="btn-secondary" onClick={() => handleExport('csv')} disabled={loading || !preview}>Export CSV</button>
+        <button type="button" className="btn-secondary" onClick={() => handleExport('xlsx')} disabled={loading || !preview}>Export Excel</button>
       </div>
 
       {loading && <GlobalLoadingOverlay visible={true} message="Preparing report preview..." />}
@@ -352,10 +462,19 @@ export default function ReportsPanel() {
           <p className="analytics-chart-section-desc">
             <CalendarRange size={14} /> {periodLabel}
           </p>
+          {((preview.dataQuality?.syntheticSeedPets || 0) + (preview.dataQuality?.syntheticSeedVaccinations || 0) +
+            (preview.dataQuality?.syntheticSeedPayments || 0) + (preview.syntheticData?.current?.pets || 0) +
+            (preview.syntheticData?.current?.vaccinations || 0) + (preview.syntheticData?.current?.payments || 0) +
+            (preview.syntheticData?.vaccineEpisodes || 0)) > 0 && (
+            <p className="analytics-warning">
+              Synthetic 2025 seed data is included. Clearly exclude or disclose these records before using this as an official clinic report.
+            </p>
+          )}
 
           {activeReport.key === 'summary' && (
+            <>
             <div className="summary-row">
-              <SummaryCard label="Registered Pets" value={fmtNum(preview.summary?.totalPets)} />
+              <SummaryCard label="Verified Pet Registrations" value={fmtNum(preview.summary?.totalPets)} />
               <SummaryCard
                 label="Vaccinated Pets"
                 value={fmtNum(preview.summary?.vaccinatedPets)}
@@ -372,9 +491,46 @@ export default function ReportsPanel() {
                 color="#c6a15b"
               />
             </div>
+            <div className="report-table-container">
+              <h3>Monthly registrations and vaccinations</h3>
+              <div className="chart-card-canvas">
+                <Bar options={reportChartOptions} data={{
+                  labels: previewMonths,
+                  datasets: [
+                    { label: 'Verified registrations', data: previewMonths.map((month) => preview.registrations?.find((row) => row.month === month)?.total || 0), backgroundColor: '#7a0c1e' },
+                    { label: 'Vaccine doses', data: previewMonths.map((month) => preview.vaccinations?.find((row) => row.month === month)?.total || 0), backgroundColor: '#1e7a46' },
+                  ],
+                }} />
+              </div>
+              <div className="report-table-wrapper">
+                <table className="report-table">
+                  <thead><tr><th>Month</th><th>Verified registrations</th><th>Vaccine doses</th><th>Paid revenue</th></tr></thead>
+                  <tbody>{previewMonths.map((month) => {
+                    const registrations = preview.registrations?.find((entry) => entry.month === month);
+                    const vaccinations = preview.vaccinations?.find((entry) => entry.month === month);
+                    const revenue = preview.paymentRevenue?.find((entry) => entry.month === month);
+                    return <tr key={month}><td>{month}</td><td>{fmtNum(registrations?.total)}</td><td>{fmtNum(vaccinations?.total)}</td><td>{fmtPeso(revenue?.total)}</td></tr>;
+                  })}</tbody>
+                </table>
+              </div>
+              <p>Pet registrations use registration date when available. Revenue includes paid ledger records only.</p>
+            </div>
+            <div className="report-table-container">
+              <h3>Species and barangay distribution</h3>
+              <div className="report-table-wrapper">
+                <table className="report-table">
+                  <thead><tr><th>Species</th><th>Verified pets</th><th>Barangay</th><th>Verified pets</th></tr></thead>
+                  <tbody>{Array.from({ length: Math.max(preview.species?.length || 0, preview.barangays?.length || 0) }).map((_, index) => (
+                    <tr key={index}><td>{preview.species?.[index]?.species || '—'}</td><td>{fmtNum(preview.species?.[index]?.total)}</td><td>{preview.barangays?.[index]?.barangay || '—'}</td><td>{fmtNum(preview.barangays?.[index]?.total)}</td></tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </div>
+            </>
           )}
 
           {activeReport.key === 'compliance' && (
+            <>
             <div className="summary-row">
               <SummaryCard
                 label="Episodes Evaluated"
@@ -397,10 +553,51 @@ export default function ReportsPanel() {
                 color="#c6a15b"
               />
             </div>
+            <div className="report-table-container">
+              <h3>Follow-up outcome breakdown</h3>
+              <div className="chart-card-canvas">
+                <Bar options={reportChartOptions} data={{
+                  labels: (preview.buckets || []).map((row) => row.status),
+                  datasets: [{ label: 'Vaccine episodes', data: (preview.buckets || []).map((row) => row.total), backgroundColor: ['#1e7a46', '#b8860b', '#c8102e', '#6b6062', '#c6a15b'] }],
+                }} />
+              </div>
+              <div className="report-table-wrapper"><table className="report-table">
+                <thead><tr><th>Outcome</th><th>Episodes</th><th>Share</th></tr></thead>
+                <tbody>{(preview.buckets || []).map((row) => <tr key={row.status}><td>{row.status}</td><td>{fmtNum(row.total)}</td><td>{fmtPct(row.pct)}</td></tr>)}</tbody>
+              </table></div>
+              <h3>Key findings</h3><ul>{(preview.analysis?.findings || []).map((item) => <li key={item}>{item}</li>)}</ul>
+              <h3>Recommendations</h3><ul>{(preview.analysis?.recommendations || []).map((item) => <li key={item}>{item}</li>)}</ul>
+              <h3>Monthly on-time trend (evaluated n and pending shown)</h3>
+              <div className="chart-card-canvas">
+                <Bar options={reportChartOptions} data={{
+                  labels: (preview.trend || []).map((row) => row.period),
+                  datasets: [{ label: 'On-time rate (%)', data: (preview.trend || []).map((row) => row.onTimeRate), backgroundColor: '#1e7a46' }],
+                }} />
+              </div>
+              <h3>Owner-stated retention reasons</h3><div className="report-table-wrapper"><table className="report-table">
+                <thead><tr><th>Reason</th><th>Count</th></tr></thead>
+                <tbody>{(preview.retentionReasons || []).map((row) => <tr key={row.key}><td>{row.label}</td><td>{fmtNum(row.count)}</td></tr>)}</tbody>
+              </table></div>
+              <h3>Any-service retention and follow-up</h3>
+              <p>
+                {fmtPct(preview.serviceReturn?.summary?.returnRate30)} of mature service episodes had any-service return within 30 days;
+                owner retention within 90 days was {fmtPct(preview.serviceReturn?.retention?.retentionRate)}.
+              </p>
+            </div>
+            </>
           )}
 
           {(activeReport.key === 'comparison' || activeReport.key === 'yearly') && (
             <>
+              <div className="chart-card-canvas">
+                <Bar options={reportChartOptions} data={{
+                  labels: (preview.series || []).map((row) => row.label),
+                  datasets: [
+                    { label: preview.current?.label || 'Current', data: (preview.series || []).map((row) => Number(row.current?.[preview.primaryMetric]) || 0), backgroundColor: '#c8102e' },
+                    { label: preview.baseline?.label || 'Baseline', data: (preview.series || []).map((row) => Number(row.baseline?.[preview.primaryMetric]) || 0), backgroundColor: '#c6a15b' },
+                  ],
+                }} />
+              </div>
               <div className="summary-row">
                 <SummaryCard
                   label="Doses"
@@ -438,6 +635,7 @@ export default function ReportsPanel() {
                         <th>Owners</th>
                         <th>On-Time Rate</th>
                         <th>Revenue</th>
+                        {activeReport.key !== 'yearly' && <><th>Baseline doses</th><th>Baseline revenue</th></>}
                       </tr>
                     </thead>
                     <tbody>
@@ -450,6 +648,7 @@ export default function ReportsPanel() {
                               <td>{fmtNum(row.owners)}</td>
                               <td>{fmtPct(row.onTimeRate)}</td>
                               <td>{fmtPeso(row.revenue)}</td>
+                              {activeReport.key !== 'yearly' && <><td>—</td><td>—</td></>}
                             </tr>
                           ))
                         : (preview.series || []).map((row) => (
@@ -462,18 +661,20 @@ export default function ReportsPanel() {
                                 {row.current ? fmtPct(row.current.onTimeRate) : '—'}
                               </td>
                               <td>{row.current ? fmtPeso(row.current.revenue) : '—'}</td>
+                              <td>{row.baseline ? fmtNum(row.baseline.doses) : '—'}</td>
+                              <td>{row.baseline ? fmtPeso(row.baseline.revenue) : '—'}</td>
                             </tr>
                           ))}
                       {activeReport.key === 'yearly' && !(preview.yearly || []).length ? (
                         <tr>
-                          <td className="report-table-empty" colSpan={6}>
+                          <td className="report-table-empty" colSpan={activeReport.key === 'yearly' ? 6 : 8}>
                             No yearly data available.
                           </td>
                         </tr>
                       ) : null}
                       {activeReport.key !== 'yearly' && !(preview.series || []).length ? (
                         <tr>
-                          <td className="report-table-empty" colSpan={6}>
+                          <td className="report-table-empty" colSpan={8}>
                             No comparison data available.
                           </td>
                         </tr>

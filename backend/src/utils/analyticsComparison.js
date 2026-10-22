@@ -303,13 +303,25 @@ function buildComparison({
     windows: windowCount,
     primaryMetric,
     metrics: METRICS,
-    current: { ...currentRange, label: currentLabel },
-    baseline: { ...baselineRange, label: baselineLabel },
+    current: { ...currentRange, label: currentLabel, partial: isPartialWindow(currentRange, granularity) },
+    baseline: { ...baselineRange, label: baselineLabel, partial: isPartialWindow(baselineRange, granularity) },
     totals,
     series,
     yearly: buildYearly(rows, primaryMetric),
     matrix: buildMatrix(rows),
   };
+}
+
+function isPartialWindow(range, granularity) {
+  if (granularity === "daily") return false;
+  const start = new Date(`${range.from}T00:00:00`);
+  const end = new Date(`${range.to}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+  if (granularity === "weekly") return start.getDay() !== 1 || end.getDay() !== 0;
+  if (granularity === "monthly") {
+    return start.getDate() !== 1 || end.getDate() !== new Date(end.getFullYear(), end.getMonth() + 1, 0).getDate();
+  }
+  return start.getMonth() !== 0 || start.getDate() !== 1 || end.getMonth() !== 11 || end.getDate() !== 31;
 }
 
 module.exports = {
@@ -329,4 +341,5 @@ module.exports = {
   withRates,
   emptyMetrics,
   round,
+  isPartialWindow,
 };

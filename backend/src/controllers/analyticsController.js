@@ -143,9 +143,8 @@ async function getDashboardAnalytics(req, res) {
         const condition = hasRange
             ? (col) => dateRangeCondition(col, from, to)
             : (col) => dateWhere(col, filter);
-        const petDate = condition("p.created_at");
-        const petDateSimple = condition("pets.created_at");
-        const vaccDate = condition("date_administered");
+        const petDate = condition("COALESCE(p.registration_date, DATE(p.created_at))");
+        const petDateSimple = condition("COALESCE(pets.registration_date, DATE(pets.created_at))");
         const qrDate = condition("issue_date");
         const lostDate = condition("COALESCE(lost_date, created_at)");
         // The live ledger is `payment_monitoring`; the `payments` table is the
@@ -161,9 +160,11 @@ async function getDashboardAnalytics(req, res) {
         `);
 
         const [[vaccinatedPets]] = await db.query(`
-            SELECT COUNT(DISTINCT pet_id) AS total
-            FROM vaccination_records
-            WHERE ${vaccDate}
+            SELECT COUNT(DISTINCT vr.pet_id) AS total
+            FROM vaccination_records vr
+            JOIN vaccines v ON v.id = vr.vaccine_id
+            WHERE ${condition("vr.date_administered")}
+              AND v.vaccine_name <> 'REGISTRATION FEE'
         `);
 
         const [[lostPets]] = await db.query(`
@@ -244,11 +245,13 @@ async function getDashboardAnalytics(req, res) {
 
         const [vaccinations] = await db.query(`
             SELECT
-                ${toInt("EXTRACT(YEAR FROM date_administered)")} AS year,
-                ${toInt("EXTRACT(MONTH FROM date_administered)")} AS month_num,
+                ${toInt("EXTRACT(YEAR FROM vr.date_administered)")} AS year,
+                ${toInt("EXTRACT(MONTH FROM vr.date_administered)")} AS month_num,
                 COUNT(*) AS total
-            FROM vaccination_records
-            WHERE ${vaccDate}
+            FROM vaccination_records vr
+            JOIN vaccines v ON v.id = vr.vaccine_id
+            WHERE ${condition("vr.date_administered")}
+              AND v.vaccine_name <> 'REGISTRATION FEE'
             GROUP BY 1, 2
             ORDER BY 1, 2
         `);
@@ -289,8 +292,8 @@ async function getDashboardAnalytics(req, res) {
 
         const [registrations] = await db.query(`
             SELECT
-                ${toInt("EXTRACT(YEAR FROM created_at)")} AS year,
-                ${toInt("EXTRACT(MONTH FROM created_at)")} AS month_num,
+                ${toInt("EXTRACT(YEAR FROM COALESCE(registration_date, DATE(created_at)))")} AS year,
+                ${toInt("EXTRACT(MONTH FROM COALESCE(registration_date, DATE(created_at)))")} AS month_num,
                 COUNT(*) AS total
             FROM pets
             WHERE ${petDateSimple}
@@ -312,14 +315,18 @@ async function getDashboardAnalytics(req, res) {
                 SELECT vr1.pet_id, vr1.next_due_date
                 FROM vaccination_records vr1
                 JOIN (
-                    SELECT best_pet_id AS pet_id, MAX(id) AS max_id
+                    SELECT best_pet_id AS pet_id, MAX(vr2.id) AS max_id
                     FROM vaccination_records vr2
+                    JOIN vaccines v2 ON v2.id = vr2.vaccine_id
                     JOIN (
                         SELECT pet_id AS best_pet_id, MAX(date_administered) AS latest_date
-                        FROM vaccination_records
+                        FROM vaccination_records vr
+                        JOIN vaccines v ON v.id = vr.vaccine_id
+                        WHERE v.vaccine_name <> 'REGISTRATION FEE'
                         GROUP BY pet_id
                     ) latest_date ON latest_date.best_pet_id = vr2.pet_id
                         AND vr2.date_administered = latest_date.latest_date
+                    WHERE v2.vaccine_name <> 'REGISTRATION FEE'
                     GROUP BY best_pet_id
                 ) latest_id ON latest_id.pet_id = vr1.pet_id AND latest_id.max_id = vr1.id
             ) latest ON p.id = latest.pet_id
@@ -347,6 +354,47 @@ async function getDashboardAnalytics(req, res) {
             ORDER BY 1, 2
         `);
 
+        const [[dataQuality]] = await db.query(`
+            SELECT
+                (SELECT COUNT(*)
+                 FROM pet_owners po
+                 JOIN pets p ON p.pet_owner_id = po.id
+                 WHERE ${condition("COALESCE(p.registration_date, DATE(p.created_at))")}
+                   AND p.status = 'Verified'
+                   AND (po.barangay IS NULL OR TRIM(po.barangay) = '')) AS missing_barangay,
+                (SELECT COUNT(*)
+                 FROM vaccination_records vr
+                 JOIN vaccines v ON v.id = vr.vaccine_id
+                 WHERE ${condition("vr.date_administered")}
+                   AND v.vaccine_name <> 'REGISTRATION FEE'
+                   AND vr.next_due_date IS NULL) AS missing_due_date,
+                (SELECT COUNT(*)
+                 FROM pets p
+                 WHERE ${condition("COALESCE(p.registration_date, DATE(p.created_at))")}
+                   AND p.status = 'Verified'
+                   AND p.registration_date IS NOT NULL
+                   AND DATE(p.created_at) > p.registration_date) AS late_encoded_registrations,
+                (SELECT COUNT(*)
+                 FROM vaccination_records vr
+                 JOIN vaccines v ON v.id = vr.vaccine_id
+                 WHERE ${condition("vr.date_administered")}
+                   AND v.vaccine_name <> 'REGISTRATION FEE'
+                   AND vr.date_administered IS NOT NULL
+                   AND DATE(vr.created_at) > vr.date_administered) AS late_encoded_vaccinations,
+                (SELECT COUNT(*)
+                 FROM pets p
+                 WHERE ${condition("COALESCE(p.registration_date, DATE(p.created_at))")}
+                   AND p.pet_code LIKE 'ANL-2025-%') AS synthetic_seed_pets,
+                (SELECT COUNT(*)
+                 FROM vaccination_records vr
+                 WHERE ${condition("vr.date_administered")}
+                   AND vr.comments LIKE 'ANALYTICS_SEED_2025:%') AS synthetic_seed_vaccinations,
+                (SELECT COUNT(*)
+                 FROM payment_monitoring pm
+                 WHERE ${condition("COALESCE(pm.consultation_date, DATE(pm.created_at))")}
+                   AND pm.payment_reference LIKE 'ANL-2025-PAY-%') AS synthetic_seed_payments
+        `);
+
         const [recentPets] = await db.query(`
             SELECT
                 pet_code,
@@ -367,7 +415,8 @@ async function getDashboardAnalytics(req, res) {
             FROM vaccination_records vr
             JOIN pets p ON vr.pet_id = p.id
             JOIN vaccines v ON vr.vaccine_id = v.id
-            WHERE ${vaccDate}
+            WHERE ${condition("vr.date_administered")}
+            AND v.vaccine_name <> 'REGISTRATION FEE'
             ORDER BY vr.date_administered DESC
             LIMIT 5
         `);
@@ -407,17 +456,22 @@ async function getDashboardAnalytics(req, res) {
         // so the comparison is computed against an equivalent baseline.
         let comparison = null;
         const compare = String(req.query.compare || '').trim();
-        if (compare === 'previous' || compare === 'previousYear') {
+        const canCompare = hasRange
+            ? Boolean(from && to)
+            : filter !== 'all';
+        if (canCompare && (compare === 'previous' || compare === 'previousYear')) {
             try {
                 const comp = await buildPeriodComparison({
-                    granularity: 'monthly',
+                    granularity: hasRange
+                        ? 'monthly'
+                        : ({ today: 'daily', week: 'weekly', month: 'monthly', year: 'yearly' }[filter] || 'monthly'),
                     compare,
                     anchor: toISODate(hasRange ? new Date(`${to || from}T00:00:00`) : new Date()),
-                    windows: 12,
+                    windows: hasRange ? 12 : 1,
                     primaryMetric: 'registrations',
                     includeEpisodes: false,
                     ...(hasRange ? { current: { from, to } } : {}),
-                    toDate: !hasRange && compare === 'previousYear',
+                    toDate: !hasRange,
                 });
 
                 comparison = {
@@ -467,6 +521,15 @@ async function getDashboardAnalytics(req, res) {
             registrations: withMonthLabels(registrations),
             vaccinationStatus,
             paymentRevenue: withMonthLabels(paymentRevenue),
+            dataQuality: {
+                missingBarangay: Number(dataQuality?.missing_barangay) || 0,
+                missingDueDate: Number(dataQuality?.missing_due_date) || 0,
+                lateEncodedRegistrations: Number(dataQuality?.late_encoded_registrations) || 0,
+                lateEncodedVaccinations: Number(dataQuality?.late_encoded_vaccinations) || 0,
+                syntheticSeedPets: Number(dataQuality?.synthetic_seed_pets) || 0,
+                syntheticSeedVaccinations: Number(dataQuality?.synthetic_seed_vaccinations) || 0,
+                syntheticSeedPayments: Number(dataQuality?.synthetic_seed_payments) || 0,
+            },
             recentPets,
             recentVaccinations,
             recentPayments,

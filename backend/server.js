@@ -77,6 +77,7 @@ const { ensureOwnerLocationSource } = require("./src/db/ensureOwnerLocationSourc
 const { ensurePrescriptionInventoryColumns } = require("./src/db/ensurePrescriptionInventoryColumns");
 const { ensureMedicineStampColumns } = require("./src/db/ensureMedicineStampColumns");
 const { ensureConsultationService } = require("./src/db/ensureConsultationService");
+const { ensureFollowupContacts } = require("./src/db/ensureFollowupContacts");
 
 const {
     startAnnouncementScheduler,
@@ -367,6 +368,7 @@ async function startSchedulers() {
   await ensureOwnerLocationSource();
   await ensurePrescriptionInventoryColumns();
   await ensureMedicineStampColumns();
+  await ensureFollowupContacts();
 
   startNotificationScheduler();
   startAnnouncementScheduler();

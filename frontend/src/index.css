@@ -6240,6 +6240,43 @@ body:has(.clinic-access-page)::before {
 }
 
 .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin: 0 0 1.25rem; }
+.analytics-warning {
+  margin: 0.75rem 0;
+  padding: 0.85rem 1rem;
+  color: #704f00;
+  background: #fff7df;
+  border-left: 4px solid #b8860b;
+  border-radius: 6px;
+}
+.analytics-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.followup-contact-editor {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.followup-contact-editor fieldset {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 1rem;
+  border: 1px solid var(--color-border, #e8e2e0);
+  border-radius: 8px;
+  padding: 1rem;
+}
+.followup-contact-editor fieldset label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+@media (max-width: 720px) {
+  .analytics-insight-grid,
+  .followup-contact-editor fieldset {
+    grid-template-columns: 1fr;
+  }
+}
 .chart-grid--single {
   grid-template-columns: 1fr;
 }

@@ -8,7 +8,6 @@ const {
   normalizeCompare,
   describeWindow,
   trailingRange,
-  baselineRange,
   shiftYears,
   windowSize,
 } = require("../utils/reportPeriods");
@@ -69,6 +68,64 @@ function previousRange(range) {
   return { from: toISODate(baselineFrom), to: toISODate(baselineTo) };
 }
 
+async function countSyntheticSeedRecords(range) {
+  const [[row]] = await db.query(`
+    SELECT
+      (SELECT COUNT(*) FROM pets p
+       WHERE p.pet_code LIKE 'ANL-2025-%'
+         AND DATE(COALESCE(p.registration_date, DATE(p.created_at))) BETWEEN ? AND ?) AS pets,
+      (SELECT COUNT(*) FROM vaccination_records vr
+       WHERE vr.comments LIKE 'ANALYTICS_SEED_2025:%'
+         AND DATE(vr.date_administered) BETWEEN ? AND ?) AS vaccinations,
+      (SELECT COUNT(*) FROM payment_monitoring pm
+       WHERE pm.payment_reference LIKE 'ANL-2025-PAY-%'
+         AND DATE(COALESCE(pm.consultation_date, DATE(pm.created_at))) BETWEEN ? AND ?) AS payments
+  `, [
+    range.from, range.to,
+    range.from, range.to,
+    range.from, range.to,
+  ]);
+  return {
+    pets: Number(row?.pets) || 0,
+    vaccinations: Number(row?.vaccinations) || 0,
+    payments: Number(row?.payments) || 0,
+  };
+}
+
+function previousWindowRange(range, granularity, count) {
+  const from = parseISODate(range.from);
+  const to = parseISODate(range.to);
+  if (!from || !to) return range;
+
+  const shift = Math.max(1, count);
+  if (granularity === "daily") {
+    const baselineFrom = addDays(from, -shift);
+    const baselineTo = addDays(to, -shift);
+    return { from: toISODate(baselineFrom), to: toISODate(baselineTo) };
+  }
+  if (granularity === "weekly") {
+    const offset = shift * 7;
+    return {
+      from: toISODate(addDays(from, -offset)),
+      to: toISODate(addDays(to, -offset)),
+    };
+  }
+  if (granularity === "monthly") {
+    const shiftMonth = (date) => {
+      const target = new Date(date.getFullYear(), date.getMonth() - shift, 1);
+      const day = Math.min(date.getDate(), new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate());
+      target.setDate(day);
+      return target;
+    };
+    return { from: toISODate(shiftMonth(from)), to: toISODate(shiftMonth(to)) };
+  }
+
+  return {
+    from: toISODate(shiftYears(from, -shift)),
+    to: toISODate(shiftYears(to, -shift)),
+  };
+}
+
 /**
  * Resolve the current and baseline windows for an explicit date range, used
  * by the dashboard when the user types a custom range instead of a preset.
@@ -118,13 +175,14 @@ async function loadDayRows({ includeEpisodes = true } = {}) {
         AND ${VACCINE_FILTER}
     `),
 
-    // 3) New pet registrations, one row per day.
+    // 3) Pet registrations use the service/registration date when available;
+    // fall back to the encoding date for older records.
     db.query(`
       SELECT
-        ${dateFormat("p.created_at", "date")} AS service_on,
+        ${dateFormat("COALESCE(p.registration_date, DATE(p.created_at))", "date")} AS service_on,
         COUNT(*) AS registrations
       FROM pets p
-      GROUP BY ${dateFormat("p.created_at", "date")}
+      GROUP BY COALESCE(p.registration_date, DATE(p.created_at))
     `),
 
     // 4) Consultations, one row per day.
@@ -163,6 +221,7 @@ async function loadDayRows({ includeEpisodes = true } = {}) {
         COUNT(*) AS lostPets
       FROM pets p
       WHERE p.is_lost = 1
+        AND p.status = 'Verified'
       GROUP BY COALESCE(p.lost_date, p.created_at)
     `),
 
@@ -280,7 +339,7 @@ async function buildPeriodComparison(options = {}) {
   // "Same period last year" is only a fair comparison when both sides cover
   // the same dates, so the window is clamped to the anchor (year-to-date).
   // "Previous period" keeps whole calendar buckets, which is its definition.
-  const toDate = options.toDate !== false && compare === "previousYear";
+  const toDate = options.toDate !== false;
 
   const currentRange =
     options.current ||
@@ -293,12 +352,12 @@ async function buildPeriodComparison(options = {}) {
     baselineWindow =
       compare === "previousYear"
         ? previousYearRange(currentRange)
-        : baselineRange(anchorDate, granularity, count, compare);
+        : previousWindowRange(currentRange, granularity, count);
   }
 
   const rows = await loadDayRows({ includeEpisodes });
 
-  return buildComparison({
+  const comparison = buildComparison({
     rows,
     granularity,
     compare,
@@ -309,6 +368,16 @@ async function buildPeriodComparison(options = {}) {
     baselineLabel: describeWindow(granularity, baselineWindow.from, baselineWindow.to),
     primaryMetric,
   });
+  const [currentSynthetic, baselineSynthetic] = await Promise.all([
+    countSyntheticSeedRecords(currentRange),
+    countSyntheticSeedRecords(baselineWindow),
+  ]);
+  comparison.syntheticData = {
+    label: "Synthetic Analytics Seed 2025",
+    current: currentSynthetic,
+    baseline: baselineSynthetic,
+  };
+  return comparison;
 }
 
 // GET /api/analytics/period-comparison
@@ -361,15 +430,12 @@ async function buildDashboardComparison({
   const anchorDate = parseISODate(anchor) || new Date();
   const count = windowSize(g, windows);
 
-  const currentRange =
-    mode === "previousYear"
-      ? toDateRange(anchorDate, g, count)
-      : trailingRange(anchorDate, g, count);
+  const currentRange = toDateRange(anchorDate, g, count);
 
   const baselineWindow =
     mode === "previousYear"
       ? previousYearRange(currentRange)
-      : baselineRange(anchorDate, g, count, mode);
+      : previousWindowRange(currentRange, g, count);
 
   const rows = await loadDayRows({ includeEpisodes });
 
@@ -390,9 +456,11 @@ module.exports = {
   getPeriodComparison,
   buildPeriodComparison,
   buildDashboardComparison,
+  toDateRange,
+  previousRange,
+  previousYearRange,
+  previousWindowRange,
+  countSyntheticSeedRecords,
   windowsForCustomRange,
   loadDayRows,
-  toDateRange,
-  previousYearRange,
-  previousRange,
 };

@@ -156,6 +156,12 @@ test('pctChange returns a null percentage when the baseline is zero', () => {
   assert.deepEqual(pctChange(0, 0), { delta: 0, pct: 0 });
 });
 
+test('pctChange suppresses unstable percentages for small baselines', () => {
+  assert.deepEqual(pctChange(20, 4), { delta: 16, pct: null });
+  assert.deepEqual(pctChange(4, 4), { delta: 0, pct: null });
+  assert.deepEqual(pctChange(10, 5), { delta: 5, pct: 100 });
+});
+
 test('normalize helpers fall back to safe defaults', () => {
   assert.equal(normalizeGranularity('weekly'), 'weekly');
   assert.equal(normalizeGranularity('hourly'), 'monthly');

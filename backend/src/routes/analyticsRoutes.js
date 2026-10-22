@@ -17,6 +17,7 @@ const {
 
 const {
     getVaccineCompliance,
+    saveFollowupContact,
     getReturnRate,
     getVaccinationTrends
 } = require("../controllers/complianceController");
@@ -43,6 +44,16 @@ router.get(
         "Veterinarian"
     ]),
     getVaccineCompliance
+);
+
+router.put(
+    "/vaccine-follow-up/:episodeId/contact",
+    auth,
+    requireRole([
+        "Admin",
+        "Staff"
+    ]),
+    saveFollowupContact
 );
 
 router.get(

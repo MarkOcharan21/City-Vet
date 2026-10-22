@@ -2,6 +2,7 @@ import {
   getPrintFooter,
   getPrintHeader,
   getSectionHeader,
+  getPrintBarChart,
   openPrintDocument,
 } from './printReport';
 
@@ -20,7 +21,7 @@ function num(value) {
 }
 
 function pct(value) {
-  if (value === null || value === undefined) return '—';
+  if (value === null || value === undefined) return 'N/A';
   const n = Number(value);
   return Number.isFinite(n) ? `${n.toFixed(1)}%` : '—';
 }
@@ -128,7 +129,18 @@ export function buildComparisonReportBody(data, {
     <p class="report-meta report-meta--center">
       ${esc(granularity)} comparison · baseline: ${esc(compareLabel)}<br />
       ${esc(currentWindow)}${baselineWindow ? ` compared with ${esc(baselineWindow)}` : ''}
+      ${data?.current?.partial ? '<br />Current period is partial (through the reporting anchor date).' : ''}
+      ${data?.baseline?.partial ? '<br />Baseline period is also partial.' : ''}
     </p>
+    <div class="notes">
+      Generated ${esc(dateStr)}. Doses are vaccination records; unique pets and owners are distinct IDs within the reporting window.
+      Revenue is paid-ledger revenue. Percent changes are omitted when the baseline is zero or fewer than five records.
+    </div>
+    ${((Number(data?.syntheticData?.current?.pets) || 0) + (Number(data?.syntheticData?.current?.vaccinations) || 0) +
+      (Number(data?.syntheticData?.current?.payments) || 0) + (Number(data?.syntheticData?.baseline?.pets) || 0) +
+      (Number(data?.syntheticData?.baseline?.vaccinations) || 0) + (Number(data?.syntheticData?.baseline?.payments) || 0)) > 0
+      ? '<div class="notes"><strong>Data notice:</strong> Synthetic Analytics Seed 2025 records are included in one or both comparison windows; do not interpret them as real clinic activity.</div>'
+      : ''}
 
     ${tableBlock(
       1,
@@ -190,6 +202,14 @@ export function buildComparisonReportBody(data, {
       ]),
       'No yearly data available.'
     )}
+    ${getPrintBarChart(4, `CURRENT ${granularity.toUpperCase()} SERIES`, (data?.series || []).map((row) => ({
+      period: row.label,
+      value: Number(row.current?.[data?.primaryMetric || 'doses']) || 0,
+    })), 'period', 'value', '#C8102E')}
+    ${getPrintBarChart(5, `BASELINE ${granularity.toUpperCase()} SERIES`, (data?.series || []).map((row) => ({
+      period: row.baselineLabel,
+      value: Number(row.baseline?.[data?.primaryMetric || 'doses']) || 0,
+    })), 'period', 'value', '#C6A15B')}
 
     ${getPrintFooter()}
   `;

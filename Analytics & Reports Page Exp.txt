@@ -1,0 +1,670 @@
+ANALYTICS & REPORTS PAGE - DETAILED FEATURE DOCUMENTATION
+================================================================================
+Project : City Vet Cabuyao - Pet Registration System
+Module  : Admin > Analytics & Reports
+Updated : October 22, 2026
+
+
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+1. Purpose and Audience
+2. Access and Roles
+3. Page Structure
+4. Overview Tab
+   4.1 Period Filters
+   4.2 Summary Cards
+   4.3 Period Comparison Controls
+   4.4 Comparison Metrics and Delta Badges
+   4.5 Year-over-Year Charts
+   4.6 Year-over-Year Summary Table
+   4.7 Other Overview Charts
+5. Vaccine Compliance Tab
+   5.1 Filters
+   5.2 Summary Cards
+   5.3 Follow-Up Outcomes and Trend
+   5.4 Follow-Up Funnel
+   5.5 Outcome by Vaccine
+   5.6 Compliance by Barangay
+   5.7 Service Return Analysis
+   5.8 Owners to Contact
+6. Period Comparison Tab
+   6.1 Controls
+   6.2 Summary Cards and Delta Row
+   6.3 Charts
+   6.4 Period-by-Period Table
+   6.5 Year-over-Year Table
+7. Reports Tab
+8. Printing and Exports
+9. Metrics, Definitions, and Data Sources
+10. Backend API Reference
+11. Data Integrity Rules
+12. Known Limitations and Notes
+13. Recent Enhancements
+
+
+1. PURPOSE AND AUDIENCE
+--------------------------------------------------------------------------------
+The Analytics & Reports page gives administrators, staff, and veterinarians a
+single workspace for reviewing clinic operations. It answers four questions:
+
+  - What happened in the selected period? (Overview)
+  - Are owners returning for scheduled vaccine follow-ups? (Vaccine Compliance)
+  - How does the current period compare to the previous period or the same
+    period last year? (Period Comparison, plus the Overview comparison tools)
+  - What can be printed or exported as an official report? (Reports)
+
+Most analytics are read-only and derived from operational tables. Admin and
+Staff can also save follow-up contact outcomes and owner-stated retention
+reasons from the actionable worklist; these entries are stored separately from
+the vaccination record.
+
+
+2. ACCESS AND ROLES
+--------------------------------------------------------------------------------
+Only authenticated users with one of these roles can open the page:
+
+  - Admin
+  - Staff
+  - Veterinarian
+
+All analytics endpoints require a valid Bearer token and pass through a role
+guard. Owners cannot access this module.
+
+
+3. PAGE STRUCTURE
+--------------------------------------------------------------------------------
+A tab bar at the top of the page switches between four sections:
+
+  1. Overview
+  2. Vaccine Compliance
+  3. Period Comparison
+  4. Reports
+
+The selected tab stays on screen while its panel loads. Each panel has its own
+filters, refresh action, loading overlay, error state, and print action. If a
+request fails, the panel shows the error message plus a Retry button instead of
+leaving stale numbers on screen.
+
+
+4. OVERVIEW TAB
+--------------------------------------------------------------------------------
+The Overview tab is the default landing section. It shows the headline numbers
+and the main charts for the selected period.
+
+4.1 Period Filters
+--------------------------------------------------------------------------------
+Filter buttons:
+
+  - Today
+  - This Week
+  - This Month
+  - This Year
+  - All Time
+
+A Custom Range field accepts a From date and a To date. The Clear button resets
+the custom dates. The active period is shown above the filter row as
+"Showing data for: <label>".
+
+The filter controls which records feed the summary cards and charts. Custom
+ranges take precedence over the preset buttons.
+
+4.2 Summary Cards
+--------------------------------------------------------------------------------
+Four headline cards are always shown for the selected period:
+
+  - Verified Pets
+  - Vaccinated Pets
+  - Lost Pets
+  - Generated QR
+
+Each card uses the dashboard summary totals, not the comparison window. The
+comparison numbers are shown separately in the delta row so the two scopes are
+never mixed silently.
+
+4.3 Period Comparison Controls
+--------------------------------------------------------------------------------
+A "COMPARE TO" toggle sits beside the period filters. Options:
+
+  - Off
+  - Same Period Last Year (previousYear) - default
+  - Previous Period (previous)
+
+The selection is sent to the backend as the "compare" query parameter. When Off
+is selected, the comparison row and the Year-over-Year table are hidden, and the
+monthly charts return to a single-series view.
+
+When a comparison mode is active, the page shows:
+
+  - A delta row labelled "Comparing <current window> vs <baseline window>"
+  - Small colored badges for each core metric
+  - Grouped year-over-year bar charts (when more than one year is present in the
+    filtered data)
+  - A Year-over-Year Summary table
+
+Comparison window behaviour:
+
+  - previousYear uses the same calendar window one year earlier. For year-to-date
+    views the end date is clamped to today, so both sides cover the same dates.
+  - previous uses a matching window for the selected preset: one day for Today,
+    the elapsed portion of the current week/month/year for those presets, or
+    exactly the selected dates for a complete custom range.
+  - previousYear uses the same selected window one year earlier. YTD windows
+    end on the anchor date; complete custom ranges retain their exact dates.
+  - Comparisons are unavailable for All Time or an incomplete custom range
+    because neither defines a fair baseline.
+
+4.4 Comparison Metrics and Delta Badges
+--------------------------------------------------------------------------------
+The Overview delta row reports the following metrics whenever the backend
+returns them:
+
+  - Registrations
+  - Vaccinations (doses)
+  - Revenue
+  - Consultations
+  - QR Issued
+  - Lost Pets
+  - New Owners
+
+Each badge shows the absolute change and, when the baseline is at least five,
+the percentage change. Colors follow meaning:
+
+  - Green: improvement
+  - Red: decline
+  - Grey: no change or insufficient baseline data
+
+Lost Pets uses inverted coloring: fewer lost pets is treated as an improvement.
+
+Percentage change is suppressed when the baseline is below five to avoid
+overstating movement in a very small sample. Raw values and absolute changes
+remain visible.
+
+4.5 Year-over-Year Charts
+--------------------------------------------------------------------------------
+Three monthly charts automatically switch to grouped bars when their filtered
+data contains two or more calendar years:
+
+  - Monthly Pet Registrations
+  - Vaccinations Per Month
+  - Revenue Collected Per Month
+
+In grouped mode:
+
+  - The x-axis is fixed to Jan through Dec.
+  - Each year becomes its own dataset and legend entry.
+  - Missing months render as zero so all years share the same axis.
+  - The legend appears at the bottom only in grouped mode.
+
+If only one year is present, the chart stays as the original single-series bar
+chart with the existing colors.
+
+4.6 Year-over-Year Summary Table
+--------------------------------------------------------------------------------
+When comparison is active, a dedicated section lists every year on record. Each
+row contains:
+
+  - Year
+  - Registrations and change vs the previous year
+  - Vaccinations (doses) and change
+  - Revenue and change
+  - Consultations and change
+  - QR Issued and change
+
+The first year on record shows a dash for its change because there is no earlier
+year to compare against. The table is horizontally scrollable on narrow screens,
+and the year column stays visible while scrolling.
+
+4.7 Other Overview Charts
+--------------------------------------------------------------------------------
+Pets by Species
+  Horizontal bar chart of pet counts per species.
+
+Pet Sex Distribution
+  Doughnut chart of Male / Female / Unknown counts.
+
+Registration Status
+  Pie chart of Verified / Pending / Rejected registration states.
+
+Top Barangays Registration Cabuyao
+  Horizontal bar chart of the ten barangays with the most registered pets.
+
+Vaccination Compliance
+  Doughnut chart of Up to Date / Due Soon / Overdue / No Record.
+
+QR Statistics
+  Doughnut chart of QR code status counts.
+
+Recent activity data is returned by the dashboard endpoint but this page
+currently focuses on aggregated charts and comparisons. Empty chart data renders
+a friendly empty state instead of a blank canvas.
+
+
+5. VACCINE COMPLIANCE TAB
+--------------------------------------------------------------------------------
+This tab answers whether pet owners came back for the next vaccine dose. It is
+episode-based: each vaccination with a next due date becomes a follow-up
+episode, and the outcome is evaluated against the grace period.
+
+5.1 Filters
+--------------------------------------------------------------------------------
+  - From date
+  - To date
+  - Grace period: No grace, 15, 30 (default), 60, or 90 days
+  - Barangay: All barangays or a specific barangay
+  - The owners-to-contact list also supports pet/owner search, vaccine and
+    contact-status filters, sorting, and pagination.
+  - Reset: clears dates and list filters, resets grace to 30, and clears the
+    barangay
+  - Refresh: reloads both compliance and service-return data
+  - Print Report: prepares the printable compliance report
+
+5.2 Summary Cards
+--------------------------------------------------------------------------------
+  - Episodes Evaluated, with total doses and pending count
+  - On-Time Compliance, with on-time, late, and lapsed counts
+  - Never Returned, with share of evaluated episodes and affected pets
+  - Returned For Any Service, with owners and pets served
+
+5.3 Follow-Up Outcomes and Trend
+--------------------------------------------------------------------------------
+Follow-Up Outcomes
+  Doughnut chart of On Time, Late, Lapsed, and No Return. Pending episodes are
+  excluded because they cannot be evaluated yet.
+
+Monthly On-Time Rate
+  Line chart of the on-time percentage per month for the selected range.
+
+5.4 Follow-Up Funnel
+--------------------------------------------------------------------------------
+A visual funnel that narrows the population step by step:
+
+  Pets vaccinated -> Follow-ups due and evaluated -> Owner came back ->
+  Came back on time
+
+Each step shows its count and a proportional bar.
+
+5.5 Outcome by Vaccine
+--------------------------------------------------------------------------------
+Grouped bar chart comparing On Time versus No Return for each vaccine. This
+identifies which vaccines have the weakest follow-through.
+
+5.6 Compliance by Barangay
+--------------------------------------------------------------------------------
+Table columns:
+
+  Barangay, Episodes, On Time, Late, Lapsed, No Return, On-Time Rate
+
+Useful for identifying geographic gaps and prioritizing field follow-up.
+
+5.7 Service Return Analysis
+--------------------------------------------------------------------------------
+This section uses the separate return-rate endpoint to measure whether owners
+returned for any service, not just vaccines.
+
+Summary cards:
+
+  - Returned Within 30 Days, with visit count
+  - Never Returned
+  - Follow-Up Kept, with scheduled and honoured counts
+  - Owner Retention (90 Days), with owners served
+
+Table columns:
+
+  Service, Visits, Pets, Returned <=30d, Returned <=60d, Returned <=90d,
+  Never Returned, Avg Days to Return
+
+5.8 Owners to Contact
+--------------------------------------------------------------------------------
+An actionable worklist of overdue or never-fulfilled follow-ups, most overdue
+first. Columns:
+
+  Pet, Owner, Contact, Barangay, Vaccine, Due, Days Overdue, Last Recorded
+  Service, Follow-Up Status, Contact Status / Action
+
+Follow-up status appears as a colored chip (On Time, Late, Lapsed, No Return).
+Admin and Staff can open an action to record contact status and owner-stated
+reasons. The section header shows the total number of actionable follow-ups;
+Veterinarians see aggregate analysis only, not owner names or phone numbers.
+When no rows match the filters, the table shows an empty state.
+
+
+6. PERIOD COMPARISON TAB
+--------------------------------------------------------------------------------
+This is the dedicated analysis workspace for comparing two windows across all
+metrics, with no reliance on the Overview filters.
+
+6.1 Controls
+--------------------------------------------------------------------------------
+  - Granularity: Daily, Weekly, Monthly, Yearly
+  - Compare against: Previous Period or Same Period Last Year
+  - Metric selector: Registrations, Vaccinations, Unique Pets, Unique Owners,
+    Consultations, QR Issued, Revenue, Lost Pets, New Owners
+  - Anchor date: the reference date for the comparison window
+  - Refresh
+  - Print Comparison
+
+Default window sizes when no explicit range is supplied:
+
+  - Daily: 14 buckets
+  - Weekly: 8 buckets
+  - Monthly: 6 buckets
+  - Yearly: 4 buckets
+
+Same Period Last Year clamps the end date to the anchor so both sides cover the
+same dates (year-to-date behaviour). Previous Period uses whole calendar buckets.
+
+6.2 Summary Cards and Delta Row
+--------------------------------------------------------------------------------
+Four cards show the current value plus the baseline and change:
+
+  - Registrations
+  - Doses Administered
+  - Unique Pets
+  - Unique Owners
+
+A delta row below the cards reports Consultations, QR Issued, Revenue, Lost
+Pets, New Owners, and On-Time Rate. Lost Pets is inverted (a drop is good).
+
+6.3 Charts
+--------------------------------------------------------------------------------
+Metric chart
+  Grouped bars of the selected metric: current window vs baseline window. The
+  title updates with the metric name. Tooltips show both series.
+
+On-Time Rate
+  Line chart of current versus baseline on-time percentage for the same buckets.
+  The y-axis is fixed to 0-100%.
+
+6.4 Period-by-Period Table
+--------------------------------------------------------------------------------
+Columns:
+
+  Period, Baseline Period, <Metric> (Current), <Metric> (Baseline), Change,
+  % Change, On-Time Rate (Current), On-Time Rate (Baseline), Revenue (Current)
+
+The metric columns follow the selector. Each row aligns one current bucket with
+its baseline bucket. Missing baseline buckets are labelled "No data".
+
+6.5 Year-over-Year Table
+--------------------------------------------------------------------------------
+The full history table has one row per year and these columns:
+
+  Year, Registrations, Vaccinations, Unique Pets, Unique Owners, Consultations,
+  QR Issued, Revenue, Lost Pets, New Owners
+
+Each value shows the year's total with the change against the previous year
+underneath it in smaller text. This provides a complete yearly narrative while
+keeping the table compact.
+
+
+7. REPORTS TAB
+--------------------------------------------------------------------------------
+The Reports tab builds a preview first, then prints the official document. It is
+designed for month-end, year-end, and compliance reporting.
+
+Quick period presets:
+
+  - This Month
+  - Last Month
+  - This Year (default on open)
+  - Last Year
+  - All Time
+
+Custom From/To dates override the preset. A grace-period selector (0, 15, 30,
+60, 90 days) is available for the compliance report.
+
+Four report types are offered as selectable cards:
+
+  1. Analytics Summary Report
+     Registrations, species mix, QR issuance, vaccination volume, and revenue
+     for the selected period. The printed version includes a Year-over-Year
+     Summary section whenever comparison data is available.
+
+  2. Vaccine Follow-Up Compliance Report
+     On-time, late, lapsed, and never-returned follow-ups, plus the owners to
+     contact. Uses the selected grace period.
+
+  3. Period Comparison Report
+     Current window against the previous period, broken down by the selected
+     granularity. The printed report now covers all core metrics and includes a
+     Year-over-Year Summary section.
+
+  4. Yearly Vaccination Report
+     Every year on record with doses, pets, owners, on-time rate, revenue, and
+     change versus the previous year.
+
+The preview area shows report-specific summary cards, analysis, charts, and
+tables. Reports can be printed or saved as PDF, exported as Excel workbooks,
+and downloaded as CSV. The follow-up worklist has its own CSV export. While a
+report is being prepared, its action shows a progress label and is disabled to
+prevent duplicate submission.
+
+
+8. PRINTING AND EXPORTS
+--------------------------------------------------------------------------------
+Printing opens a dedicated print window styled for A4 portrait, with the clinic
+header, watermark, report title, and generated timestamp.
+
+Analytics Summary print
+  Includes the summary cards, species, QR statistics, barangay counts,
+  registration status, monthly registrations, sex distribution, vaccinations per
+  month, vaccination compliance, and a Year-over-Year Summary table with deltas.
+
+Period Comparison print
+  Includes the full comparison summary (registrations, doses, unique pets,
+  unique owners, consultations, QR issued, revenue, lost pets, new owners,
+  follow-ups on time, on-time rate), the period-by-period rows, and the
+  year-over-year table.
+
+Vaccine Compliance print
+  Includes the compliance summary, outcome buckets, trend, funnel, vaccine
+  breakdown, barangay breakdown, return analysis, and the owners-to-contact
+  list.
+
+All printed tables use the existing clinic report styling and are safe for
+letter/A4 printing.
+
+
+9. METRICS, DEFINITIONS, AND DATA SOURCES
+--------------------------------------------------------------------------------
+Registrations
+  Verified pets grouped by registration_date, falling back to DATE(created_at)
+  only when the service date is missing.
+
+Vaccinations / Doses
+  Rows in vaccination_records with a date_administered in the period, filtered
+  to valid vaccine records (excluding REGISTRATION FEE). Source:
+  vaccination_records joined to vaccines.
+
+Unique Pets / Unique Owners
+  Distinct pet IDs and owner IDs inside each bucket. Critical rule: counts are
+  deduplicated per bucket, not summed from daily distinct values. A pet
+  vaccinated on three days of the same month counts once for that month, but may
+  count again in a different month. Window totals use a true distinct count over
+  the whole window.
+
+Consultations
+  Consultation records with a consultation date in the period.
+  Source: consultation_records.
+
+QR Issued
+  QR code rows grouped by issue date. Source: qr_codes.issue_date.
+
+Revenue
+  Sum of total_amount for Paid records in payment_monitoring, dated by
+  consultation_date and falling back to created_at. Unpaid and Cancelled
+  records are excluded.
+
+Lost Pets
+  Pets flagged is_lost, dated by lost_date and falling back to created_at.
+
+New Owners
+  Pet owner records created in the period. Source: pet_owners.created_at.
+
+On-Time Rate
+  On-time episodes divided by evaluated episodes (On Time + Late + Lapsed +
+  No Return). Pending episodes are excluded. Evaluated with the configured grace
+  period; 30 days is the default.
+
+Follow-up outcomes
+  On Time: returned within the grace period of the due date.
+  Late: returned after the grace period but still returned.
+  Lapsed: the next scheduled dose passed without a return.
+  No Return: no subsequent service was recorded.
+  Pending: due date is in the future or not yet evaluable.
+
+
+10. BACKEND API REFERENCE
+--------------------------------------------------------------------------------
+All endpoints require authentication and the Admin, Staff, or Veterinarian role.
+
+GET /api/analytics/dashboard
+  Query: filter (today|week|month|year|all), from, to, compare
+  (previous|previousYear)
+  Returns summary cards, demographics, monthly series with year/monthNum, QR
+  stats, registration status, recent activity, and an optional comparison block
+  (mode, windows, totals, matrix, yearly).
+
+GET /api/analytics/period-comparison
+  Query: granularity (daily|weekly|monthly|yearly), compare
+  (previous|previousYear), anchor, windows, metric, from, to, baselineFrom,
+  baselineTo
+  Returns granularity, compare, windows, primaryMetric, metric catalogue,
+  current and baseline ranges, totals with deltas, aligned series, yearly rows,
+  and the year-by-month matrix.
+
+GET /api/analytics/vaccination-trends
+  Legacy-compatible endpoint. It now delegates to the shared comparison engine
+  but keeps the old response shape used by the Reports tab and any older
+  consumers.
+
+GET /api/analytics/vaccine-compliance
+  Query: from, to, grace, barangay
+  Returns summary, buckets, trend, funnel, byVaccine, byBarangay, actionable
+  list, and actionableTotal.
+
+GET /api/analytics/return-rate
+  Query: from, to
+  Returns summary, byService, followUp, and retention data.
+
+The comparison engine is shared by the dashboard, the dedicated comparison
+endpoint, and the legacy vaccination-trends endpoint, so all three produce
+consistent numbers.
+
+
+11. DATA INTEGRITY RULES
+--------------------------------------------------------------------------------
+Distinct counting
+  Unique pets and owners are counted with per-bucket deduplication. Earlier
+  versions summed daily distinct counts, which overstated monthly and yearly
+  totals. The new aggregation fixes that across every comparison view.
+
+Year and month preservation
+  Monthly series keep their year and month number instead of flattening all
+  years into one Jan-December sequence. This allows correct grouped charts and
+  prevents different years from being merged.
+
+PostgreSQL alias handling
+  PostgreSQL folds unquoted aliases such as qrIssued to lowercase. The loader
+  reads both spellings so QR Issued, Lost Pets, and New Owners cannot silently
+  become zero on PostgreSQL while working on MySQL.
+
+Zero-baseline handling
+  A percentage change is only shown when the baseline is greater than zero.
+  Otherwise the UI shows the absolute change or a dash.
+
+Comparison scope
+  The Overview summary cards keep the selected dashboard scope. Comparison
+  badges and charts use the comparison window and are explicitly labelled with
+  both dates, so the two scopes are not confused.
+
+
+12. KNOWN LIMITATIONS AND NOTES
+--------------------------------------------------------------------------------
+  - The Year-over-Year table lists every year present in the data. Early years
+    may show QR-only activity because historical QR records exist even when no
+    pets were registered that year.
+  - Revenue is collected revenue (Paid only). Unpaid and Cancelled payments are
+    excluded by design.
+  - On-time rate depends on the grace period. Changing the grace period changes
+    the evaluated outcomes and is reflected in both the UI and the printed
+    report.
+  - Reports use printable HTML, not native PDF generation. Use the browser's
+    Print to PDF option when a PDF file is required.
+  - The Overview comparison now follows the selected preset's period; use the
+    Period Comparison tab for a selectable daily/weekly/monthly/yearly series.
+
+
+13. RECENT ENHANCEMENTS
+--------------------------------------------------------------------------------
+Year-over-year comparison release:
+
+  - Added a Period Comparison toggle to the Overview tab with Off, Previous
+    Period, and Same Period Last Year modes.
+  - Added delta badges for registrations, doses, revenue, consultations, QR
+    issued, lost pets, and new owners.
+  - Switched the registrations, vaccinations, and revenue monthly charts to
+    grouped bars by year when multiple years are present.
+  - Added a Year-over-Year Summary table to the Overview tab.
+  - Added the /api/analytics/period-comparison endpoint with a shared comparison
+    engine.
+  - Migrated the Period Comparison tab from the vaccination-only endpoint to the
+    unified endpoint, with a metric selector and full yearly table.
+  - Extended the Analytics Summary and Period Comparison print templates with
+    year-over-year sections and all core metrics.
+  - Fixed unique pet and owner double counting across days and months.
+  - Fixed QR Issued, Lost Pets, and New Owners reading as zero on PostgreSQL
+    due to lowercase column aliases.
+  - Added a Year-over-Year section to the Analytics Summary print flow by
+    requesting comparison data from the print modal.
+
+End of document.
+
+14. IMPLEMENTATION CORRECTIONS (October 22, 2026)
+--------------------------------------------------------------------------------
+The following corrections supersede older descriptions above:
+
+Metric definitions and windows
+  - Overview pet registration totals include verified pets grouped by
+    registration_date, falling back to DATE(created_at) only when the service
+    date is missing. Vaccine doses exclude the REGISTRATION FEE line item.
+  - Vaccine compliance is one row per vaccination record with a due date.
+    Episodes remain Pending until the due date plus the selected grace period
+    has elapsed. Lost pets and records with an explicitly recorded
+    moved/lost/deceased reason are excluded from compliance denominators.
+  - A service-return episode is one pet + service type + service date.
+    30/60/90-day return rates use only episodes with a complete observation
+    window. Owner retention uses owners with a complete 90-day window.
+  - Period comparisons clamp to the anchor date. Partial ranges are marked,
+    year-over-year comparisons use matching YTD dates, and previous-period
+    windows shift by the same elapsed dates. Percentage changes are omitted
+    when the baseline is below five; raw values and absolute changes remain.
+  - All Time does not show an unrelated rolling-period comparison.
+
+Follow-up contact and analysis
+  - Admin and Staff can record contact status, contact date, caller identity,
+    multiple owner-stated retention reasons, and an optional Other description.
+    The endpoint is role-protected. Veterinarians can access aggregate
+    compliance analysis but do not receive names or phone numbers in the
+    actionable list.
+  - Reasons are not inferred. Retention-reason summaries include only saved
+    owner responses. The factors table, cohort retention, and return-time
+    histogram describe recorded associations and do not prove causation.
+  - Cohort rates use mature 30/60/90-day windows. Trend points include
+    evaluated sample size and pending counts; small samples are flagged.
+
+Reports and synthetic data
+  - Reports include a data preview, analysis/recommendations where available,
+    charts/tables, browser Print / Save PDF, multi-sheet Excel, and full-data
+    CSV export. Comparison and yearly previews show current and baseline
+    values.
+  - Synthetic Analytics Seed 2025 records are identified by their seed
+    markers and displayed as a warning in analytics and reports; they are
+    included in totals, so they must be disclosed or excluded before presenting
+    figures as real clinic activity.
+  - No SMS reminder log is currently used by this analysis. Reminder-related
+    factors are not reported until a reliable reminder delivery log exists.
+
+Updated overview also removes the one-category QR status donut, groups
+demographic charts in a two-column layout, hides zero-valued chart labels, and
+uses semantic colors for latest vaccine due status.

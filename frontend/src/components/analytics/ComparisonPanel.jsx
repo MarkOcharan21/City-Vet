@@ -82,27 +82,6 @@ function fmtRange(range) {
  * A change indicator. `invert` flips the meaning, for metrics where a drop is
  * the good news (revenue up, lapsed episodes down).
  */
-function DeltaBadge({ delta, pctChange, invert = false, suffix = '' }) {
-  if (delta === null || delta === undefined) {
-    return <span className="analytics-delta-badge analytics-delta-badge--flat">No data</span>;
-  }
-
-  const n = Number(delta);
-  const direction = n > 0 ? 'up' : n < 0 ? 'down' : 'flat';
-  const positive = invert ? direction === 'down' : direction === 'up';
-  const tone = direction === 'flat' ? 'flat' : positive ? 'up' : 'down';
-
-  return (
-    <span className={`analytics-delta-badge analytics-delta-badge--${tone}`}>
-      {fmtDelta(n)}
-      {suffix}
-      {pctChange !== null && pctChange !== undefined && (
-        <em> ({Number(pctChange) > 0 ? '+' : ''}{Number(pctChange).toFixed(1)}%)</em>
-      )}
-    </span>
-  );
-}
-
 const groupedBarOptions = {
   responsive: true,
   maintainAspectRatio: false,
@@ -119,29 +98,6 @@ const groupedBarOptions = {
     y: {
       beginAtZero: true,
       ticks: { stepSize: 1, font: { family: 'Inter' } },
-      grid: { color: 'rgba(36, 20, 22, 0.06)' },
-    },
-  },
-};
-
-const rateLineOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: { mode: 'index', intersect: false },
-  plugins: {
-    legend: {
-      position: 'bottom',
-      labels: { padding: 14, usePointStyle: true, font: { family: 'Inter', size: 12 } },
-    },
-    tooltip: { backgroundColor: '#241416', padding: 12, cornerRadius: 8 },
-    datalabels: { display: false },
-  },
-  scales: {
-    x: { grid: { display: false }, ticks: { font: { family: 'Inter' } } },
-    y: {
-      beginAtZero: true,
-      max: 100,
-      ticks: { font: { family: 'Inter' }, callback: (v) => `${v}%` },
       grid: { color: 'rgba(36, 20, 22, 0.06)' },
     },
   },
@@ -196,8 +152,6 @@ export default function ComparisonPanel() {
       labels: series.map((s) => s.label),
       current: series.map((s) => pick(s.current)),
       baseline: series.map((s) => pick(s.baseline)),
-      currentRate: series.map((s) => (s.current ? s.current.onTimeRate : null)),
-      baselineRate: series.map((s) => (s.baseline ? s.baseline.onTimeRate : null)),
     };
   }, [series, metric, data?.primaryMetric]);
 
@@ -234,7 +188,10 @@ export default function ComparisonPanel() {
               key={option.key}
               type="button"
               aria-pressed={granularity === option.key}
-              onClick={() => setGranularity(option.key)}
+              onClick={() => {
+                setGranularity(option.key);
+                if (option.key === 'yearly') setCompare('previousYear');
+              }}
               className={`analytics-filter-btn${granularity === option.key ? ' is-active' : ''}`}
             >
               {option.label}
@@ -304,7 +261,15 @@ export default function ComparisonPanel() {
         Comparing <strong>{fmtRange(data?.current) || data?.current?.label || '—'}</strong> against{' '}
         <strong>{fmtRange(data?.baseline) || data?.baseline?.label || '—'}</strong>
         {data?.windows ? ` · ${data.windows} period(s) per side` : ''}
+        {data?.current?.partial && <strong> · Partial current period</strong>}
+        {data?.baseline?.partial && <strong> · Partial baseline period</strong>}
       </p>
+      {(data?.syntheticData?.current?.pets || data?.syntheticData?.current?.vaccinations || data?.syntheticData?.current?.payments ||
+        data?.syntheticData?.baseline?.pets || data?.syntheticData?.baseline?.vaccinations || data?.syntheticData?.baseline?.payments) > 0 && (
+        <p className="analytics-warning">
+          Synthetic 2025 seed data is included in this comparison. Current: {fmtNum(data.syntheticData.current.pets)} pets / {fmtNum(data.syntheticData.current.vaccinations)} vaccine records; baseline: {fmtNum(data.syntheticData.baseline.pets)} pets / {fmtNum(data.syntheticData.baseline.vaccinations)} vaccine records.
+        </p>
+      )}
 
       {loading && <GlobalLoadingOverlay visible={true} message="Building comparison..." />}
 
@@ -321,56 +286,30 @@ export default function ComparisonPanel() {
         <>
           <div className="summary-row">
             <SummaryCard
-              label="Registrations"
-              value={fmtNum(current.registrations)}
-              sub={[
-                { label: 'Baseline', value: fmtNum(baseline.registrations) },
-                { label: 'Change', value: fmtDelta(totals.registrations?.delta) },
-              ]}
+              label={`${activeMetric.label} — Current`}
+              value={fmtMetric(current[chartData.metric], activeMetric.money)}
             />
             <SummaryCard
-              label="Doses Administered"
-              value={fmtNum(current.doses)}
-              color="#1e7a46"
-              sub={[
-                { label: 'Baseline', value: fmtNum(baseline.doses) },
-                { label: 'Change', value: fmtDelta(totals.doses?.delta) },
-              ]}
+              label={`${activeMetric.label} — Baseline`}
+              value={fmtMetric(baseline[chartData.metric], activeMetric.money)}
             />
             <SummaryCard
-              label="Unique Pets"
-              value={fmtNum(current.pets)}
-              color="#c6a15b"
-              sub={[
-                { label: 'Baseline', value: fmtNum(baseline.pets) },
-                { label: 'Change', value: fmtDelta(totals.pets?.delta) },
-              ]}
+              label="Absolute Change"
+              value={fmtMetric(totals[chartData.metric]?.delta, activeMetric.money)}
             />
             <SummaryCard
-              label="Unique Owners"
-              value={fmtNum(current.owners)}
-              color="#b8860b"
-              sub={[
-                { label: 'Baseline', value: fmtNum(baseline.owners) },
-                { label: 'Change', value: fmtDelta(totals.owners?.delta) },
-              ]}
+              label="Percent Change"
+              value={totals[chartData.metric]?.pctChange == null
+                ? (Number(baseline[chartData.metric]) > 0 ? 'N/A (<5 baseline)' : 'New')
+                : `${totals[chartData.metric].pctChange > 0 ? '+' : ''}${Number(totals[chartData.metric].pctChange).toFixed(1)}%`}
             />
           </div>
 
-          <div className="analytics-delta-row">
-            <span className="analytics-delta-row-label">Consultations</span>
-            <DeltaBadge delta={totals.consultations?.delta} pctChange={totals.consultations?.pctChange} />
-            <span className="analytics-delta-row-label">QR Issued</span>
-            <DeltaBadge delta={totals.qrIssued?.delta} pctChange={totals.qrIssued?.pctChange} />
-            <span className="analytics-delta-row-label">Revenue</span>
-            <DeltaBadge delta={totals.revenue?.delta} pctChange={totals.revenue?.pctChange} />
-            <span className="analytics-delta-row-label">Lost Pets</span>
-            <DeltaBadge delta={totals.lostPets?.delta} pctChange={totals.lostPets?.pctChange} invert />
-            <span className="analytics-delta-row-label">New Owners</span>
-            <DeltaBadge delta={totals.newOwners?.delta} pctChange={totals.newOwners?.pctChange} />
-            <span className="analytics-delta-row-label">On-time rate</span>
-            <DeltaBadge delta={totals.onTimeRate?.delta} pctChange={totals.onTimeRate?.pctChange} suffix=" pts" />
-          </div>
+          {activeMetric.key === 'registrations' && (
+            <p className="analytics-chart-section-desc">
+              Registrations are grouped by registration date (falling back to encoded date when missing). Bulk encoding can still make registration-date totals differ from the date records were entered.
+            </p>
+          )}
 
           <div className="chart-grid chart-grid--1col">
             <div className="chart-card">
@@ -404,31 +343,31 @@ export default function ComparisonPanel() {
             </div>
 
             <div className="chart-card">
-              <h3>On-Time Rate — Current vs Baseline</h3>
+              <h3>{activeMetric.label} Trend — Current vs Baseline</h3>
               <div className="chart-card-canvas">
                 {series.length ? (
                   <Line
-                    options={rateLineOptions}
+                    options={groupedBarOptions}
                     data={{
                       labels: chartData.labels,
                       datasets: [
                         {
-                          label: 'Current (%)',
-                          data: chartData.currentRate,
+                          label: data.current?.label || 'Current',
+                          data: chartData.current,
                           borderColor: '#c8102e',
                           backgroundColor: 'rgba(200, 16, 46, 0.1)',
                           fill: true,
-                          tension: 0.35,
+                          tension: 0,
                           pointRadius: 3,
                           spanGaps: true,
                         },
                         {
-                          label: 'Baseline (%)',
-                          data: chartData.baselineRate,
+                          label: data.baseline?.label || 'Baseline',
+                          data: chartData.baseline,
                           borderColor: '#c6a15b',
                           backgroundColor: 'rgba(198, 161, 91, 0.1)',
                           borderDash: [6, 4],
-                          tension: 0.35,
+                          tension: 0,
                           pointRadius: 3,
                           spanGaps: true,
                         },
@@ -456,9 +395,6 @@ export default function ComparisonPanel() {
                       <th>{activeMetric.label} (Baseline)</th>
                       <th>Change</th>
                       <th>% Change</th>
-                      <th>On-Time Rate (Current)</th>
-                      <th>On-Time Rate (Baseline)</th>
-                      <th>Revenue (Current)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -475,14 +411,11 @@ export default function ComparisonPanel() {
                               ? '—'
                               : `${Number(row.deltas?.[chartData.metric]?.pctChange ?? row.pctChange).toFixed(1)}%`}
                           </td>
-                          <td>{row.current ? fmtPct(row.current.onTimeRate) : '—'}</td>
-                          <td>{row.baseline ? fmtPct(row.baseline.onTimeRate) : '—'}</td>
-                          <td>{row.current ? fmtPeso(row.current.revenue) : '—'}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td className="report-table-empty" colSpan={9}>
+                        <td className="report-table-empty" colSpan={6}>
                           No comparison rows available.
                         </td>
                       </tr>

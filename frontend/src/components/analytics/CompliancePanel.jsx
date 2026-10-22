@@ -19,12 +19,87 @@ const OUTCOME_COLORS = {
   Pending: '#c6a15b',
 };
 
+const saveContact = async () => {
+  if (!editingContact || !contactDraft) return;
+  try {
+    await api.put(`/analytics/vaccine-follow-up/${editingContact.id}/contact`, contactDraft);
+    toast.success('Follow-up contact saved.');
+    setEditingContact(null);
+    setContactDraft(null);
+    load();
+  } catch (err) {
+    toast.error(err.response?.data?.message || 'Could not save follow-up contact.');
+  }
+};
+
+const exportActionableCsv = () => {
+  const rows = compliance?.actionable || [];
+  if (!rows.length) {
+    toast.error('There are no follow-up rows on this page to export.');
+    return;
+  }
+  const columns = [
+    ['Pet code', 'pet_code'],
+    ['Pet', 'pet_name'],
+    ['Owner', 'owner_name'],
+    ['Contact', 'contact_number'],
+    ['Barangay', 'barangay'],
+    ['Vaccine', 'vaccine_name'],
+    ['Due date', 'due_on'],
+    ['Days overdue', 'days_overdue'],
+    ['Last service', 'last_service_on'],
+    ['Outcome', 'outcome'],
+    ['Contact status', 'contact_status'],
+    ['Reasons', 'reasons'],
+    ['Other reason', 'other_reason'],
+    ['Contact date', 'contacted_at'],
+  ];
+  const csv = [
+    columns.map(([label]) => csvCell(label)).join(','),
+    ...rows.map((row) =>
+      columns
+        .map(([, key]) => csvCell(key === 'reasons' ? (row[key] || []).join('; ') : row[key]))
+        .join(',')
+    ),
+  ].join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'vaccine-follow-ups-page.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
 const FUNNEL_STEPS = [
-  { key: 'vaccinated', label: 'Pets vaccinated' },
-  { key: 'dueEvaluable', label: 'Follow-ups due & evaluated' },
-  { key: 'returned', label: 'Owner came back' },
-  { key: 'onTime', label: 'Came back on time' },
+  { key: 'episodes', label: 'Vaccine episodes with a due date' },
+  { key: 'dueEvaluable', label: 'Episodes outside grace / evaluated' },
+  { key: 'returned', label: 'Returned for the same vaccine' },
+  { key: 'onTime', label: 'Returned on time' },
 ];
+
+const RETENTION_REASONS = [
+  ['forgot_schedule', 'Forgot / unaware of schedule'],
+  ['no_reminder', 'Did not receive reminder'],
+  ['distance_transport', 'Distance / transportation'],
+  ['clinic_hours', 'Clinic hours did not work'],
+  ['cost', 'Cost'],
+  ['other_clinic', 'Went to another clinic / private vet'],
+  ['moved', 'Moved / changed barangay'],
+  ['lost_deceased', 'Pet lost or deceased'],
+  ['pet_health_fear', 'Pet illness / fear'],
+  ['other', 'Other'],
+];
+
+function localISODate() {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate()
+  ).padStart(2, '0')}`;
+}
+
+function csvCell(value) {
+  return `"${String(value ?? '').replaceAll('"', '""')}"`;
+}
 
 function fmtPct(value) {
   if (value === null || value === undefined) return '—';
@@ -112,15 +187,25 @@ export default function CompliancePanel() {
   const [error, setError] = useState(null);
   const [printing, setPrinting] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [search, setSearch] = useState('');
+  const [contactStatusFilter, setContactStatusFilter] = useState('');
+  const [vaccineFilter, setVaccineFilter] = useState('');
+  const [sortBy, setSortBy] = useState('daysOverdue');
+  const [page, setPage] = useState(1);
+  const [editingContact, setEditingContact] = useState(null);
+  const [contactDraft, setContactDraft] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    const params = { grace };
+    const params = { grace, limit: 25, page, sortBy };
     if (from) params.from = from;
     if (to) params.to = to;
     if (barangay.trim()) params.barangay = barangay.trim();
+    if (search.trim()) params.search = search.trim();
+    if (contactStatusFilter) params.contactStatus = contactStatusFilter;
+    if (vaccineFilter) params.vaccine = vaccineFilter;
 
     const returnParams = {};
     if (from) returnParams.from = from;
@@ -143,7 +228,7 @@ export default function CompliancePanel() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, grace, barangay]);
+  }, [from, to, grace, barangay, search, contactStatusFilter, vaccineFilter, sortBy, page]);
 
   useEffect(() => {
     load();
@@ -168,12 +253,17 @@ export default function CompliancePanel() {
       if (to) params.to = to;
       if (barangay.trim()) params.barangay = barangay.trim();
 
-      const res = await api.get('/analytics/vaccine-compliance', { params });
+      params.limit = 1000;
+      params.page = 1;
+      const [res, serviceReturn] = await Promise.all([
+        api.get('/analytics/vaccine-compliance', { params }),
+        api.get('/analytics/return-rate', { params }),
+      ]);
       if (!res.data?.success) {
         toast.error(res.data?.message || 'Could not build the report.');
         return;
       }
-      printComplianceReport(res.data, {
+      printComplianceReport({ ...res.data, serviceReturn: serviceReturn.data }, {
         title: 'Vaccine Follow-Up Compliance Report',
         period: res.data.filterLabel || 'All Time',
       });
@@ -199,7 +289,7 @@ export default function CompliancePanel() {
             id="compliance-from"
             type="date"
             value={from}
-            onChange={(e) => setFrom(e.target.value)}
+            onChange={(e) => { setPage(1); setFrom(e.target.value); }}
           />
         </div>
         <div className="analytics-inline-field">
@@ -208,7 +298,7 @@ export default function CompliancePanel() {
             id="compliance-to"
             type="date"
             value={to}
-            onChange={(e) => setTo(e.target.value)}
+            onChange={(e) => { setPage(1); setTo(e.target.value); }}
           />
         </div>
         <div className="analytics-inline-field">
@@ -216,7 +306,7 @@ export default function CompliancePanel() {
           <select
             id="compliance-grace"
             value={grace}
-            onChange={(e) => setGrace(Number(e.target.value))}
+            onChange={(e) => { setPage(1); setGrace(Number(e.target.value)); }}
           >
             {GRACE_OPTIONS.map((days) => (
               <option key={days} value={days}>
@@ -230,7 +320,7 @@ export default function CompliancePanel() {
           <select
             id="compliance-barangay"
             value={barangay}
-            onChange={(e) => setBarangay(e.target.value)}
+            onChange={(e) => { setPage(1); setBarangay(e.target.value); }}
           >
             <option value="">All barangays</option>
             {barangayOptions.map((name) => (
@@ -248,8 +338,13 @@ export default function CompliancePanel() {
             setTo('');
             setGrace(30);
             setBarangay('');
+            setSearch('');
+            setContactStatusFilter('');
+            setVaccineFilter('');
+            setSortBy('daysOverdue');
+            setPage(1);
           }}
-          disabled={!from && !to && grace === 30 && !barangay}
+          disabled={!from && !to && grace === 30 && !barangay && !search && !contactStatusFilter && !vaccineFilter && sortBy === 'daysOverdue'}
         >
           Reset
         </button>
@@ -295,11 +390,11 @@ export default function CompliancePanel() {
         <>
           <div className="summary-row">
             <SummaryCard
-              label="Episodes Evaluated"
+              label="Vaccine Episodes"
               value={fmtNum(summary.evaluable)}
               sub={[
-                { label: 'Total doses', value: fmtNum(summary.episodes) },
-                { label: 'Pending', value: fmtNum(summary.pending) },
+                { label: 'Evaluated', value: fmtNum(summary.evaluable) },
+                { label: 'Pending in grace', value: fmtNum(summary.pending) },
               ]}
             />
             <SummaryCard
@@ -313,7 +408,7 @@ export default function CompliancePanel() {
               ]}
             />
             <SummaryCard
-              label="Never Returned"
+              label="No Same-Vaccine Return"
               value={fmtNum(summary.noReturn)}
               color="#c8102e"
               sub={[
@@ -322,12 +417,12 @@ export default function CompliancePanel() {
               ]}
             />
             <SummaryCard
-              label="Returned For Any Service"
+              label="Any-Service Return Rate"
               value={fmtPct(summary.anyServiceReturnedRate)}
               color="#c6a15b"
               sub={[
-                { label: 'Owners', value: fmtNum(summary.distinctOwners) },
-                { label: 'Pets', value: fmtNum(summary.distinctPets) },
+                { label: 'Episodes in denominator', value: fmtNum(summary.evaluable) },
+                { label: 'Distinct pets in period', value: fmtNum(summary.distinctPets) },
               ]}
             />
           </div>
@@ -358,10 +453,29 @@ export default function CompliancePanel() {
 
             <div className="chart-card">
               <h3>Monthly On-Time Rate</h3>
+              <p className="analytics-chart-section-desc">
+                The tooltip shows evaluated sample size and episodes still pending; periods with n &lt; 30 are small samples.
+              </p>
               <div className="chart-card-canvas">
                 {(compliance?.trend || []).length ? (
                   <Line
-                    options={lineOptions}
+                    options={{
+                      ...lineOptions,
+                      plugins: {
+                        ...lineOptions.plugins,
+                        tooltip: {
+                          ...lineOptions.plugins.tooltip,
+                          callbacks: {
+                            afterLabel: (context) => {
+                              const point = compliance?.trend?.[context.dataIndex];
+                              return point
+                                ? [`Evaluated n=${point.evaluable}`, `Pending=${point.pending}`, point.lowSample ? 'Small sample (n < 30)' : '']
+                                : '';
+                            },
+                          },
+                        },
+                      },
+                    }}
                     data={{
                       labels: (compliance?.trend || []).map((t) => t.period),
                       datasets: [
@@ -371,8 +485,9 @@ export default function CompliancePanel() {
                           borderColor: '#1e7a46',
                           backgroundColor: 'rgba(30, 122, 70, 0.12)',
                           fill: true,
-                          tension: 0.35,
-                          pointRadius: 3,
+                          tension: 0,
+                          pointRadius: (compliance?.trend || []).map((t) => (t.lowSample ? 5 : 3)),
+                          pointStyle: (compliance?.trend || []).map((t) => (t.lowSample ? 'triangle' : 'circle')),
                         },
                       ],
                     }}
@@ -385,9 +500,50 @@ export default function CompliancePanel() {
           </div>
 
           <section className="analytics-chart-section">
+            <h3 className="analytics-chart-section-title">Days to Same-Vaccine Return</h3>
+            <div className="chart-card-canvas">
+              {(compliance.returnDayDistribution || []).some((bucket) => bucket.count > 0) ? (
+                <Bar
+                  options={barOptions}
+                  data={{
+                    labels: compliance.returnDayDistribution.map((bucket) => bucket.label),
+                    datasets: [{
+                      label: 'Returned vaccine episodes',
+                      data: compliance.returnDayDistribution.map((bucket) => bucket.count),
+                      backgroundColor: '#1e7a46',
+                      borderRadius: 4,
+                    }],
+                  }}
+                />
+              ) : <p className="chart-card-empty">No same-vaccine return intervals are recorded.</p>}
+            </div>
+          </section>
+
+          <section className="analytics-chart-section">
+            <h3 className="analytics-chart-section-title">Any-Service Cohort Retention</h3>
+            <p className="analytics-chart-section-desc">
+              Cohorts are grouped by month of vaccine service. Only episodes with a complete 30/60/90-day observation window are included in that window's denominator.
+            </p>
+            <div className="report-table-wrapper">
+              <table className="report-table">
+                <thead><tr><th>First vaccine service cohort</th><th>30-day return</th><th>n</th><th>60-day return</th><th>n</th><th>90-day return</th><th>n</th></tr></thead>
+                <tbody>
+                  {(compliance.cohortRetention || []).map((row) => (
+                    <tr key={row.key}>
+                      <td>{row.cohort}</td><td>{fmtPct(row.rate30)}</td><td>{fmtNum(row.eligible30)}</td>
+                      <td>{fmtPct(row.rate60)}</td><td>{fmtNum(row.eligible60)}</td>
+                      <td>{fmtPct(row.rate90)}</td><td>{fmtNum(row.eligible90)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="analytics-chart-section">
             <h3 className="analytics-chart-section-title">Follow-Up Funnel</h3>
             <p className="analytics-chart-section-desc">
-              How the vaccinated pets narrow down to owners who actually came back on time.
+              Each stage counts vaccine episodes (one row per administered dose), not unique pets. Episodes within the grace period are pending and excluded from evaluated rates.
             </p>
             <div className="compliance-funnel">
               {FUNNEL_STEPS.map((step) => {
@@ -410,6 +566,59 @@ export default function CompliancePanel() {
           </section>
 
           <section className="analytics-chart-section">
+            <h3 className="analytics-chart-section-title">Key Findings & Recommendations</h3>
+            <div className="analytics-insight-grid">
+              <div className="chart-card">
+                <h3>Key Findings</h3>
+                <ul>{(compliance.analysis?.findings || []).map((finding) => <li key={finding}>{finding}</li>)}</ul>
+                <p>{compliance.analysis?.interpretation}</p>
+              </div>
+              <div className="chart-card">
+                <h3>Recommended Actions</h3>
+                <ul>{(compliance.analysis?.recommendations || []).map((item) => <li key={item}>{item}</li>)}</ul>
+              </div>
+            </div>
+          </section>
+
+          <section className="analytics-chart-section">
+            <h3 className="analytics-chart-section-title">Factors Affecting Return</h3>
+            <p className="analytics-chart-section-desc">
+              These are associations in recorded clinic data, not proof of why an owner did or did not return. Rates use evaluated vaccine episodes; n &lt; 30 is a small sample.
+            </p>
+            <div className="report-table-wrapper">
+              <table className="report-table">
+                <thead><tr><th>Factor</th><th>Group</th><th>n Evaluated</th><th>Returned</th><th>Return Rate</th><th>On-Time Rate</th></tr></thead>
+                <tbody>
+                  {(compliance.factors || []).map((row) => (
+                    <tr key={`${row.factor}-${row.group}`}>
+                      <td>{row.factor}</td><td>{row.group}{row.lowSample ? ' *' : ''}</td>
+                      <td>{fmtNum(row.sampleSize)}</td><td>{fmtNum(row.returned)}</td>
+                      <td>{fmtPct(row.returnedRate)}</td><td>{fmtPct(row.onTimeRate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="analytics-chart-section">
+            <h3 className="analytics-chart-section-title">Retention Reasons Recorded</h3>
+            <p className="analytics-chart-section-desc">
+              Only reasons explicitly recorded during owner contact are shown. Missing reasons are not inferred from a missed visit.
+            </p>
+            <div className="report-table-wrapper">
+              <table className="report-table">
+                <thead><tr><th>Owner-stated reason</th><th>Recorded count</th></tr></thead>
+                <tbody>
+                  {(compliance.retentionReasons || []).map((reason) => (
+                    <tr key={reason.key}><td>{reason.label}</td><td>{fmtNum(reason.count)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="analytics-chart-section">
             <h3 className="analytics-chart-section-title">Outcome By Vaccine</h3>
             <div className="chart-grid chart-grid--1col">
               <div className="chart-card">
@@ -417,9 +626,25 @@ export default function CompliancePanel() {
                 <div className="chart-card-canvas">
                   {(compliance?.byVaccine || []).length ? (
                     <Bar
-                      options={barOptions}
+                      options={{
+                        ...barOptions,
+                        plugins: {
+                          ...barOptions.plugins,
+                          tooltip: {
+                            ...barOptions.plugins.tooltip,
+                            callbacks: {
+                              afterBody: (items) => {
+                                const row = compliance?.byVaccine?.[items[0]?.dataIndex];
+                                return row
+                                  ? [`Evaluated n=${row.evaluable}`, `On-time rate: ${fmtPct(row.onTimeRate)}`, `No-return rate: ${fmtPct(row.noReturnRate)}`, row.lowSample ? 'Small sample (n < 30)' : '']
+                                  : '';
+                              },
+                            },
+                          },
+                        },
+                      }}
                       data={{
-                        labels: (compliance?.byVaccine || []).map((r) => r.key),
+                        labels: (compliance?.byVaccine || []).map((r) => `${r.key} (n=${r.evaluable}${r.lowSample ? '*' : ''})`),
                         datasets: [
                           {
                             label: 'On time',
@@ -453,7 +678,8 @@ export default function CompliancePanel() {
                   <thead>
                     <tr>
                       <th>Barangay</th>
-                      <th>Episodes</th>
+                      <th>Evaluated episodes (n)</th>
+                      <th>Pending</th>
                       <th>On Time</th>
                       <th>Late</th>
                       <th>Lapsed</th>
@@ -463,20 +689,21 @@ export default function CompliancePanel() {
                   </thead>
                   <tbody>
                     {(compliance?.byBarangay || []).length ? (
-                      (compliance?.byBarangay || []).map((row) => (
+                      compliance.byBarangay.slice().sort((a, b) => a.onTimeRate - b.onTimeRate).map((row) => (
                         <tr key={row.key}>
-                          <td>{row.key}</td>
-                          <td>{fmtNum(row.episodes)}</td>
+                          <td>{row.key}{row.lowSample ? ' *' : ''}</td>
+                          <td>{fmtNum(row.evaluable)}</td>
+                          <td>{fmtNum(row.pending)}</td>
                           <td>{fmtNum(row.onTime)}</td>
                           <td>{fmtNum(row.late)}</td>
                           <td>{fmtNum(row.lapsed)}</td>
                           <td>{fmtNum(row.noReturn)}</td>
-                          <td>{fmtPct(row.onTimeRate)}</td>
+                          <td style={{ backgroundColor: `rgba(200, 16, 46, ${Math.max(0.04, (100 - row.onTimeRate) / 200)})` }}>{fmtPct(row.onTimeRate)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td className="report-table-empty" colSpan={7}>
+                        <td className="report-table-empty" colSpan={8}>
                           No barangay data available.
                         </td>
                       </tr>
@@ -490,8 +717,7 @@ export default function CompliancePanel() {
           <section className="analytics-chart-section">
             <h3 className="analytics-chart-section-title">Service Return Analysis</h3>
             <p className="analytics-chart-section-desc">
-              Did the owner come back for any service — vaccination, consultation, preventive care
-              or procedure — after the visit?
+              Unlike vaccine follow-up (returning for the same vaccine), this counts whether a pet had any later service. One service episode is one pet, service type, and service date.
             </p>
 
             <div className="summary-row">
@@ -499,10 +725,10 @@ export default function CompliancePanel() {
                 label="Returned Within 30 Days"
                 value={fmtPct(returns?.summary?.returnRate30)}
                 color="#1e7a46"
-                sub={[{ label: 'Visits', value: fmtNum(returns?.summary?.episodes) }]}
+                sub={[{ label: 'Matured service episodes', value: fmtNum(returns?.summary?.eligible30) }]}
               />
               <SummaryCard
-                label="Never Returned"
+                label="Service Episodes With No Later Service"
                 value={fmtNum(returns?.summary?.neverReturned)}
                 color="#c8102e"
               />
@@ -513,12 +739,16 @@ export default function CompliancePanel() {
                 sub={[
                   { label: 'Scheduled', value: fmtNum(returns?.followUp?.scheduled) },
                   { label: 'Honoured', value: fmtNum(returns?.followUp?.honoured) },
+                  { label: 'Pending appointments', value: fmtNum(returns?.followUp?.pending) },
                 ]}
               />
               <SummaryCard
                 label="Owner Retention (90 Days)"
                 value={fmtPct(returns?.retention?.retentionRate)}
-                sub={[{ label: 'Owners served', value: fmtNum(returns?.retention?.ownersServed) }]}
+                sub={[
+                  { label: 'Owners with a complete 90-day window', value: fmtNum(returns?.retention?.ownersServed) },
+                  { label: 'Returned', value: fmtNum(returns?.retention?.ownersReturned) },
+                ]}
               />
             </div>
 
@@ -529,12 +759,13 @@ export default function CompliancePanel() {
                   <thead>
                     <tr>
                       <th>Service</th>
-                      <th>Visits</th>
+                      <th>Service episodes (pet × service × date)</th>
+                      <th>Underlying records</th>
                       <th>Pets</th>
                       <th>Returned ≤30d</th>
                       <th>Returned ≤60d</th>
                       <th>Returned ≤90d</th>
-                      <th>Never Returned</th>
+                      <th>No Later Service Recorded</th>
                       <th>Avg Days to Return</th>
                     </tr>
                   </thead>
@@ -544,15 +775,16 @@ export default function CompliancePanel() {
                         <tr key={row.serviceType}>
                           <td>{row.serviceType}</td>
                           <td>{fmtNum(row.episodes)}</td>
+                          <td>{fmtNum(row.visits)}</td>
                           <td>{fmtNum(row.pets)}</td>
                           <td>
-                            {fmtNum(row.returned30)} ({fmtPct(row.returnRate30)})
+                            {fmtNum(row.returned30)} / {fmtNum(row.eligible30)} ({fmtPct(row.returnRate30)})
                           </td>
                           <td>
-                            {fmtNum(row.returned60)} ({fmtPct(row.returnRate60)})
+                            {fmtNum(row.returned60)} / {fmtNum(row.eligible60)} ({fmtPct(row.returnRate60)})
                           </td>
                           <td>
-                            {fmtNum(row.returned90)} ({fmtPct(row.returnRate90)})
+                            {fmtNum(row.returned90)} / {fmtNum(row.eligible90)} ({fmtPct(row.returnRate90)})
                           </td>
                           <td>{fmtNum(row.neverReturned)}</td>
                           <td>{fmtNum(row.avgDaysToReturn)}</td>
@@ -560,7 +792,7 @@ export default function CompliancePanel() {
                       ))
                     ) : (
                       <tr>
-                        <td className="report-table-empty" colSpan={8}>
+                        <td className="report-table-empty" colSpan={9}>
                           No service data available.
                         </td>
                       </tr>
@@ -583,6 +815,21 @@ export default function CompliancePanel() {
                   {fmtNum(compliance?.actionableTotal ?? 0)}
                 </span>
               </h3>
+              <div className="analytics-filter-row" role="group" aria-label="Follow-up list controls">
+                <input aria-label="Search owners to contact" value={search} placeholder="Search pet or owner" onChange={(event) => { setPage(1); setSearch(event.target.value); }} />
+                <select aria-label="Filter by vaccine" value={vaccineFilter} onChange={(event) => { setPage(1); setVaccineFilter(event.target.value); }}>
+                  <option value="">All vaccines</option>
+                  {(compliance.actionableFilters?.vaccines || []).map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+                <select aria-label="Filter by contact status" value={contactStatusFilter} onChange={(event) => { setPage(1); setContactStatusFilter(event.target.value); }}>
+                  <option value="">All contact statuses</option>
+                  {(compliance.actionableFilters?.contactStatuses || []).map((status) => <option key={status} value={status}>{status}</option>)}
+                </select>
+                <select aria-label="Sort follow-ups" value={sortBy} onChange={(event) => { setPage(1); setSortBy(event.target.value); }}>
+                  <option value="daysOverdue">Most overdue first</option><option value="dueDate">Due date</option><option value="owner">Owner name</option><option value="pet">Pet name</option>
+                </select>
+                <button type="button" className="btn-secondary" onClick={exportActionableCsv}>Export page CSV</button>
+              </div>
               <div className="report-table-wrapper">
                 <table className="report-table">
                   <thead>
@@ -594,8 +841,9 @@ export default function CompliancePanel() {
                       <th>Vaccine</th>
                       <th>Due</th>
                       <th>Days Overdue</th>
-                      <th>Last Visit</th>
+                      <th>Last Recorded Service</th>
                       <th>Status</th>
+                      <th>Contact status / action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -621,17 +869,75 @@ export default function CompliancePanel() {
                               {row.outcome}
                             </span>
                           </td>
+                          <td>
+                            {row.contact_status}
+                            <button type="button" className="btn-secondary" onClick={() => {
+                              setEditingContact(row);
+                              setContactDraft({
+                                contactStatus: row.contact_status,
+                                reasons: row.reasons || [],
+                                otherReason: row.other_reason || '',
+                                contactedAt: row.contacted_at || localISODate(),
+                              });
+                            }}>Record contact</button>
+                          </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td className="report-table-empty" colSpan={9}>
-                          No owners are overdue — every due follow-up has been met.
+                        <td className="report-table-empty" colSpan={10}>
+                          No follow-ups match these filters.
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
+              </div>
+              {editingContact && contactDraft && (
+                <div className="chart-card followup-contact-editor">
+                  <h3>Contact record — {editingContact.owner_name} ({editingContact.pet_name})</h3>
+                  {editingContact.contact_recorded_by_name && (
+                    <p>Last recorded by: {editingContact.contact_recorded_by_name}</p>
+                  )}
+                  <label>Contact status
+                    <select value={contactDraft.contactStatus} onChange={(event) => setContactDraft({ ...contactDraft, contactStatus: event.target.value })}>
+                      {(compliance.actionableFilters?.contactStatuses || []).map((status) => <option key={status} value={status}>{status}</option>)}
+                    </select>
+                  </label>
+                  {contactDraft.contactStatus !== 'Not yet contacted' && (
+                    <label>Contact date
+                      <input type="date" value={contactDraft.contactedAt} onChange={(event) => setContactDraft({ ...contactDraft, contactedAt: event.target.value })} />
+                    </label>
+                  )}
+                  <fieldset>
+                    <legend>Owner-stated reasons (select all that apply)</legend>
+                    {RETENTION_REASONS.map(([key, label]) => (
+                      <label key={key}>
+                        <input type="checkbox" checked={contactDraft.reasons.includes(key)} onChange={(event) => {
+                          const reasons = event.target.checked
+                            ? [...contactDraft.reasons, key]
+                            : contactDraft.reasons.filter((reason) => reason !== key);
+                          setContactDraft({ ...contactDraft, reasons });
+                        }} />
+                        {label}
+                      </label>
+                    ))}
+                  </fieldset>
+                  {contactDraft.reasons.includes('other') && (
+                    <label>Other reason
+                      <input value={contactDraft.otherReason} onChange={(event) => setContactDraft({ ...contactDraft, otherReason: event.target.value })} />
+                    </label>
+                  )}
+                  <div className="analytics-filter-row">
+                    <button type="button" className="btn-primary" onClick={saveContact}>Save contact</button>
+                    <button type="button" className="btn-secondary" onClick={() => { setEditingContact(null); setContactDraft(null); }}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              <div className="analytics-filter-row" aria-label="Follow-up pagination">
+                <button type="button" className="btn-secondary" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Previous</button>
+                <span>Page {compliance.actionablePage || page} of {Math.max(1, compliance.actionablePages || 1)}</span>
+                <button type="button" className="btn-secondary" disabled={page >= (compliance.actionablePages || 1)} onClick={() => setPage((current) => current + 1)}>Next</button>
               </div>
             </div>
           </section>
