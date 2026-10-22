@@ -252,12 +252,21 @@ function bucketKey(date, granularity) {
 /**
  * Roll date-level rows up into buckets.
  *
- * @param {Array<{date: string, ...metrics}>} rows date-level aggregates
+ * `sum` metrics are added up. `distinct` metrics count the number of unique
+ * ids seen inside the bucket, which is NOT the same as summing a per-day
+ * distinct count: a pet vaccinated on three different days of the same month
+ * is one unique pet for that month, not three.
+ *
+ * @param {Array<{date: string, ...metrics}>} rows date-level rows
  * @param {'daily'|'weekly'|'monthly'|'yearly'} granularity
- * @param {string[]} metricKeys numeric fields to sum
+ * @param {object} [spec]
+ * @param {string[]} [spec.sum] numeric fields to add up
+ * @param {string[]} [spec.distinct] fields holding an id to count uniquely
  * @returns {Array<{key,label,start,sort, ...metrics}>} chronologically ordered
  */
-function rollUp(rows, granularity, metricKeys) {
+function aggregate(rows, granularity, spec = {}) {
+  const sumKeys = spec.sum || [];
+  const distinctKeys = spec.distinct || [];
   const buckets = new Map();
 
   for (const row of rows || []) {
@@ -268,17 +277,96 @@ function rollUp(rows, granularity, metricKeys) {
 
     if (!buckets.has(bucket.key)) {
       const entry = { key: bucket.key, label: bucket.label, start: bucket.start, sort: bucket.sort };
-      for (const key of metricKeys) entry[key] = 0;
+      for (const key of sumKeys) entry[key] = 0;
+      for (const key of distinctKeys) entry[key] = 0;
       buckets.set(bucket.key, entry);
     }
 
     const entry = buckets.get(bucket.key);
-    for (const key of metricKeys) {
+
+    for (const key of sumKeys) {
       entry[key] = (Number(entry[key]) || 0) + (Number(row[key]) || 0);
+    }
+
+    for (const key of distinctKeys) {
+      const value = row[key];
+      if (value === null || value === undefined || value === "") continue;
+      // Kept off the entry until the bucket is finalised, so the id sets never
+      // leak into the JSON payload.
+      if (!entry.distinctSets) entry.distinctSets = new Map();
+      let set = entry.distinctSets.get(key);
+      if (!set) {
+        set = new Set();
+        entry.distinctSets.set(key, set);
+      }
+      set.add(String(value));
     }
   }
 
-  return Array.from(buckets.values()).sort((a, b) => a.sort - b.sort);
+  const result = [];
+  for (const entry of buckets.values()) {
+    if (entry.distinctSets) {
+      for (const key of distinctKeys) {
+        const set = entry.distinctSets.get(key);
+        entry[key] = set ? set.size : 0;
+      }
+    }
+    delete entry.distinctSets;
+    result.push(entry);
+  }
+
+  return result.sort((a, b) => a.sort - b.sort);
+}
+
+/**
+ * Aggregate a set of rows into a single total, ignoring time entirely.
+ *
+ * Used for window totals: the "unique pets" of a three-month window is the
+ * number of distinct pets anywhere in that window, not the sum of the monthly
+ * unique-pet counts.
+ *
+ * @param {Array<object>} rows rows carrying a `date` plus the metric fields
+ * @param {object} [spec]
+ * @param {string[]} [spec.sum] numeric fields to add up
+ * @param {string[]} [spec.distinct] fields holding an id to count uniquely
+ */
+function aggregateFlat(rows, spec = {}) {
+  const sumKeys = spec.sum || [];
+  const distinctKeys = spec.distinct || [];
+  const total = {};
+  for (const key of sumKeys) total[key] = 0;
+  for (const key of distinctKeys) total[key] = 0;
+
+  const sets = new Map();
+  for (const row of rows || []) {
+    for (const key of sumKeys) {
+      total[key] = (Number(total[key]) || 0) + (Number(row[key]) || 0);
+    }
+    for (const key of distinctKeys) {
+      const value = row[key];
+      if (value === null || value === undefined || value === "") continue;
+      if (!sets.has(key)) sets.set(key, new Set());
+      sets.get(key).add(String(value));
+    }
+  }
+
+  for (const key of distinctKeys) {
+    total[key] = sets.has(key) ? sets.get(key).size : 0;
+  }
+
+  return total;
+}
+
+/**
+ * Roll date-level rows up into buckets, adding up every listed metric.
+ *
+ * @param {Array<{date: string, ...metrics}>} rows date-level aggregates
+ * @param {'daily'|'weekly'|'monthly'|'yearly'} granularity
+ * @param {string[]} metricKeys numeric fields to sum
+ * @returns {Array<{key,label,start,sort, ...metrics}>} chronologically ordered
+ */
+function rollUp(rows, granularity, metricKeys) {
+  return aggregate(rows, granularity, { sum: metricKeys });
 }
 
 /**
@@ -363,7 +451,7 @@ const DEFAULT_WINDOW_SIZE = {
 
 function windowSize(granularity, override) {
   const parsed = Number(override);
-  if (Number.isFinite(parsed) && parsed >= 2 && parsed <= 60) return Math.trunc(parsed);
+  if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 60) return Math.trunc(parsed);
   return DEFAULT_WINDOW_SIZE[normalizeGranularity(granularity)];
 }
 
@@ -468,6 +556,8 @@ module.exports = {
   DEFAULT_WINDOW_SIZE,
   bucketKey,
   rollUp,
+  aggregate,
+  aggregateFlat,
   pctChange,
   describeWindow,
   weekdayLabel,

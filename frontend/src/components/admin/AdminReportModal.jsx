@@ -100,7 +100,7 @@ export default function AdminReportModal({ open, onClose }) {
   const handlePrint = async () => {
     setLoading(true);
     try {
-      const params = {};
+      const params = { compare: 'previousYear' };
       if (from) params.from = from;
       if (to) params.to = to;
       const res = await api.get('/analytics/dashboard', { params });

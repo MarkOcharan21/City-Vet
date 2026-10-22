@@ -34,6 +34,23 @@ function tableBlock(sectionNumber, title, columns, items, emptyMessage) {
   `;
 }
 
+function num(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toLocaleString('en-US') : '—';
+}
+
+function delta(value) {
+  if (value === null || value === undefined) return '—';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  return `${n > 0 ? '+' : ''}${n.toLocaleString('en-US')}`;
+}
+
+function peso(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `₱${n.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—';
+}
+
 export function buildAdminReportBody(dashboard, {
   title = 'Analytics Report',
   period = 'All Time',
@@ -92,6 +109,25 @@ export function buildAdminReportBody(dashboard, {
     ${tableBlock(8, 'VACCINATION COMPLIANCE', ['Status', 'Total'],
       (dashboard.vaccinationStatus || []).map((x) => [x.status, x.total]),
       'No vaccination compliance data found.')}
+
+    ${(dashboard.comparison?.yearly || []).length
+      ? tableBlock(9, 'YEAR-OVER-YEAR SUMMARY', ['Year', 'Registrations', 'Δ', 'Vaccinations', 'Δ', 'Consultations', 'Δ', 'QR Issued', 'Δ', 'Revenue', 'Δ', 'Lost Pets'],
+          dashboard.comparison.yearly.map((y) => [
+            y.year,
+            num(y.registrations),
+            delta(y.deltas?.registrations?.delta),
+            num(y.doses),
+            delta(y.deltas?.doses?.delta),
+            num(y.consultations),
+            delta(y.deltas?.consultations?.delta),
+            num(y.qrIssued),
+            delta(y.deltas?.qrIssued?.delta),
+            peso(y.revenue),
+            delta(y.deltas?.revenue?.delta),
+            num(y.lostPets),
+          ]),
+          'No yearly data available.')
+      : ''}
 
     ${getPrintFooter()}
   `;

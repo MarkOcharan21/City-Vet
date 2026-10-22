@@ -2,6 +2,9 @@
 const { vetNameExpr } = require("../utils/vetNameFormat");
 const { mondayIndex, toInt } = require("../config/sql");
 const { geocodeOwnerLocation } = require("../utils/geocode");
+const { buildPeriodComparison } = require("./comparisonController");
+const { toISODate } = require("../utils/reportPeriods");
+const { METRICS } = require("../utils/analyticsComparison");
 
 const BARANGAY_LIST = [
   'Baclaran', 'Banaybanay', 'Banlic', 'Bigaa', 'Butong', 'Casile', 'Diezmo',
@@ -111,7 +114,11 @@ function withMonthLabels(rows) {
         const month = Number(row.month_num);
         const label = MONTH_LABELS[month - 1];
         return {
+            // Kept for the existing charts and printed reports.
             month: label ? `${label} ${year}` : String(row.year),
+            // Exposed so the grouped year-over-year charts can pivot on year.
+            year,
+            monthNum: month,
             total: Number(row.total) || 0
         };
     });
@@ -395,12 +402,47 @@ async function getDashboardAnalytics(req, res) {
         const catMale = catsBySex.find((c) => c.sex === 'Male')?.total || 0;
         const catFemale = catsBySex.find((c) => c.sex === 'Female')?.total || 0;
 
+        // Period-over-period comparison for the Overview tab.
+        // The dashboard reads `pets`/registrations/QR with its own date window,
+        // so the comparison is computed against an equivalent baseline.
+        let comparison = null;
+        const compare = String(req.query.compare || '').trim();
+        if (compare === 'previous' || compare === 'previousYear') {
+            try {
+                const comp = await buildPeriodComparison({
+                    granularity: 'monthly',
+                    compare,
+                    anchor: toISODate(hasRange ? new Date(`${to || from}T00:00:00`) : new Date()),
+                    windows: 12,
+                    primaryMetric: 'registrations',
+                    includeEpisodes: false,
+                    ...(hasRange ? { current: { from, to } } : {}),
+                    toDate: !hasRange && compare === 'previousYear',
+                });
+
+                comparison = {
+                    mode: comp.compare,
+                    granularity: comp.granularity,
+                    windows: comp.windows,
+                    metrics: METRICS,
+                    current: comp.current,
+                    baseline: comp.baseline,
+                    totals: comp.totals,
+                    matrix: comp.matrix,
+                    yearly: comp.yearly,
+                };
+            } catch (err) {
+                console.error('Failed to build dashboard comparison:', err.message);
+            }
+        }
+
         res.json({
             success: true,
             filter,
             from,
             to,
             filterLabel: hasRange ? rangeLabel(from, to) : filterLabel(filter),
+            comparison,
             summary: {
                 totalPets: totalPets.total,
                 vaccinatedPets: vaccinatedPets.total,

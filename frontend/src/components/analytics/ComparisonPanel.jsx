@@ -21,6 +21,22 @@ const COMPARE_MODES = [
   { key: 'previousYear', label: 'Same Period Last Year' },
 ];
 
+const METRIC_OPTIONS = [
+  { key: 'registrations', label: 'Registrations', money: false, invert: false },
+  { key: 'doses', label: 'Vaccinations', money: false, invert: false },
+  { key: 'pets', label: 'Unique Pets', money: false, invert: false },
+  { key: 'owners', label: 'Unique Owners', money: false, invert: false },
+  { key: 'consultations', label: 'Consultations', money: false, invert: false },
+  { key: 'qrIssued', label: 'QR Issued', money: false, invert: false },
+  { key: 'revenue', label: 'Revenue', money: true, invert: false },
+  { key: 'lostPets', label: 'Lost Pets', money: false, invert: true },
+  { key: 'newOwners', label: 'New Owners', money: false, invert: false },
+];
+
+function fmtMetric(value, money = false) {
+  return money ? fmtPeso(value) : fmtNum(value);
+}
+
 function toISO(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
     date.getDate()
@@ -134,6 +150,7 @@ const rateLineOptions = {
 export default function ComparisonPanel() {
   const [granularity, setGranularity] = useState('monthly');
   const [compare, setCompare] = useState('previous');
+  const [metric, setMetric] = useState('doses');
   const [anchor, setAnchor] = useState(toISO(new Date()));
 
   const [data, setData] = useState(null);
@@ -146,20 +163,21 @@ export default function ComparisonPanel() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get('/analytics/vaccination-trends', {
-        params: { granularity, compare, anchor },
+      const res = await api.get('/analytics/period-comparison', {
+        params: { granularity, compare, anchor, metric },
       });
+      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to load comparison');
       setData(res.data);
     } catch (err) {
       const message =
-        err.response?.data?.message || 'Failed to load the vaccination comparison.';
+        err.response?.data?.message || err.message || 'Failed to load comparison.';
       setError(message);
       setData(null);
       toast.error(message);
     } finally {
       setLoading(false);
     }
-  }, [granularity, compare, anchor]);
+  }, [granularity, compare, anchor, metric]);
 
   useEffect(() => {
     load();
@@ -170,29 +188,33 @@ export default function ComparisonPanel() {
   const baseline = totals.baseline || {};
   const series = data?.series || [];
 
-  const chartData = useMemo(
-    () => ({
+  const chartData = useMemo(() => {
+    const key = data?.primaryMetric || metric;
+    const pick = (row) => (row ? Number(row[key]) || 0 : 0);
+    return {
+      metric: key,
       labels: series.map((s) => s.label),
-      current: series.map((s) => (s.current ? s.current.doses : 0)),
-      baseline: series.map((s) => (s.baseline ? s.baseline.doses : 0)),
+      current: series.map((s) => pick(s.current)),
+      baseline: series.map((s) => pick(s.baseline)),
       currentRate: series.map((s) => (s.current ? s.current.onTimeRate : null)),
       baselineRate: series.map((s) => (s.baseline ? s.baseline.onTimeRate : null)),
-    }),
-    [series]
-  );
+    };
+  }, [series, metric, data?.primaryMetric]);
+
+  const activeMetric = METRIC_OPTIONS.find((m) => m.key === chartData.metric) || METRIC_OPTIONS[1];
 
   const handlePrint = async () => {
     setPrinting(true);
     try {
-      const res = await api.get('/analytics/vaccination-trends', {
-        params: { granularity, compare, anchor },
+      const res = await api.get('/analytics/period-comparison', {
+        params: { granularity, compare, anchor, metric },
       });
       if (!res.data?.success) {
         toast.error(res.data?.message || 'Could not build the comparison report.');
         return;
       }
       printComparisonReport(res.data, {
-        title: 'Vaccination Period Comparison Report',
+        title: 'Period Comparison Report',
         period: fmtRange(res.data.current) || res.data.current?.label || '',
       });
     } catch (err) {
@@ -233,6 +255,21 @@ export default function ComparisonPanel() {
               {option.label}
             </button>
           ))}
+        </div>
+
+        <div className="analytics-inline-field">
+          <label htmlFor="comparison-metric">Metric</label>
+          <select
+            id="comparison-metric"
+            value={metric}
+            onChange={(e) => setMetric(e.target.value)}
+          >
+            {METRIC_OPTIONS.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="analytics-inline-field">
@@ -284,8 +321,17 @@ export default function ComparisonPanel() {
         <>
           <div className="summary-row">
             <SummaryCard
+              label="Registrations"
+              value={fmtNum(current.registrations)}
+              sub={[
+                { label: 'Baseline', value: fmtNum(baseline.registrations) },
+                { label: 'Change', value: fmtDelta(totals.registrations?.delta) },
+              ]}
+            />
+            <SummaryCard
               label="Doses Administered"
               value={fmtNum(current.doses)}
+              color="#1e7a46"
               sub={[
                 { label: 'Baseline', value: fmtNum(baseline.doses) },
                 { label: 'Change', value: fmtDelta(totals.doses?.delta) },
@@ -294,7 +340,7 @@ export default function ComparisonPanel() {
             <SummaryCard
               label="Unique Pets"
               value={fmtNum(current.pets)}
-              color="#1e7a46"
+              color="#c6a15b"
               sub={[
                 { label: 'Baseline', value: fmtNum(baseline.pets) },
                 { label: 'Change', value: fmtDelta(totals.pets?.delta) },
@@ -303,43 +349,32 @@ export default function ComparisonPanel() {
             <SummaryCard
               label="Unique Owners"
               value={fmtNum(current.owners)}
-              color="#c6a15b"
+              color="#b8860b"
               sub={[
                 { label: 'Baseline', value: fmtNum(baseline.owners) },
                 { label: 'Change', value: fmtDelta(totals.owners?.delta) },
               ]}
             />
-            <SummaryCard
-              label="On-Time Rate"
-              value={fmtPct(current.onTimeRate)}
-              color="#b8860b"
-              sub={[
-                { label: 'Baseline', value: fmtPct(baseline.onTimeRate) },
-                { label: 'Change', value: fmtDelta(totals.onTimeRate?.delta) },
-              ]}
-            />
           </div>
 
           <div className="analytics-delta-row">
-            <span className="analytics-delta-row-label">Doses change</span>
-            <DeltaBadge delta={totals.doses?.delta} pctChange={totals.doses?.pctChange} />
-            <span className="analytics-delta-row-label">Revenue change</span>
-            <DeltaBadge
-              delta={totals.revenue?.delta}
-              pctChange={totals.revenue?.pctChange}
-              suffix=""
-            />
-            <span className="analytics-delta-row-label">On-time rate change</span>
-            <DeltaBadge
-              delta={totals.onTimeRate?.delta}
-              pctChange={totals.onTimeRate?.pctChange}
-              suffix=" pts"
-            />
+            <span className="analytics-delta-row-label">Consultations</span>
+            <DeltaBadge delta={totals.consultations?.delta} pctChange={totals.consultations?.pctChange} />
+            <span className="analytics-delta-row-label">QR Issued</span>
+            <DeltaBadge delta={totals.qrIssued?.delta} pctChange={totals.qrIssued?.pctChange} />
+            <span className="analytics-delta-row-label">Revenue</span>
+            <DeltaBadge delta={totals.revenue?.delta} pctChange={totals.revenue?.pctChange} />
+            <span className="analytics-delta-row-label">Lost Pets</span>
+            <DeltaBadge delta={totals.lostPets?.delta} pctChange={totals.lostPets?.pctChange} invert />
+            <span className="analytics-delta-row-label">New Owners</span>
+            <DeltaBadge delta={totals.newOwners?.delta} pctChange={totals.newOwners?.pctChange} />
+            <span className="analytics-delta-row-label">On-time rate</span>
+            <DeltaBadge delta={totals.onTimeRate?.delta} pctChange={totals.onTimeRate?.pctChange} suffix=" pts" />
           </div>
 
           <div className="chart-grid chart-grid--1col">
             <div className="chart-card">
-              <h3>Doses — Current vs Baseline</h3>
+              <h3>{activeMetric.label} — Current vs Baseline</h3>
               <div className="chart-card-canvas">
                 {series.length ? (
                   <Bar
@@ -417,8 +452,8 @@ export default function ComparisonPanel() {
                     <tr>
                       <th>Period</th>
                       <th>Baseline Period</th>
-                      <th>Doses (Current)</th>
-                      <th>Doses (Baseline)</th>
+                      <th>{activeMetric.label} (Current)</th>
+                      <th>{activeMetric.label} (Baseline)</th>
                       <th>Change</th>
                       <th>% Change</th>
                       <th>On-Time Rate (Current)</th>
@@ -432,10 +467,14 @@ export default function ComparisonPanel() {
                         <tr key={row.key}>
                           <td>{row.label}</td>
                           <td>{row.baselineLabel}</td>
-                          <td>{fmtNum(row.current?.doses ?? 0)}</td>
-                          <td>{row.baseline ? fmtNum(row.baseline.doses) : 'No data'}</td>
-                          <td>{fmtDelta(row.delta)}</td>
-                          <td>{row.pctChange === null ? '—' : `${Number(row.pctChange).toFixed(1)}%`}</td>
+                          <td>{fmtMetric(row.current?.[chartData.metric] ?? 0, activeMetric.money)}</td>
+                          <td>{row.baseline ? fmtMetric(row.baseline[chartData.metric], activeMetric.money) : 'No data'}</td>
+                          <td>{fmtDelta(row.deltas?.[chartData.metric]?.delta ?? row.delta)}</td>
+                          <td>
+                            {(row.deltas?.[chartData.metric]?.pctChange ?? row.pctChange) === null
+                              ? '—'
+                              : `${Number(row.deltas?.[chartData.metric]?.pctChange ?? row.pctChange).toFixed(1)}%`}
+                          </td>
                           <td>{row.current ? fmtPct(row.current.onTimeRate) : '—'}</td>
                           <td>{row.baseline ? fmtPct(row.baseline.onTimeRate) : '—'}</td>
                           <td>{row.current ? fmtPeso(row.current.revenue) : '—'}</td>
@@ -455,9 +494,9 @@ export default function ComparisonPanel() {
           </section>
 
           <section className="analytics-chart-section">
-            <h3 className="analytics-chart-section-title">Yearly Vaccination Report</h3>
+            <h3 className="analytics-chart-section-title">Year-over-Year Summary</h3>
             <p className="analytics-chart-section-desc">
-              Every year on record, with the change against the year before it.
+              Every year on record. The small figure under each value is the change against the year before it.
             </p>
             <div className="report-table-container">
               <h3>Yearly totals</h3>
@@ -466,38 +505,44 @@ export default function ComparisonPanel() {
                   <thead>
                     <tr>
                       <th>Year</th>
-                      <th>Doses</th>
+                      <th>Registrations</th>
+                      <th>Vaccinations</th>
                       <th>Unique Pets</th>
                       <th>Unique Owners</th>
-                      <th>On Time</th>
-                      <th>On-Time Rate</th>
+                      <th>Consultations</th>
+                      <th>QR Issued</th>
                       <th>Revenue</th>
-                      <th>Change vs Previous Year</th>
+                      <th>Lost Pets</th>
+                      <th>New Owners</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(data.yearly || []).length ? (
-                      (data.yearly || []).map((row) => (
-                        <tr key={row.year}>
-                          <td>{row.year}</td>
-                          <td>{fmtNum(row.doses)}</td>
-                          <td>{fmtNum(row.pets)}</td>
-                          <td>{fmtNum(row.owners)}</td>
-                          <td>{fmtNum(row.onTime)}</td>
-                          <td>{fmtPct(row.onTimeRate)}</td>
-                          <td>{fmtPeso(row.revenue)}</td>
-                          <td>
-                            {row.pctChange === null || row.pctChange === undefined ? (
-                              '—'
-                            ) : (
-                              <DeltaBadge delta={row.delta} pctChange={row.pctChange} />
-                            )}
-                          </td>
-                        </tr>
-                      ))
+                      (data.yearly || []).map((row) => {
+                        const cell = (metric, money = false) => (
+                          <>
+                            <div>{fmtMetric(row[metric], money)}</div>
+                            <small className="analytics-table-delta">{fmtDelta(row.deltas?.[metric]?.delta)}</small>
+                          </>
+                        );
+                        return (
+                          <tr key={row.year}>
+                            <td>{row.year}</td>
+                            <td>{cell('registrations')}</td>
+                            <td>{cell('doses')}</td>
+                            <td>{cell('pets')}</td>
+                            <td>{cell('owners')}</td>
+                            <td>{cell('consultations')}</td>
+                            <td>{cell('qrIssued')}</td>
+                            <td>{cell('revenue', true)}</td>
+                            <td>{cell('lostPets')}</td>
+                            <td>{cell('newOwners')}</td>
+                          </tr>
+                        );
+                      })
                     ) : (
                       <tr>
-                        <td className="report-table-empty" colSpan={8}>
+                        <td className="report-table-empty" colSpan={10}>
                           No yearly data available.
                         </td>
                       </tr>

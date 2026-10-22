@@ -30,6 +30,14 @@ const FILTER_OPTIONS = [
   { key: "all", label: "All Time" },
 ];
 
+const COMPARE_OPTIONS = [
+  { key: "", label: "Off" },
+  { key: "previousYear", label: "Same Period Last Year" },
+  { key: "previous", label: "Previous Period" },
+];
+
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 const barChartOptions = {
   responsive: true,
   maintainAspectRatio: false,
@@ -186,6 +194,89 @@ const revenueBarChartOptions = {
   },
 };
 
+const groupedYearBarChartOptions = {
+  ...barChartOptions,
+  plugins: {
+    ...barChartOptions.plugins,
+    legend: {
+      display: true,
+      position: "bottom",
+      labels: {
+        padding: 14,
+        usePointStyle: true,
+        font: { family: "Inter", size: 12 },
+      },
+    },
+  },
+};
+
+const groupedYearRevenueChartOptions = {
+  ...revenueBarChartOptions,
+  plugins: {
+    ...revenueBarChartOptions.plugins,
+    legend: {
+      display: true,
+      position: "bottom",
+      labels: {
+        padding: 14,
+        usePointStyle: true,
+        font: { family: "Inter", size: 12 },
+      },
+    },
+  },
+};
+
+function fmtNum(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toLocaleString('en-US') : '—';
+}
+
+function fmtDelta(value) {
+  if (value === null || value === undefined) return '—';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  return `${n > 0 ? '+' : ''}${n.toLocaleString('en-US')}`;
+}
+
+function fmtPct(value) {
+  if (value === null || value === undefined) return '—';
+  const n = Number(value);
+  return Number.isFinite(n) ? `${n > 0 && !String(value).startsWith('-') ? '+' : ''}${n.toFixed(1)}%` : '—';
+}
+
+function deltaTone(delta, invert = false) {
+  const n = Number(delta);
+  if (!Number.isFinite(n) || n === 0) return 'flat';
+  const up = invert ? n < 0 : n > 0;
+  return up ? 'up' : 'down';
+}
+
+function getComparisonMetric(dashboard, key) {
+  return dashboard?.comparison?.totals?.[key] || null;
+}
+
+function buildGroupedYearDatasets(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return { labels: MONTH_LABELS, datasets: [] };
+  const years = Array.from(new Set(rows.map((r) => r.year).filter((y) => y))).sort();
+  const palette = ["#c8102e", "#c6a15b", "#1e7a46", "#b8860b", "#7a0c1e"];
+  const datasets = years.map((year, idx) => ({
+    label: String(year),
+    data: MONTH_LABELS.map((month, mIdx) => {
+      const match = rows.find((r) => r.year === year && Number(r.monthNum) === mIdx + 1);
+      return Number(match?.total) || 0;
+    }),
+    backgroundColor: palette[idx % palette.length],
+    borderRadius: 6,
+  }));
+  return { labels: MONTH_LABELS, datasets };
+}
+
+function distinctYears(rows) {
+  if (!Array.isArray(rows)) return 0;
+  const years = new Set(rows.map((r) => r.year).filter((y) => y !== null && y !== undefined));
+  return years.size;
+}
+
 function hasChartData(items, valueKey = "total") {
   return Array.isArray(items) && items.some((item) => Number(item[valueKey]) > 0);
 }
@@ -198,6 +289,7 @@ export default function AnalyticsReports() {
   const [filter, setFilter] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [compare, setCompare] = useState("previousYear");
   const [retryCount, setRetryCount] = useState(0);
   const [printOpen, setPrintOpen] = useState(false);
 
@@ -216,6 +308,7 @@ export default function AnalyticsReports() {
     let url = `/analytics/dashboard?filter=${filter}`;
     if (from) url += `&from=${from}`;
     if (to) url += `&to=${to}`;
+    if (compare) url += `&compare=${compare}`;
 
     api
       .get(url)
@@ -242,7 +335,7 @@ export default function AnalyticsReports() {
       .finally(() => {
         setLoading(false);
       });
-  }, [tab, filter, from, to, retryCount]);
+  }, [tab, filter, from, to, compare, retryCount]);
 
   return (
     <div className="page">
@@ -318,6 +411,20 @@ export default function AnalyticsReports() {
                 Clear
               </button>
             </div>
+            <div className="analytics-toggle-group">
+              <span className="analytics-toggle-label">Compare to</span>
+              {COMPARE_OPTIONS.map((option) => (
+                <button
+                  key={option.key || "off"}
+                  type="button"
+                  aria-pressed={compare === option.key}
+                  onClick={() => setCompare(option.key)}
+                  className={`analytics-filter-btn${compare === option.key ? " is-active" : ""}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {loading && <GlobalLoadingOverlay visible={true} message="Loading analytics data..." />}
@@ -334,23 +441,52 @@ export default function AnalyticsReports() {
           {!loading && !error && dashboard && (
             <>
               <div className="summary-row">
-                <SummaryCard label="Verified Pets" value={dashboard?.summary?.totalPets ?? '—'} />
+                <SummaryCard label="Verified Pets" value={dashboard?.summary?.totalPets ?? '-'} />
                 <SummaryCard
                   label="Vaccinated Pets"
-                  value={dashboard?.summary?.vaccinatedPets ?? '—'}
+                  value={dashboard?.summary?.vaccinatedPets ?? '-'}
                   color="#1e7a46"
                 />
                 <SummaryCard
                   label="Lost Pets"
-                  value={dashboard?.summary?.lostPets ?? '—'}
+                  value={dashboard?.summary?.lostPets ?? '-'}
                   color="#c8102e"
                 />
                 <SummaryCard
                   label="Generated QR"
-                  value={dashboard?.summary?.totalQr ?? '—'}
+                  value={dashboard?.summary?.totalQr ?? '-'}
                   color="#c6a15b"
                 />
               </div>
+
+              {compare && dashboard?.comparison && (
+                <div className="analytics-delta-row">
+                  <span className="analytics-delta-row-label">
+                    Comparing <strong>{dashboard.comparison.current?.label}</strong> vs <strong>{dashboard.comparison.baseline?.label}</strong>
+                  </span>
+                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.registrations?.delta > 0 ? 'up' : dashboard?.comparison?.totals?.registrations?.delta < 0 ? 'down' : 'flat'}`}>
+                    Registrations {fmtDelta(dashboard?.comparison?.totals?.registrations?.delta)}{dashboard?.comparison?.totals?.registrations?.pctChange != null ? ` (${Number(dashboard.comparison.totals.registrations.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.registrations.pctChange).toFixed(1)}%)` : ''}
+                  </span>
+                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.doses?.delta > 0 ? 'up' : dashboard?.comparison?.totals?.doses?.delta < 0 ? 'down' : 'flat'}`}>
+                    Vaccinations {fmtDelta(dashboard?.comparison?.totals?.doses?.delta)}{dashboard?.comparison?.totals?.doses?.pctChange != null ? ` (${Number(dashboard.comparison.totals.doses.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.doses.pctChange).toFixed(1)}%)` : ''}
+                  </span>
+                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.revenue?.delta > 0 ? 'up' : dashboard?.comparison?.totals?.revenue?.delta < 0 ? 'down' : 'flat'}`}>
+                    Revenue {fmtDelta(dashboard?.comparison?.totals?.revenue?.delta)}{dashboard?.comparison?.totals?.revenue?.pctChange != null ? ` (${Number(dashboard.comparison.totals.revenue.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.revenue.pctChange).toFixed(1)}%)` : ''}
+                  </span>
+                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.consultations?.delta > 0 ? 'up' : dashboard?.comparison?.totals?.consultations?.delta < 0 ? 'down' : 'flat'}`}>
+                    Consultations {fmtDelta(dashboard?.comparison?.totals?.consultations?.delta)}{dashboard?.comparison?.totals?.consultations?.pctChange != null ? ` (${Number(dashboard.comparison.totals.consultations.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.consultations.pctChange).toFixed(1)}%)` : ''}
+                  </span>
+                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.qrIssued?.delta > 0 ? 'up' : dashboard?.comparison?.totals?.qrIssued?.delta < 0 ? 'down' : 'flat'}`}>
+                    QR Issued {fmtDelta(dashboard?.comparison?.totals?.qrIssued?.delta)}{dashboard?.comparison?.totals?.qrIssued?.pctChange != null ? ` (${Number(dashboard.comparison.totals.qrIssued.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.qrIssued.pctChange).toFixed(1)}%)` : ''}
+                  </span>
+                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.lostPets?.delta > 0 ? 'down' : dashboard?.comparison?.totals?.lostPets?.delta < 0 ? 'up' : 'flat'}`}>
+                    Lost Pets {fmtDelta(dashboard?.comparison?.totals?.lostPets?.delta)}{dashboard?.comparison?.totals?.lostPets?.pctChange != null ? ` (${Number(dashboard.comparison.totals.lostPets.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.lostPets.pctChange).toFixed(1)}%)` : ''}
+                  </span>
+                  <span className={`analytics-delta-badge analytics-delta-badge--${dashboard?.comparison?.totals?.newOwners?.delta > 0 ? 'up' : dashboard?.comparison?.totals?.newOwners?.delta < 0 ? 'down' : 'flat'}`}>
+                    New Owners {fmtDelta(dashboard?.comparison?.totals?.newOwners?.delta)}{dashboard?.comparison?.totals?.newOwners?.pctChange != null ? ` (${Number(dashboard.comparison.totals.newOwners.pctChange) > 0 ? '+' : ''}${Number(dashboard.comparison.totals.newOwners.pctChange).toFixed(1)}%)` : ''}
+                  </span>
+                </div>
+              )}
 
               <h2>Analytics Graphs</h2>
               <p className="page-intro">
@@ -409,20 +545,27 @@ export default function AnalyticsReports() {
                     />
                   </ChartCard>
 
-                  <ChartCard title="Monthly Pet Registrations" isEmpty={!hasChartData(dashboard?.registrations)}>
+                  <ChartCard
+                    title={distinctYears(dashboard?.registrations) >= 2 ? "Monthly Pet Registrations (Year-over-Year)" : "Monthly Pet Registrations"}
+                    isEmpty={!hasChartData(dashboard?.registrations)}
+                  >
                     <Bar
-                      options={barChartOptions}
-                      data={{
-                        labels: dashboard?.registrations.map((x) => x.month) || [],
-                        datasets: [
-                          {
-                            label: "Registrations",
-                            data: dashboard?.registrations.map((x) => x.total) || [],
-                            backgroundColor: "#7a0c1e",
-                            borderRadius: 6,
-                          },
-                        ],
-                      }}
+                      options={distinctYears(dashboard?.registrations) >= 2 ? groupedYearBarChartOptions : barChartOptions}
+                      data={
+                        distinctYears(dashboard?.registrations) >= 2
+                          ? buildGroupedYearDatasets(dashboard?.registrations)
+                          : {
+                              labels: dashboard?.registrations.map((x) => x.month) || [],
+                              datasets: [
+                                {
+                                  label: "Registrations",
+                                  data: dashboard?.registrations.map((x) => x.total) || [],
+                                  backgroundColor: "#7a0c1e",
+                                  borderRadius: 6,
+                                },
+                              ],
+                            }
+                      }
                     />
                   </ChartCard>
                 </div>
@@ -459,40 +602,51 @@ export default function AnalyticsReports() {
                 </p>
 
                 <div className="chart-grid chart-grid--1col">
-                  <ChartCard title="Vaccinations Per Month" isEmpty={!hasChartData(dashboard?.vaccinations)}>
+                  <ChartCard
+                    title={distinctYears(dashboard?.vaccinations) >= 2 ? "Vaccinations Per Month (Year-over-Year)" : "Vaccinations Per Month"}
+                    isEmpty={!hasChartData(dashboard?.vaccinations)}
+                  >
                     <Bar
-                      options={barChartOptions}
-                      data={{
-                        labels: dashboard?.vaccinations.map((x) => x.month) || [],
-                        datasets: [
-                          {
-                            label: "Vaccinations",
-                            data: dashboard?.vaccinations.map((x) => x.total) || [],
-                            backgroundColor: "#1e7a46",
-                            borderRadius: 6,
-                          },
-                        ],
-                      }}
+                      options={distinctYears(dashboard?.vaccinations) >= 2 ? groupedYearBarChartOptions : barChartOptions}
+                      data={
+                        distinctYears(dashboard?.vaccinations) >= 2
+                          ? buildGroupedYearDatasets(dashboard?.vaccinations)
+                          : {
+                              labels: dashboard?.vaccinations.map((x) => x.month) || [],
+                              datasets: [
+                                {
+                                  label: "Vaccinations",
+                                  data: dashboard?.vaccinations.map((x) => x.total) || [],
+                                  backgroundColor: "#1e7a46",
+                                  borderRadius: 6,
+                                },
+                              ],
+                            }
+                      }
                     />
                   </ChartCard>
 
                   <ChartCard
-                    title="Revenue Collected Per Month"
+                    title={distinctYears(dashboard?.paymentRevenue) >= 2 ? "Revenue Collected Per Month (Year-over-Year)" : "Revenue Collected Per Month"}
                     isEmpty={!hasChartData(dashboard?.paymentRevenue)}
                   >
                     <Bar
-                      options={revenueBarChartOptions}
-                      data={{
-                        labels: dashboard?.paymentRevenue.map((x) => x.month) || [],
-                        datasets: [
-                          {
-                            label: "Revenue",
-                            data: dashboard?.paymentRevenue.map((x) => x.total) || [],
-                            backgroundColor: "#c6a15b",
-                            borderRadius: 6,
-                          },
-                        ],
-                      }}
+                      options={distinctYears(dashboard?.paymentRevenue) >= 2 ? groupedYearRevenueChartOptions : revenueBarChartOptions}
+                      data={
+                        distinctYears(dashboard?.paymentRevenue) >= 2
+                          ? buildGroupedYearDatasets(dashboard?.paymentRevenue)
+                          : {
+                              labels: dashboard?.paymentRevenue.map((x) => x.month) || [],
+                              datasets: [
+                                {
+                                  label: "Revenue",
+                                  data: dashboard?.paymentRevenue.map((x) => x.total) || [],
+                                  backgroundColor: "#c6a15b",
+                                  borderRadius: 6,
+                                },
+                              ],
+                            }
+                      }
                     />
                   </ChartCard>
 
@@ -529,6 +683,51 @@ export default function AnalyticsReports() {
                   </ChartCard>
                 </div>
               </section>
+
+              {compare && dashboard?.comparison?.yearly && Array.isArray(dashboard.comparison.yearly) && dashboard.comparison.yearly.length > 0 && (
+                <section className="analytics-chart-section">
+                  <h3 className="analytics-chart-section-title">Year-over-Year Summary</h3>
+                  <p className="analytics-chart-section-desc">
+                    Totals by year with change vs previous year for core metrics.
+                  </p>
+                  <div className="analytics-table-wrapper">
+                    <table className="analytics-table analytics-table--yoy">
+                      <thead>
+                        <tr>
+                          <th>Year</th>
+                          <th>Registrations</th>
+                          <th>Δ vs prev</th>
+                          <th>Vaccinations (doses)</th>
+                          <th>Δ vs prev</th>
+                          <th>Revenue</th>
+                          <th>Δ vs prev</th>
+                          <th>Consultations</th>
+                          <th>Δ vs prev</th>
+                          <th>QR Issued</th>
+                          <th>Δ vs prev</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dashboard.comparison.yearly.map((row) => (
+                          <tr key={row.year}>
+                            <td>{row.year}</td>
+                            <td>{fmtNum(row.registrations)}</td>
+                            <td>{fmtDelta(row.deltas?.registrations?.delta)}</td>
+                            <td>{fmtNum(row.doses)}</td>
+                            <td>{fmtDelta(row.deltas?.doses?.delta)}</td>
+                            <td>₱{fmtNum(row.revenue)}</td>
+                            <td>{fmtDelta(row.deltas?.revenue?.delta)}</td>
+                            <td>{fmtNum(row.consultations)}</td>
+                            <td>{fmtDelta(row.deltas?.consultations?.delta)}</td>
+                            <td>{fmtNum(row.qrIssued)}</td>
+                            <td>{fmtDelta(row.deltas?.qrIssued?.delta)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
 
               <div className="analytics-print-row">
                 <button type="button" className="btn-primary" onClick={() => setPrintOpen(true)}>

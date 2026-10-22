@@ -6650,6 +6650,68 @@ body:has(.clinic-access-page)::before {
   border-color: rgba(36, 20, 22, 0.08);
 }
 
+/* ===== Year-over-year matrix ===== */
+.analytics-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-card);
+}
+
+.analytics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.analytics-table th,
+.analytics-table td {
+  padding: 0.7rem 0.9rem;
+  text-align: right;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.analytics-table th:first-child,
+.analytics-table td:first-child {
+  text-align: left;
+  font-weight: 700;
+  color: var(--color-ink);
+  position: sticky;
+  left: 0;
+  background: var(--color-card);
+}
+
+.analytics-table thead th {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  background: rgba(36, 20, 22, 0.04);
+}
+
+.analytics-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.analytics-table tbody tr:hover td {
+  background: rgba(200, 16, 46, 0.03);
+}
+
+.analytics-table--yoy td:nth-child(even):not(:first-child) {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.analytics-table-delta {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
 /* ===== Outcome status chips ===== */
 .analytics-status-chip {
   display: inline-block;

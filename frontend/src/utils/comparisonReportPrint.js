@@ -82,6 +82,18 @@ const COMPARE_LABELS = {
   previousYear: 'Same Period Last Year',
 };
 
+const METRIC_LABELS = {
+  registrations: 'Registrations',
+  doses: 'Doses',
+  pets: 'Unique Pets',
+  owners: 'Unique Owners',
+  consultations: 'Consultations',
+  qrIssued: 'QR Issued',
+  revenue: 'Revenue',
+  lostPets: 'Lost Pets',
+  newOwners: 'New Owners',
+};
+
 /**
  * Period comparison report (daily / weekly / monthly / yearly).
  *
@@ -89,7 +101,7 @@ const COMPARE_LABELS = {
  * @param {{title?: string, period?: string, generatedAt?: Date}} options
  */
 export function buildComparisonReportBody(data, {
-  title = 'Vaccination Period Comparison Report',
+  title = 'Period Comparison Report',
   period = '',
   generatedAt = new Date(),
 } = {}) {
@@ -123,27 +135,32 @@ export function buildComparisonReportBody(data, {
       'COMPARISON SUMMARY',
       ['Metric', 'Current Period', 'Baseline', 'Change', '% Change'],
       [
+        ['New pet registrations', num(current.registrations), num(baseline.registrations), delta(totals.registrations?.delta), pct(totals.registrations?.pctChange)],
         ['Doses administered', num(current.doses), num(baseline.doses), delta(totals.doses?.delta), pct(totals.doses?.pctChange)],
-        ['Unique pets', num(current.pets), num(baseline.pets), delta(totals.pets?.delta), pct(totals.pets?.pctChange)],
-        ['Unique owners', num(current.owners), num(baseline.owners), delta(totals.owners?.delta), pct(totals.owners?.pctChange)],
+        ['Unique pets vaccinated', num(current.pets), num(baseline.pets), delta(totals.pets?.delta), pct(totals.pets?.pctChange)],
+        ['Unique owners served', num(current.owners), num(baseline.owners), delta(totals.owners?.delta), pct(totals.owners?.pctChange)],
+        ['Consultations', num(current.consultations), num(baseline.consultations), delta(totals.consultations?.delta), pct(totals.consultations?.pctChange)],
+        ['QR codes issued', num(current.qrIssued), num(baseline.qrIssued), delta(totals.qrIssued?.delta), pct(totals.qrIssued?.pctChange)],
+        ['Revenue collected', peso(current.revenue), peso(baseline.revenue), peso(totals.revenue?.delta), pct(totals.revenue?.pctChange)],
+        ['Lost pets', num(current.lostPets), num(baseline.lostPets), delta(totals.lostPets?.delta), pct(totals.lostPets?.pctChange)],
+        ['New pet owners', num(current.newOwners), num(baseline.newOwners), delta(totals.newOwners?.delta), pct(totals.newOwners?.pctChange)],
         ['Follow-ups on time', num(current.onTime), num(baseline.onTime), '—', '—'],
         ['On-time rate', pct(current.onTimeRate), pct(baseline.onTimeRate), delta(totals.onTimeRate?.delta), pct(totals.onTimeRate?.pctChange)],
-        ['Revenue collected', peso(current.revenue), peso(baseline.revenue), peso(totals.revenue?.delta), pct(totals.revenue?.pctChange)],
       ],
       'No comparison data available.'
     )}
 
     ${tableBlock(
       2,
-      'PERIOD-BY-PERIOD COMPARISON',
-      ['Period', 'Baseline Period', 'Doses (Current)', 'Doses (Baseline)', 'Change', '% Change', 'On-Time Rate (Current)', 'On-Time Rate (Baseline)'],
+      `PERIOD-BY-PERIOD COMPARISON (${(METRIC_LABELS[data?.primaryMetric] || 'Doses').toUpperCase()})`,
+      ['Period', 'Baseline Period', `${METRIC_LABELS[data?.primaryMetric] || 'Doses'} (Current)`, `${METRIC_LABELS[data?.primaryMetric] || 'Doses'} (Baseline)`, 'Change', '% Change', 'On-Time Rate (Current)', 'On-Time Rate (Baseline)'],
       (data?.series || []).map((s) => [
         s.label,
         s.baselineLabel,
-        num(s.current?.doses ?? 0),
-        s.baseline ? num(s.baseline.doses) : 'No data',
-        delta(s.delta),
-        pct(s.pctChange),
+        num(s.current?.[data?.primaryMetric || 'doses'] ?? 0),
+        s.baseline ? num(s.baseline[data?.primaryMetric || 'doses']) : 'No data',
+        delta(s.deltas?.[data?.primaryMetric || 'doses']?.delta ?? s.delta),
+        pct(s.deltas?.[data?.primaryMetric || 'doses']?.pctChange ?? s.pctChange),
         s.current ? pct(s.current.onTimeRate) : '—',
         s.baseline ? pct(s.baseline.onTimeRate) : '—',
       ]),
@@ -152,19 +169,24 @@ export function buildComparisonReportBody(data, {
 
     ${tableBlock(
       3,
-      'YEARLY VACCINATION REPORT',
-      ['Year', 'Doses', 'Unique Pets', 'Unique Owners', 'On Time', 'On-Time Rate', 'Revenue', 'Change vs Previous Year'],
+      'YEAR-OVER-YEAR SUMMARY',
+      ['Year', 'Registrations', 'Δ', 'Vaccinations', 'Δ', 'Unique Pets', 'Unique Owners', 'Consultations', 'Δ', 'QR Issued', 'Δ', 'Revenue', 'Δ', 'Lost Pets', 'New Owners'],
       (data?.yearly || []).map((y) => [
         y.year,
+        num(y.registrations),
+        delta(y.deltas?.registrations?.delta),
         num(y.doses),
+        delta(y.deltas?.doses?.delta),
         num(y.pets),
         num(y.owners),
-        num(y.onTime),
-        pct(y.onTimeRate),
+        num(y.consultations),
+        delta(y.deltas?.consultations?.delta),
+        num(y.qrIssued),
+        delta(y.deltas?.qrIssued?.delta),
         peso(y.revenue),
-        y.pctChange === null || y.pctChange === undefined
-          ? '—'
-          : `${delta(y.delta)} (${pct(y.pctChange)})`,
+        peso(y.deltas?.revenue?.delta),
+        num(y.lostPets),
+        num(y.newOwners),
       ]),
       'No yearly data available.'
     )}
@@ -174,7 +196,7 @@ export function buildComparisonReportBody(data, {
 }
 
 export function printComparisonReport(data, options) {
-  const reportTitle = options?.title || 'Vaccination Period Comparison Report';
+  const reportTitle = options?.title || 'Period Comparison Report';
   const period = options?.period || '';
   return openPrintDocument({
     title: period ? `${reportTitle} - ${period}` : reportTitle,

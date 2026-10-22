@@ -21,6 +21,19 @@ const {
     getVaccinationTrends
 } = require("../controllers/complianceController");
 
+const { getPeriodComparison } = require("../controllers/comparisonController");
+
+router.get(
+    "/period-comparison",
+    auth,
+    requireRole([
+        "Admin",
+        "Staff",
+        "Veterinarian"
+    ]),
+    getPeriodComparison
+);
+
 router.get(
     "/vaccine-compliance",
     auth,
