@@ -58,6 +58,17 @@ function endDate(start, duration) {
   return fmt(e.toISOString());
 }
 
+function sampleVaccinationExpiry(dateAdministered) {
+  if (!dateAdministered) return null;
+  const dateOnly = String(dateAdministered).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const date = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(dateAdministered);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setFullYear(date.getFullYear() + 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function nextDueMeta(nextDue) {
   if (!nextDue) return { tone: "none", label: null };
   const ms = new Date(nextDue).getTime() - Date.now();
@@ -443,6 +454,10 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
               <tbody>
                 {b.vaccinations.map((v) => {
                   const meta = statusMeta(v.status);
+                  const sampleExpiry = sampleVaccinationExpiry(v.date_administered);
+                  const recordKey = String(v.id || v.date_administered || "RECORD")
+                    .replace(/[^a-zA-Z0-9]/g, "")
+                    .slice(-8);
                   return (
                     <tr key={v.id}>
                       <td data-label="Vaccine"><strong>{v.vaccine_name}</strong></td>
@@ -456,10 +471,13 @@ export default function DigitalPetBooklet({ data, mode = "public", pets, activeT
                             medicineName: v.vaccine_name,
                           })}
                           medicineName={v.vaccine_name}
-                          batchNumber={v.batch_number}
+                          batchNumber={v.batch_number || `DEMO-${recordKey}`}
                           expiryDate={v.expiry_date ? fmt(v.expiry_date) : null}
-                          batchLabel="Not recorded"
-                          expiryLabel="Not recorded"
+                          expiryLabel={
+                            sampleExpiry
+                              ? `SAMPLE: ${fmt(sampleExpiry)}`
+                              : "SAMPLE: Not recorded"
+                          }
                           itemType="Vaccination"
                           size={168}
                         />
