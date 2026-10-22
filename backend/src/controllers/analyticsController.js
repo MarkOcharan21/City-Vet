@@ -384,15 +384,15 @@ async function getDashboardAnalytics(req, res) {
                 (SELECT COUNT(*)
                  FROM pets p
                  WHERE ${condition("COALESCE(p.registration_date, DATE(p.created_at))")}
-                   AND p.pet_code LIKE 'ANL-2025-%') AS synthetic_seed_pets,
+                   AND LEFT(p.pet_code, 9) = 'ANL-2025-') AS synthetic_seed_pets,
                 (SELECT COUNT(*)
                  FROM vaccination_records vr
                  WHERE ${condition("vr.date_administered")}
-                   AND vr.comments LIKE 'ANALYTICS_SEED_2025:%') AS synthetic_seed_vaccinations,
+                   AND LEFT(vr.comments, 20) = 'ANALYTICS_SEED_2025:') AS synthetic_seed_vaccinations,
                 (SELECT COUNT(*)
                  FROM payment_monitoring pm
                  WHERE ${condition("COALESCE(pm.consultation_date, DATE(pm.created_at))")}
-                   AND pm.payment_reference LIKE 'ANL-2025-PAY-%') AS synthetic_seed_payments
+                   AND LEFT(pm.payment_reference, 13) = 'ANL-2025-PAY-') AS synthetic_seed_payments
         `);
 
         const [recentPets] = await db.query(`

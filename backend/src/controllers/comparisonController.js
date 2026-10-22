@@ -72,13 +72,13 @@ async function countSyntheticSeedRecords(range) {
   const [[row]] = await db.query(`
     SELECT
       (SELECT COUNT(*) FROM pets p
-       WHERE p.pet_code LIKE 'ANL-2025-%'
+       WHERE LEFT(p.pet_code, 9) = 'ANL-2025-'
          AND DATE(COALESCE(p.registration_date, DATE(p.created_at))) BETWEEN ? AND ?) AS pets,
       (SELECT COUNT(*) FROM vaccination_records vr
-       WHERE vr.comments LIKE 'ANALYTICS_SEED_2025:%'
+       WHERE LEFT(vr.comments, 20) = 'ANALYTICS_SEED_2025:'
          AND DATE(vr.date_administered) BETWEEN ? AND ?) AS vaccinations,
       (SELECT COUNT(*) FROM payment_monitoring pm
-       WHERE pm.payment_reference LIKE 'ANL-2025-PAY-%'
+       WHERE LEFT(pm.payment_reference, 13) = 'ANL-2025-PAY-'
          AND DATE(COALESCE(pm.consultation_date, DATE(pm.created_at))) BETWEEN ? AND ?) AS payments
   `, [
     range.from, range.to,
