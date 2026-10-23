@@ -16,6 +16,7 @@ import ComparisonSummary from "../../components/analytics/ComparisonSummary";
 import {
   formatDateRange,
   getBaselinePeriodRange,
+  getPreviousEqualRange,
   getSelectedPeriodLabel,
   getSelectedPeriodRange,
 } from "../../utils/analyticsPeriods";
@@ -323,12 +324,19 @@ export default function AnalyticsReports() {
   const [from, setFrom] = useState(() => getSelectedPeriodRange('year', '', '').from);
   const [to, setTo] = useState(() => getSelectedPeriodRange('year', '', '').to);
   const [compare, setCompare] = useState("");
+  const [baselineFrom, setBaselineFrom] = useState("");
+  const [baselineTo, setBaselineTo] = useState("");
   const [retryCount, setRetryCount] = useState(0);
   const [printOpen, setPrintOpen] = useState(false);
 
   const periodRange = { from, to };
-  const baselineRange = getBaselinePeriodRange(periodRange, compare);
-  const periodLabel = formatDateRange(periodRange) || getSelectedPeriodLabel('custom', from, to);
+  const baselineRange =
+    compare === 'previousYear'
+      ? getBaselinePeriodRange(periodRange, 'previousYear')
+      : compare === 'previous'
+        ? getPreviousEqualRange(periodRange)
+        : null;
+  const periodLabel = dashboard?.filterLabel || getSelectedPeriodLabel('custom', from, to);
   const compareDisabled = !from || !to;
 
   const overviewComparisonRows = useMemo(() => {
@@ -365,7 +373,7 @@ export default function AnalyticsReports() {
   }, [compareDisabled, compare]);
 
   const handleCompareChange = (next) => {
-    setCompare(next);
+    setCompare(next === compare ? '' : next);
   };
 
   useEffect(() => {
@@ -379,6 +387,9 @@ export default function AnalyticsReports() {
     if (periodRange.from) url += `&from=${periodRange.from}`;
     if (periodRange.to) url += `&to=${periodRange.to}`;
     if (compare && !compareDisabled) url += `&compare=${compare}`;
+    if (compare === 'previousYear' && baselineRange?.from && baselineRange?.to) {
+      url += `&from=${periodRange.from}&to=${periodRange.to}`;
+    }
 
     api
       .get(url)

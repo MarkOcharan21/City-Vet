@@ -36,11 +36,6 @@ const GRANULARITIES = [
   { key: 'yearly', label: 'Yearly' },
 ];
 
-const COMPARE_MODES = [
-  { key: 'previous', label: 'Previous period' },
-  { key: 'previousYear', label: 'Same period last year' },
-];
-
 const METRIC_OPTIONS = [
   { key: 'registrations', label: 'Registrations', money: false, percent: false },
   { key: 'doses', label: 'Vaccinations', money: false, percent: false },
@@ -100,7 +95,7 @@ const groupedBarOptions = {
 
 export default function PeriodComparisonPanel() {
   const [granularity, setGranularity] = useState('monthly');
-  const [compare, setCompare] = useState('previous');
+  const [showComparison, setShowComparison] = useState(false);
   const [metric, setMetric] = useState('doses');
   const [chartStyle, setChartStyle] = useState('bars');
   const [showEarlierYears, setShowEarlierYears] = useState(false);
@@ -115,7 +110,7 @@ export default function PeriodComparisonPanel() {
   const windows = Math.min(60, countPeriods(range, granularity));
   const inputType = getGranularityInputType(granularity);
   const rangeInputs = getInputValuesForRange(granularity, range);
-  const autoBaselineRange = getAutoBaselineRange(range, compare, granularity);
+  const autoBaselineRange = getAutoBaselineRange(range, 'previous', granularity);
   const yearOptions = useMemo(() => getYearOptions(20), []);
   const currentDate = useMemo(() => formatISODate(new Date()), []);
   const currentMonth = currentDate.slice(0, 7);
@@ -123,13 +118,13 @@ export default function PeriodComparisonPanel() {
   const buildParams = useCallback(() => {
     return {
       granularity,
-      compare,
+      compare: 'previous',
       metric,
       from: range.from,
       to: range.to,
       windows,
     };
-  }, [granularity, compare, metric, range.from, range.to, windows]);
+  }, [granularity, metric, range.from, range.to, windows]);
 
   const loadComparison = useCallback(async () => {
     setLoading(true);
@@ -166,11 +161,6 @@ export default function PeriodComparisonPanel() {
   const changeGranularity = (next) => {
     setGranularity(next);
     setRange(getDefaultComparisonRange(next));
-    if (next === 'yearly') setCompare('previousYear');
-  };
-
-  const changeCompare = (next) => {
-    setCompare(next);
   };
 
   const totals = data?.totals || {};
@@ -286,7 +276,7 @@ export default function PeriodComparisonPanel() {
     if (granularity === 'yearly') {
       return (
         <>
-          <label htmlFor={`${prefix}-from`}>Date range</label>
+          <label htmlFor={`${prefix}-from`}>Date Range</label>
           <select
             id={`${prefix}-from`}
             value={values.from}
@@ -308,7 +298,7 @@ export default function PeriodComparisonPanel() {
     const maxValue = inputType === 'month' ? currentMonth : currentDate;
     return (
       <>
-        <label htmlFor={`${prefix}-from`}>Date range</label>
+        <label htmlFor={`${prefix}-from`}>Date Range</label>
         <input
           id={`${prefix}-from`}
           type={inputType}
@@ -357,20 +347,14 @@ export default function PeriodComparisonPanel() {
           </div>
 
 
-          <div className="analytics-segmented" role="group" aria-label="Compare against">
-            <span className="analytics-segmented__label">Compare</span>
-            {COMPARE_MODES.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                aria-pressed={compare === option.key}
-                onClick={() => changeCompare(option.key)}
-                className={`analytics-segmented__option${compare === option.key ? ' is-active' : ''}`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          <button
+            type="button"
+            aria-pressed={showComparison}
+            onClick={() => setShowComparison((show) => !show)}
+            className={`${showComparison ? 'btn-primary' : 'btn-secondary'} analytics-toolbar__action`}
+          >
+            Compare
+          </button>
 
           <div className="analytics-field">
             <label htmlFor="comparison-metric">Metric</label>
@@ -443,15 +427,17 @@ export default function PeriodComparisonPanel() {
 
       {!loading && !error && data && (
         <>
-          <ComparisonSummary
-            title="All metrics at a glance"
-            subtitle="Every comparable metric for the current and baseline windows."
-            currentLabel={currentLabel}
-            baselineLabel={baselineLabel}
-            rows={comparisonRows}
-            explanations={comparisonExplanations}
-            note={data?.current?.partial || data?.baseline?.partial ? 'One period is still in progress' : undefined}
-          />
+          {showComparison ? (
+            <ComparisonSummary
+              title="All metrics at a glance"
+              subtitle="Every comparable metric for the current and baseline windows."
+              currentLabel={currentLabel}
+              baselineLabel={baselineLabel}
+              rows={comparisonRows}
+              explanations={comparisonExplanations}
+              note={data?.current?.partial || data?.baseline?.partial ? 'One period is still in progress' : undefined}
+            />
+          ) : null}
 
           <div className="summary-row">
             <SummaryCard

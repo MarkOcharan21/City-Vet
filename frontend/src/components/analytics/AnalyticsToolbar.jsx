@@ -5,12 +5,6 @@ import {
   getBaselinePeriodRange,
 } from '../../utils/analyticsPeriods';
 
-const COMPARE_OPTIONS = [
-  { key: '', label: 'Off' },
-  { key: 'previous', label: 'Previous period' },
-  { key: 'previousYear', label: 'Same period last year' },
-];
-
 export default function AnalyticsToolbar({
   from,
   to,
@@ -51,7 +45,7 @@ export default function AnalyticsToolbar({
     <div className="analytics-toolbar">
       <div className="analytics-toolbar__row">
         <div className="analytics-field analytics-field--dates">
-          <label htmlFor="analytics-period-from">Date range</label>
+          <label htmlFor="analytics-period-from">Date Range</label>
           <input
             id="analytics-period-from"
             type="date"
@@ -71,26 +65,16 @@ export default function AnalyticsToolbar({
         </div>
 
         {onCompareChange ? (
-          <div className="analytics-segmented" role="group" aria-label="Compare with">
-            <span className="analytics-segmented__label">Compare</span>
-            {COMPARE_OPTIONS.map((option) => {
-              const disabled = compareBlocked && option.key !== '';
-              const active = (compareBlocked ? '' : compare) === option.key;
-              return (
-                <button
-                  key={option.key || 'off'}
-                  type="button"
-                  title={disabled ? 'Select a complete date range before comparing.' : undefined}
-                  aria-pressed={active}
-                  onClick={() => onCompareChange(option.key)}
-                  disabled={disabled}
-                  className={`analytics-segmented__option${active ? ' is-active' : ''}`}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
+          <button
+            type="button"
+            title={compareBlocked ? 'Select a complete date range before comparing.' : undefined}
+            aria-pressed={Boolean(compare)}
+            onClick={() => onCompareChange(compare ? '' : 'previous')}
+            disabled={compareBlocked}
+            className={`${compare ? 'btn-primary' : 'btn-secondary'} analytics-toolbar__action`}
+          >
+            Compare
+          </button>
         ) : null}
 
         <div className="analytics-toolbar__actions">
