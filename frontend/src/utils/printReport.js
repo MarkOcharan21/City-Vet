@@ -9,7 +9,7 @@ export const PRINT_THEME = {
   rowAlt: '#FAFAFA',
 };
 
-export const LOGO_URL = '/assets/logo.png.jpg';
+export const LOGO_URL = new URL('/assets/logo.png.jpg', window.location.origin).href;
 
 export function getPrintStyles() {
   return `
@@ -547,49 +547,54 @@ export function getPrintFooter(signatoryLabel = 'Authorized Signatory') {
 
 export function openPrintDocument({ title, bodyHtml }) {
   try {
+    const logo = typeof window !== 'undefined' ? `${window.location.origin}/assets/logo.png.jpg` : LOGO_URL;
     const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base href="${typeof window !== 'undefined' ? window.location.origin + '/' : '/'}">
     <title>${String(title || 'Print Report').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
     <link
       href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;600&display=swap"
       rel="stylesheet"
     />
-    <style>${getPrintStyles()}</style>
+    <style>${getPrintStyles().replace(LOGO_URL, logo)}</style>
   </head>
   <body>
-    ${getPrintWatermark()}
+    <div class="print-watermark" aria-hidden="true">
+      <img src="${logo}" alt="" onerror="this.style.display='none'" />
+    </div>
     <div class="print-content">
-      ${bodyHtml}
+      ${bodyHtml.replace(/src="\/assets\/logo\.png\.jpg"/g, `src="${logo}"`)}
     </div>
     <script>
-      window.onload = function() {
+      window.addEventListener('load', function() {
         setTimeout(function() {
-          window.focus();
-          window.print();
-        }, 300);
-      };
+          try {
+            window.focus();
+            window.print();
+          } catch (e) {}
+        }, 400);
+      });
     </script>
   </body>
 </html>`;
 
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const printWindow = window.open(url, '_blank', 'noopener,noreferrer,width=1024,height=768');
+    const printWindow = window.open(url, '_blank', 'noopener,noreferrer');
 
     if (!printWindow) {
-      window.location.assign(url);
+      window.open(url, '_blank', 'noopener,noreferrer');
       return true;
     }
 
-    // keep blob alive briefly
     setTimeout(() => {
       try {
         URL.revokeObjectURL(url);
       } catch (e) {}
-    }, 60000);
+    }, 120000);
 
     return true;
   } catch (e) {
