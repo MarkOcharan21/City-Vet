@@ -8,6 +8,13 @@ import SummaryCard from '../SummaryCard';
 import GlobalLoadingOverlay from '../GlobalLoadingOverlay';
 import { useAuth } from '../../context/AuthContext';
 import { printComplianceReport } from '../../utils/complianceReportPrint';
+import ComparisonSummary from './ComparisonSummary';
+import {
+  COMPLIANCE_SUMMARY_KEYS,
+  buildComparisonExplanation,
+  buildComparisonRows,
+} from '../../utils/comparisonExplanation';
+import { formatDateRange } from '../../utils/analyticsPeriods';
 import './chartSetup';
 
 const GRACE_OPTIONS = [0, 15, 30, 60, 90];
@@ -53,7 +60,7 @@ const REASON_ACTIONS = {
   other: 'Review the owner-provided note and follow up as appropriate.',
 };
 
-function localISODate() {
+function getLocalISODate() {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
     date.getDate()
@@ -165,9 +172,8 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
   const [showAllBarangays, setShowAllBarangays] = useState(false);
   const [editingContact, setEditingContact] = useState(null);
   const [contactDraft, setContactDraft] = useState(null);
-  const [trendView, setTrendView] = useState('both');
 
-  const load = useCallback(async () => {
+  const loadComplianceData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -210,20 +216,20 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
     }
   }, [from, to, grace, barangay, search, contactStatusFilter, vaccineFilter, sortBy, page, compare, baselineFrom, baselineTo]);
 
-  const saveContact = async () => {
+  const saveFollowUpContact = async () => {
     if (!editingContact || !contactDraft) return;
     try {
       await api.put(`/analytics/vaccine-follow-up/${editingContact.id}/contact`, contactDraft);
       toast.success('Follow-up contact saved.');
       setEditingContact(null);
       setContactDraft(null);
-      await load();
+      await loadComplianceData();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not save follow-up contact.');
     }
   };
 
-  const exportActionableCsv = () => {
+  const exportFollowUpPageCsv = () => {
     const rows = compliance?.actionable || [];
     if (!rows.length) {
       toast.error('There are no follow-up rows on this page to export.');
@@ -251,8 +257,8 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
   };
 
   useEffect(() => {
-    load();
-  }, [load, retryCount]);
+    loadComplianceData();
+  }, [loadComplianceData, retryCount]);
 
   useEffect(() => {
     setPage(1);
@@ -273,7 +279,7 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
     return names.sort((a, b) => a.localeCompare(b));
   }, [compliance]);
 
-  const handlePrint = async () => {
+  const handlePrintComplianceReport = async () => {
     setPrinting(true);
     try {
       const params = { grace };
@@ -333,13 +339,30 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
     : 0;
   const recordedReasons = (compliance?.retentionReasons || []).filter((row) => row.count > 0);
   const topReasons = recordedReasons.slice().sort((a, b) => b.count - a.count).slice(0, 3);
-  const currentPeriodLabel = compliance?.filterLabel || `${from} to ${to}`;
-  const baselinePeriodLabel = baselineCompliance?.filterLabel || `${baselineFrom} to ${baselineTo}`;
+  const currentPeriodLabel = compliance?.filterLabel || formatDateRange({ from, to });
+  const baselinePeriodLabel = baselineCompliance?.filterLabel || formatDateRange({ from: baselineFrom, to: baselineTo });
+  const comparisonRows = useMemo(
+    () => buildComparisonRows({
+      current: summary,
+      baseline: baselineCompliance?.summary || {},
+      keys: COMPLIANCE_SUMMARY_KEYS,
+    }),
+    [summary, baselineCompliance]
+  );
+  const comparisonExplanations = useMemo(
+    () => buildComparisonExplanation({
+      rows: comparisonRows,
+      currentLabel: currentPeriodLabel,
+      baselineLabel: baselinePeriodLabel,
+      primaryKey: 'evaluable',
+    }),
+    [comparisonRows, currentPeriodLabel, baselinePeriodLabel]
+  );
 
   return (
     <div className="analytics-panel">
-      <div className="analytics-filter-row" role="group" aria-label="Compliance filters">
-        <div className="analytics-inline-field">
+      <div className="analytics-controls-row" role="group" aria-label="Compliance filters">
+        <div className="analytics-field">
           <label htmlFor="compliance-grace">Grace period</label>
           <select
             id="compliance-grace"
@@ -353,7 +376,7 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
             ))}
           </select>
         </div>
-        <div className="analytics-inline-field">
+        <div className="analytics-field">
           <label htmlFor="compliance-barangay">Barangay</label>
           <select
             id="compliance-barangay"
@@ -370,7 +393,7 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
         </div>
         <button
           type="button"
-          className="btn-secondary analytics-filter-action"
+          className="btn-secondary analytics-toolbar__action"
           onClick={() => {
             setGrace(30);
             setBarangay('');
@@ -386,15 +409,15 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
         </button>
         <button
           type="button"
-          className="btn-secondary analytics-filter-action"
+          className="btn-secondary analytics-toolbar__action"
           onClick={() => setRetryCount((c) => c + 1)}
         >
           <RefreshCw size={15} /> Refresh
         </button>
         <button
           type="button"
-          className="btn-primary analytics-filter-action"
-          onClick={handlePrint}
+          className="btn-primary analytics-toolbar__action"
+          onClick={handlePrintComplianceReport}
           disabled={loading || printing || !compliance}
         >
           <Printer size={15} /> {printing ? 'Preparing…' : 'Print Report'}
@@ -444,40 +467,15 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
       {!loading && !error && compliance && (
         <>
           {compare && baselineCompliance && (
-            <section className="analytics-chart-section analytics-comparison-summary">
-              <h3 className="analytics-chart-section-title">Vaccine Compliance: {currentPeriodLabel} vs {baselinePeriodLabel}</h3>
-              <p className="analytics-chart-section-desc">
-                Every row shows the recorded value for both date windows using the same {grace}-day grace period. Rates are recalculated from each period's own episode counts.
-              </p>
-              <p className="analytics-period-label">
-                <strong>{currentPeriodLabel}</strong> compared with <strong>{baselinePeriodLabel}</strong>
-              </p>
-              <div className="report-table-container">
-                <div className="report-table-wrapper">
-                  <table className="report-table">
-                    <thead><tr><th>Measure</th><th>Current ({from} to {to})</th><th>Baseline ({baselineFrom} to {baselineTo})</th><th>Difference</th></tr></thead>
-                    <tbody>
-                      {[
-                        ['Follow-ups evaluated', 'evaluable', 'number'],
-                        ['On time', 'onTime', 'number'],
-                        ['Late', 'late', 'number'],
-                        ['Lapsed', 'lapsed', 'number'],
-                        ['No same-vaccine return', 'noReturn', 'number'],
-                        ['On-time compliance rate', 'onTimeRate', 'percent'],
-                        ['No-return rate', 'noReturnRate', 'percent'],
-                        ['Any-service return rate', 'anyServiceReturnedRate', 'percent'],
-                      ].map(([label, key, kind]) => {
-                        const currentValue = Number(summary[key]) || 0;
-                        const baselineValue = Number(baselineCompliance.summary?.[key]) || 0;
-                        const delta = currentValue - baselineValue;
-                        const format = (value) => kind === 'percent' ? fmtPct(value) : fmtNum(value);
-                        return <tr key={key}><td>{label}</td><td>{format(currentValue)}</td><td>{format(baselineValue)}</td><td>{kind === 'percent' ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)} percentage points` : `${delta > 0 ? '+' : ''}${fmtNum(delta)}`}</td></tr>;
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </section>
+            <ComparisonSummary
+              title={`Vaccine compliance: ${currentPeriodLabel} vs ${baselinePeriodLabel}`}
+              subtitle={`Both periods use the same ${grace}-day grace period. Rates are recalculated from each period's own episodes.`}
+              currentLabel={currentPeriodLabel}
+              baselineLabel={baselinePeriodLabel}
+              rows={comparisonRows}
+              explanations={comparisonExplanations}
+              note={compliance.lowSample ? 'Includes small-sample periods' : undefined}
+            />
           )}
           {subTab === 'summary' && (
           <>
@@ -489,6 +487,7 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
               sub={[
                 { label: 'Evaluated', value: fmtNum(summary.evaluable) },
                 { label: 'Pending in grace', value: fmtNum(summary.pending) },
+                ...(compare && baselineCompliance ? [{ label: 'Baseline', value: fmtNum(baselineCompliance.summary?.evaluable) }] : []),
               ]}
             />
             <SummaryCard
@@ -500,6 +499,7 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
                 { label: 'On time', value: fmtNum(summary.onTime) },
                 { label: 'Late', value: fmtNum(summary.late) },
                 { label: 'Lapsed', value: fmtNum(summary.lapsed) },
+                ...(compare && baselineCompliance ? [{ label: 'Baseline rate', value: fmtPct(baselineCompliance.summary?.onTimeRate) }] : []),
               ]}
             />
             <SummaryCard
@@ -510,6 +510,7 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
               sub={[
                 { label: 'Share of evaluated', value: fmtPct(summary.noReturnRate) },
                 { label: 'Pets affected', value: fmtNum(summary.petsNeverReturning) },
+                ...(compare && baselineCompliance ? [{ label: 'Baseline count', value: fmtNum(baselineCompliance.summary?.noReturn) }] : []),
               ]}
             />
             <SummaryCard
@@ -520,6 +521,7 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
               sub={[
                 { label: 'Follow-ups in denominator', value: fmtNum(summary.evaluable) },
                 { label: 'Distinct pets in period', value: fmtNum(summary.distinctPets) },
+                ...(compare && baselineCompliance ? [{ label: 'Baseline rate', value: fmtPct(baselineCompliance.summary?.anyServiceReturnedRate) }] : []),
               ]}
             />
           </div>
@@ -569,22 +571,8 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
               <p className="analytics-chart-section-desc">
                 The tooltip shows evaluated sample size and follow-ups still pending; periods with n &lt; 30 are small samples.
               </p>
-              {compare && baselineCompliance && (
-                <div className="analytics-chart-mode" role="group" aria-label="On-time rate comparison view">
-                  <button type="button" aria-pressed={trendView === 'both'} className={trendView === 'both' ? 'is-active' : ''} onClick={() => setTrendView('both')}>Both years</button>
-                  <button type="button" aria-pressed={trendView === 'current'} className={trendView === 'current' ? 'is-active' : ''} onClick={() => setTrendView('current')}>Current year</button>
-                  <button type="button" aria-pressed={trendView === 'baseline'} className={trendView === 'baseline' ? 'is-active' : ''} onClick={() => setTrendView('baseline')}>Baseline year</button>
-                </div>
-              )}
-              {compare && baselineCompliance && trendView !== 'current' && (
-                <div className="analytics-chart-section-desc"><strong>Baseline:</strong> {baselinePeriodLabel}</div>
-              )}
-              {compare && baselineCompliance && trendView !== 'baseline' && (
-                <div className="analytics-chart-section-desc"><strong>Current:</strong> {currentPeriodLabel}</div>
-              )}
-              {(!compare || !baselineCompliance) && (
-              <div className="chart-card-canvas">
-                {(compliance?.trend || []).length ? (
+              {compare && baselineCompliance ? (
+                <div className="chart-card-canvas analytics-year-comparison-chart">
                   <Line
                     options={{
                       ...lineOptions,
@@ -594,84 +582,86 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
                           ...lineOptions.plugins.tooltip,
                           callbacks: {
                             afterLabel: (context) => {
-                              const point = compliance?.trend?.[context.dataIndex];
-                              return point
-                                ? [`Evaluated n=${point.evaluable}`, `Pending=${point.pending}`, point.lowSample ? 'Small sample (n < 30)' : '']
-                                : '';
+                              const month = context.dataIndex + 1;
+                              const currentPoint = compliance?.trend?.find((entry) => Number(entry.key.slice(5, 7)) === month);
+                              const baselinePoint = baselineCompliance?.trend?.find((entry) => Number(entry.key.slice(5, 7)) === month);
+                              const describe = (label, point) => point
+                                ? `${label}: n=${point.evaluable}, pending=${point.pending}${point.lowSample ? ' (small sample)' : ''}`
+                                : `${label}: no data`;
+                              return [
+                                describe(`Current ${from.slice(0, 4)}`, currentPoint),
+                                describe(`Baseline ${baselineFrom.slice(0, 4)}`, baselinePoint),
+                              ];
                             },
                           },
                         },
                       },
                     }}
                     data={{
-                      labels: (compliance?.trend || []).map((t) => t.period),
+                      labels: Array.from({ length: 12 }, (_, index) => new Date(2000, index, 1).toLocaleString('en-US', { month: 'short' })),
                       datasets: [
                         {
-                          label: 'On-time rate (%)',
-                          data: (compliance?.trend || []).map((t) => t.onTimeRate),
+                          label: `Current · ${from.slice(0, 4)}`,
+                          data: Array.from({ length: 12 }, (_, month) => compliance.trend?.find((point) => Number(point.key.slice(5, 7)) === month + 1)?.onTimeRate ?? null),
                           borderColor: '#1e7a46',
                           backgroundColor: 'rgba(30, 122, 70, 0.12)',
                           fill: true,
                           tension: 0,
-                          pointRadius: (compliance?.trend || []).map((t) => (t.lowSample ? 5 : 3)),
-                          pointStyle: (compliance?.trend || []).map((t) => (t.lowSample ? 'triangle' : 'circle')),
+                          spanGaps: false,
+                        },
+                        {
+                          label: `Baseline · ${baselineFrom.slice(0, 4)}`,
+                          data: Array.from({ length: 12 }, (_, month) => baselineCompliance.trend?.find((point) => Number(point.key.slice(5, 7)) === month + 1)?.onTimeRate ?? null),
+                          borderColor: '#c6a15b',
+                          backgroundColor: 'rgba(198, 161, 91, 0.12)',
+                          fill: true,
+                          tension: 0,
+                          spanGaps: false,
                         },
                       ],
                     }}
                   />
-                ) : (
-                  <p className="chart-card-empty">No monthly trend is available yet. Choose a wider date range or wait until more follow-ups are evaluated.</p>
-                )}
-              </div>
-              )}
-              {compare && baselineCompliance && (trendView === 'both' || trendView === 'current') && (
-                <div className="chart-card-canvas analytics-year-comparison-chart">
-                  <Line
-                    options={{
-                      ...lineOptions,
-                      plugins: {
-                        ...lineOptions.plugins,
-                        tooltip: {
-                          ...lineOptions.plugins.tooltip,
-                          callbacks: {
-                            afterLabel: (context) => {
-                              const point = compliance?.trend?.find((entry) => Number(entry.key.slice(5, 7)) === context.dataIndex + 1);
-                              return point ? [`Evaluated n=${point.evaluable}`, `Pending=${point.pending}`, ...(point.lowSample ? ['Small sample (n < 30)'] : [])] : 'No evaluated follow-ups';
-                            },
-                          },
-                        },
-                      },
-                    }}
-                    data={{
-                      labels: Array.from({ length: 12 }, (_, index) => new Date(2000, index, 1).toLocaleString('en-US', { month: 'short' })),
-                      datasets: [{ label: `Current · ${from.slice(0, 4)}`, data: Array.from({ length: 12 }, (_, month) => compliance.trend?.find((point) => Number(point.key.slice(5, 7)) === month + 1)?.onTimeRate ?? null), borderColor: '#1e7a46', backgroundColor: 'rgba(30, 122, 70, 0.12)', fill: true, tension: 0, spanGaps: false }],
-                    }}
-                  />
                 </div>
-              )}
-              {compare && baselineCompliance && (trendView === 'both' || trendView === 'baseline') && (
-                <div className="chart-card-canvas analytics-year-comparison-chart">
-                  <Line
-                    options={{
-                      ...lineOptions,
-                      plugins: {
-                        ...lineOptions.plugins,
-                        tooltip: {
-                          ...lineOptions.plugins.tooltip,
-                          callbacks: {
-                            afterLabel: (context) => {
-                              const point = baselineCompliance?.trend?.find((entry) => Number(entry.key.slice(5, 7)) === context.dataIndex + 1);
-                              return point ? [`Evaluated n=${point.evaluable}`, `Pending=${point.pending}`, ...(point.lowSample ? ['Small sample (n < 30)'] : [])] : 'No evaluated follow-ups';
+              ) : (
+                <div className="chart-card-canvas">
+                  {(compliance?.trend || []).length ? (
+                    <Line
+                      options={{
+                        ...lineOptions,
+                        plugins: {
+                          ...lineOptions.plugins,
+                          tooltip: {
+                            ...lineOptions.plugins.tooltip,
+                            callbacks: {
+                              afterLabel: (context) => {
+                                const point = compliance?.trend?.[context.dataIndex];
+                                return point
+                                  ? [`Evaluated n=${point.evaluable}`, `Pending=${point.pending}`, point.lowSample ? 'Small sample (n < 30)' : '']
+                                  : '';
+                              },
                             },
                           },
                         },
-                      },
-                    }}
-                    data={{
-                      labels: Array.from({ length: 12 }, (_, index) => new Date(2000, index, 1).toLocaleString('en-US', { month: 'short' })),
-                      datasets: [{ label: `Baseline · ${baselineFrom.slice(0, 4)}`, data: Array.from({ length: 12 }, (_, month) => baselineCompliance.trend?.find((point) => Number(point.key.slice(5, 7)) === month + 1)?.onTimeRate ?? null), borderColor: '#c6a15b', backgroundColor: 'rgba(198, 161, 91, 0.12)', fill: true, tension: 0, spanGaps: false }],
-                    }}
-                  />
+                      }}
+                      data={{
+                        labels: (compliance?.trend || []).map((t) => t.period),
+                        datasets: [
+                          {
+                            label: 'On-time rate (%)',
+                            data: (compliance?.trend || []).map((t) => t.onTimeRate),
+                            borderColor: '#1e7a46',
+                            backgroundColor: 'rgba(30, 122, 70, 0.12)',
+                            fill: true,
+                            tension: 0,
+                            pointRadius: (compliance?.trend || []).map((t) => (t.lowSample ? 5 : 3)),
+                            pointStyle: (compliance?.trend || []).map((t) => (t.lowSample ? 'triangle' : 'circle')),
+                          },
+                        ],
+                      }}
+                    />
+                  ) : (
+                    <p className="chart-card-empty">No monthly trend is available yet. Choose a wider date range or wait until more follow-ups are evaluated.</p>
+                  )}
                 </div>
               )}
             </div>
@@ -726,7 +716,7 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
             <p className="analytics-chart-section-desc">
               These are associations in recorded clinic data, not proof of why an owner did or did not return. Rates use evaluated follow-ups; n &lt; 30 is a small sample.
             </p>
-            <label className="analytics-inline-field">
+            <label className="analytics-field">
               <span>Compare by factor</span>
               <select value={selectedFactor} onChange={(event) => setSelectedFactor(event.target.value)}>
                 {factorOptions.map((factor) => <option key={factor} value={factor}>{factor}</option>)}
@@ -1142,7 +1132,7 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
                   {fmtNum(compliance?.actionableTotal ?? 0)}
                 </span>
               </h3>
-              <div className="analytics-filter-row" role="group" aria-label="Follow-up list controls">
+              <div className="analytics-controls-row" role="group" aria-label="Follow-up list controls">
                 <input aria-label="Search owners to contact" value={search} placeholder="Search pet or owner" onChange={(event) => { setPage(1); setSearch(event.target.value); }} />
                 <select aria-label="Filter by vaccine" value={vaccineFilter} onChange={(event) => { setPage(1); setVaccineFilter(event.target.value); }}>
                   <option value="">All vaccines</option>
@@ -1155,7 +1145,7 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
                 <select aria-label="Sort follow-ups" value={sortBy} onChange={(event) => { setPage(1); setSortBy(event.target.value); }}>
                   <option value="daysOverdue">Most overdue first</option><option value="dueDate">Due date</option><option value="owner">Owner name</option><option value="pet">Pet name</option>
                 </select>
-                <button type="button" className="btn-secondary" onClick={exportActionableCsv}>Export this page</button>
+                <button type="button" className="btn-secondary" onClick={exportFollowUpPageCsv}>Export this page</button>
               </div>
               <div className="report-table-wrapper">
                 <table className="report-table">
@@ -1217,7 +1207,7 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
                                 contactStatus: row.contact_status,
                                 reasons: row.reasons || [],
                                 otherReason: row.other_reason || '',
-                                contactedAt: row.contacted_at || localISODate(),
+                                contactedAt: row.contacted_at || getLocalISODate(),
                               });
                             }}>Record contact</button>
                           </td>
@@ -1290,14 +1280,14 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
                       <input value={contactDraft.otherReason} onChange={(event) => setContactDraft({ ...contactDraft, otherReason: event.target.value })} />
                     </label>
                   )}
-                  <div className="analytics-filter-row">
-                    <button type="button" className="btn-primary" onClick={saveContact}>Save contact</button>
+                  <div className="analytics-controls-row">
+                    <button type="button" className="btn-primary" onClick={saveFollowUpContact}>Save contact</button>
                     <button type="button" className="btn-secondary" onClick={() => { setEditingContact(null); setContactDraft(null); }}>Cancel</button>
                   </div>
                   </aside>
                 </div>
               )}
-              <div className="analytics-filter-row" aria-label="Follow-up pagination">
+              <div className="analytics-controls-row" aria-label="Follow-up pagination">
                 <button type="button" className="btn-secondary" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Previous</button>
                 <span>Page {compliance.actionablePage || page} of {Math.max(1, compliance.actionablePages || 1)}</span>
                 <button type="button" className="btn-secondary" disabled={page >= (compliance.actionablePages || 1)} onClick={() => setPage((current) => current + 1)}>Next</button>

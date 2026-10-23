@@ -18,6 +18,14 @@ import GlobalLoadingOverlay from '../GlobalLoadingOverlay';
 import { printAdminReport } from '../../utils/adminReportPrint';
 import { printComplianceReport } from '../../utils/complianceReportPrint';
 import { printComparisonReport } from '../../utils/comparisonReportPrint';
+import ComparisonSummary from './ComparisonSummary';
+import {
+  buildComparisonExplanation,
+  buildComparisonRows,
+  buildPeriodDifferenceNote,
+  getLargestPeriodKeys,
+} from '../../utils/comparisonExplanation';
+import { formatDateRange } from '../../utils/analyticsPeriods';
 import './chartSetup';
 
 const GRACE_OPTIONS = [0, 15, 30, 60, 90];
@@ -64,19 +72,7 @@ function fmtDelta(value) {
   return `${n > 0 ? '+' : ''}${n.toLocaleString('en-US')}`;
 }
 
-/** "May 1, 2026 – Oct 31, 2026" — the full window, not just its first day. */
-function fmtRange(range) {
-  if (!range?.from || !range?.to) return null;
-  const start = new Date(`${range.from}T00:00:00`);
-  const end = new Date(`${range.to}T00:00:00`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return `${range.from} – ${range.to}`;
-  }
-  const options = { year: 'numeric', month: 'short', day: 'numeric' };
-  return `${start.toLocaleDateString('en-US', options)} – ${end.toLocaleDateString('en-US', options)}`;
-}
-
-export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFollowups, compare = '' }) {
+export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFollowups, compare = '', baselineFrom = '', baselineTo = '' }) {
   const [grace, setGrace] = useState(30);
 
   const [selected, setSelected] = useState('summary');
@@ -140,10 +136,13 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
           if (from && to) {
             params.from = from;
             params.to = to;
-            if (compare === 'previousYear') {
+            if (compare === 'custom' && baselineFrom && baselineTo) {
+              params.baselineFrom = baselineFrom;
+              params.baselineTo = baselineTo;
+            } else if (compare === 'previousYear') {
               params.baselineFrom = `${Number(from.slice(0, 4)) - 1}${from.slice(4)}`;
               params.baselineTo = `${Number(to.slice(0, 4)) - 1}${to.slice(4)}`;
-            } else if (compare === 'previous') {
+            } else {
               const start = new Date(`${from}T00:00:00`);
               const end = new Date(`${to}T00:00:00`);
               const days = Math.round((end - start) / 86400000) + 1;
@@ -161,7 +160,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
         print: (data) =>
           printComparisonReport(data, {
             title: 'Vaccination Period Comparison Report',
-            period: fmtRange(data.current) || data.current?.label || '',
+            period: formatDateRange(data.current) || data.current?.label || '',
           }),
       },
       {
@@ -171,12 +170,16 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
           'Compare the selected calendar year with the full previous calendar year using doses, pets, owners, on-time rate and revenue.',
         icon: ClipboardList,
         load: async () => {
+          const year = Number(from?.slice(0, 4)) || new Date().getFullYear();
           const res = await api.get('/analytics/vaccination-trends', {
             params: {
               granularity: 'yearly',
               compare: 'previousYear',
-              anchor: toISO(new Date(`${from || new Date().getFullYear()}-12-31T00:00:00`)),
-              ...(from ? { from: `${from}-01-01`, to: lastDayOfYear(from), baselineFrom: `${Number(from) - 1}-01-01`, baselineTo: lastDayOfYear(Number(from) - 1) } : {}),
+              anchor: toISO(new Date(`${year}-12-31T00:00:00`)),
+              from: `${year}-01-01`,
+              to: lastDayOfYear(year),
+              baselineFrom: `${year - 1}-01-01`,
+              baselineTo: lastDayOfYear(year - 1),
             },
           });
           return res.data;
@@ -184,11 +187,11 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
         print: (data) =>
           printComparisonReport(data, {
             title: 'Yearly Vaccination Report',
-            period: fmtRange(data.current) || data.current?.label || '',
+            period: formatDateRange(data.current) || data.current?.label || '',
           }),
       },
     ],
-    [from, to, grace, compare]
+    [from, to, grace, compare, baselineFrom, baselineTo]
   );
 
   const activeReport = REPORTS.find((report) => report.key === selected) || REPORTS[0];
@@ -312,7 +315,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
   };
 
   const reportPeriodLabel = preview?.filterLabel ||
-    (preview?.current ? fmtRange(preview.current) || preview.current.label :
+    (preview?.current ? formatDateRange(preview.current) || preview.current.label :
       periodLabel || (from || to ? `${from || '…'} → ${to || '…'}` : 'All Time'));
   const previewMonths = Array.from(new Set([
     ...(preview?.registrations || []).map((row) => row.month),
@@ -322,15 +325,40 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
   const visibleMonths = previewMonths.slice(-12);
   const comparisonRows = activeReport.key === 'yearly' ? preview?.yearly || [] : preview?.series || [];
   const visibleComparisonRows = comparisonRows.slice(activeReport.key === 'yearly' ? -5 : -6);
-  const selectedCurrentYear = Number(from) || new Date().getFullYear();
+  const selectedCurrentYear = Number(from?.slice(0, 4)) || new Date().getFullYear();
   const currentYearTotals = (preview?.yearly || []).find((row) => Number(row.year) === selectedCurrentYear);
   const baselineYearTotals = (preview?.yearly || []).find((row) => Number(row.year) === selectedCurrentYear - 1);
+  const reportMetricRows = useMemo(
+    () => buildComparisonRows({
+      current: preview?.totals?.current,
+      baseline: preview?.totals?.baseline,
+      deltas: preview?.totals,
+      keys: ['doses', 'pets', 'owners', 'onTimeRate', 'revenue'],
+    }),
+    [preview]
+  );
+  const reportExplanations = useMemo(
+    () => buildComparisonExplanation({
+      rows: reportMetricRows,
+      series: preview?.series || [],
+      primaryKey: preview?.primaryMetric || 'doses',
+      currentLabel: preview?.current?.label || 'the current period',
+      baselineLabel: preview?.baseline?.label || 'the baseline period',
+      currentPartial: preview?.current?.partial,
+      baselinePartial: preview?.baseline?.partial,
+    }),
+    [reportMetricRows, preview]
+  );
+  const largestPeriodKeys = useMemo(
+    () => getLargestPeriodKeys(preview?.series || [], preview?.primaryMetric || 'doses'),
+    [preview]
+  );
 
   return (
     <div className="analytics-panel">
-      <div className="analytics-filter-row" role="group" aria-label="Report period">
+      <div className="analytics-controls-row" role="group" aria-label="Report period">
         {selected === 'compliance' && (
-          <div className="analytics-inline-field">
+          <div className="analytics-field">
             <label htmlFor="report-grace">Grace period</label>
             <select
               id="report-grace"
@@ -347,7 +375,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
         )}
         <button
           type="button"
-          className="btn-secondary analytics-filter-action"
+          className="btn-secondary analytics-toolbar__action"
           onClick={() => setRetryCount((c) => c + 1)}
         >
           <RefreshCw size={15} /> Refresh
@@ -557,6 +585,15 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
 
           {(activeReport.key === 'comparison' || activeReport.key === 'yearly') && (
             <>
+              <ComparisonSummary
+                title={activeReport.key === 'yearly' ? 'Year vs previous year' : 'Current vs baseline at a glance'}
+                subtitle="All five measures used by this report, side by side."
+                currentLabel={preview.current?.label || 'Current period'}
+                baselineLabel={preview.baseline?.label || 'Baseline period'}
+                rows={reportMetricRows}
+                explanations={reportExplanations}
+                note={preview.current?.partial ? 'Current period is still in progress' : undefined}
+              />
               <div className="summary-row">
                 <SummaryCard
                   label="Doses"
@@ -617,7 +654,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
                         <th>On-Time Rate</th>
                         <th>Revenue</th>
                         {activeReport.key === 'yearly' && <th>Compared window</th>}
-                        {activeReport.key !== 'yearly' && <><th>Baseline doses</th><th>Baseline pets</th><th>Baseline owners</th><th>Baseline on-time rate</th><th>Baseline revenue</th></>}
+                        {activeReport.key !== 'yearly' && <><th>Baseline doses</th><th>Baseline pets</th><th>Baseline owners</th><th>Baseline on-time rate</th><th>Baseline revenue</th><th>What changed</th></>}
                       </tr>
                     </thead>
                     <tbody>
@@ -652,6 +689,14 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
                               <td>{row.baseline ? fmtNum(row.baseline.owners) : '—'}</td>
                               <td>{row.baseline ? fmtPct(row.baseline.onTimeRate) : '—'}</td>
                               <td>{row.baseline ? fmtPeso(row.baseline.revenue) : '—'}</td>
+                              <td className="analytics-table-note">
+                                {buildPeriodDifferenceNote({
+                                  row,
+                                  metricKey: preview.primaryMetric || 'doses',
+                                  largestIncreaseKey: largestPeriodKeys.increaseKey,
+                                  largestDecreaseKey: largestPeriodKeys.decreaseKey,
+                                })}
+                              </td>
                             </tr>
                           ))}
                       {activeReport.key === 'yearly' && !(preview.yearly || []).length ? (
@@ -663,7 +708,7 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
                       ) : null}
                       {activeReport.key !== 'yearly' && !(preview.series || []).length ? (
                         <tr>
-                          <td className="report-table-empty" colSpan={11}>
+                          <td className="report-table-empty" colSpan={12}>
                             No period comparison data is available. Choose a wider report period or check that vaccination records exist for both periods.
                           </td>
                         </tr>

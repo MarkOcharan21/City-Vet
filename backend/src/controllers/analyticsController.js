@@ -500,22 +500,26 @@ async function getDashboardAnalytics(req, res) {
         // so the comparison is computed against an equivalent baseline.
         let comparison = null;
         const compare = String(req.query.compare || '').trim();
+        const baselineFrom = String(req.query.baselineFrom || '').trim();
+        const baselineTo = String(req.query.baselineTo || '').trim();
+        const hasCustomBaseline = compare === 'custom' && Boolean(baselineFrom && baselineTo);
         const canCompare = hasRange
             ? Boolean(from && to)
             : filter !== 'all';
-        if (canCompare && (compare === 'previous' || compare === 'previousYear')) {
+        if (canCompare && (compare === 'previous' || compare === 'previousYear' || hasCustomBaseline)) {
             try {
                 const comp = await buildPeriodComparison({
                     granularity: hasRange
                         ? 'monthly'
                         : ({ today: 'daily', week: 'weekly', month: 'monthly', year: 'yearly' }[filter] || 'monthly'),
-                    compare,
+                    compare: hasCustomBaseline ? 'previous' : compare,
                     anchor: toISODate(hasRange ? new Date(`${to || from}T00:00:00`) : new Date()),
                     windows: hasRange ? 12 : 1,
                     primaryMetric: 'registrations',
                     includeEpisodes: false,
                     includeSynthetic,
                     ...(hasRange ? { current: { from, to } } : {}),
+                    ...(hasCustomBaseline ? { baseline: { from: baselineFrom, to: baselineTo } } : {}),
                     toDate: !hasRange,
                 });
 
@@ -529,6 +533,7 @@ async function getDashboardAnalytics(req, res) {
                     totals: comp.totals,
                     matrix: comp.matrix,
                     yearly: comp.yearly,
+                    series: comp.series,
                 };
             } catch (err) {
                 console.error('Failed to build dashboard comparison:', err.message);

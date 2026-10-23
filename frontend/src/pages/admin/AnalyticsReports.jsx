@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api";
 
@@ -9,13 +9,21 @@ import SummaryCard from "../../components/SummaryCard";
 import GlobalLoadingOverlay from "../../components/GlobalLoadingOverlay";
 import AdminReportModal from "../../components/admin/AdminReportModal";
 import CompliancePanel from "../../components/analytics/CompliancePanel";
-import ComparisonPanel from "../../components/analytics/ComparisonPanel";
+import PeriodComparisonPanel from "../../components/analytics/PeriodComparisonPanel";
 import ReportsPanel from "../../components/analytics/ReportsPanel";
-import AnalyticsPeriodFilter, {
-  getAnalyticsComparisonRange,
-  getAnalyticsPeriodLabel,
-  getAnalyticsPeriodRange,
-} from "../../components/analytics/AnalyticsPeriodFilter";
+import AnalyticsToolbar from "../../components/analytics/AnalyticsToolbar";
+import ComparisonSummary from "../../components/analytics/ComparisonSummary";
+import {
+  getBaselinePeriodRange,
+  getPreviousEqualRange,
+  getSelectedPeriodLabel,
+  getSelectedPeriodRange,
+} from "../../utils/analyticsPeriods";
+import {
+  COMPARISON_SUMMARY_KEYS,
+  buildComparisonExplanation,
+  buildComparisonRows,
+} from "../../utils/comparisonExplanation";
 import "../../components/analytics/chartSetup";
 
 const TABS = [
@@ -240,7 +248,7 @@ function fmtDelta(value) {
   return `${n > 0 ? '+' : ''}${n.toLocaleString('en-US')}`;
 }
 
-function buildGroupedYearDatasets(rows) {
+function buildYearComparisonChartData(rows) {
   if (!Array.isArray(rows) || rows.length === 0) return { labels: MONTH_LABELS, datasets: [] };
   const years = Array.from(new Set(rows.map((r) => r.year).filter((y) => y))).sort().slice(-2);
   const palette = ["#c8102e", "#c6a15b", "#1e7a46", "#b8860b", "#7a0c1e"];
@@ -256,17 +264,17 @@ function buildGroupedYearDatasets(rows) {
   return { labels: MONTH_LABELS, datasets };
 }
 
-function distinctYears(rows) {
+function countDistinctYears(rows) {
   if (!Array.isArray(rows)) return 0;
   const years = new Set(rows.map((r) => r.year).filter((y) => y !== null && y !== undefined));
   return years.size;
 }
 
-function hasChartData(items, valueKey = "total") {
+function hasPositiveValues(items, valueKey = "total") {
   return Array.isArray(items) && items.some((item) => Number(item[valueKey]) > 0);
 }
 
-function getComparisonLabel(comparison, key) {
+function getBaselineDeltaLabel(comparison, key) {
   const current = Number(comparison?.totals?.current?.[key]) || 0;
   const baseline = Number(comparison?.totals?.baseline?.[key]) || 0;
   const delta = current - baseline;
@@ -278,7 +286,7 @@ function getComparisonLabel(comparison, key) {
   return `${fmtDelta(delta)} (${percent > 0 ? '+' : ''}${percent.toFixed(1)}%) vs baseline`;
 }
 
-function buildOverviewFindings(dashboard) {
+function buildOverviewInsights(dashboard) {
   const findings = [];
   const verified = Number(dashboard.summary?.totalPets) || 0;
   const vaccinated = Number(dashboard.summary?.vaccinatedPets) || 0;
@@ -316,17 +324,67 @@ export default function AnalyticsReports() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [compare, setCompare] = useState("");
+  const [baselineFrom, setBaselineFrom] = useState("");
+  const [baselineTo, setBaselineTo] = useState("");
   const [retryCount, setRetryCount] = useState(0);
   const [printOpen, setPrintOpen] = useState(false);
 
-  const periodRange = getAnalyticsPeriodRange(period, from, to);
-  const complianceBaselineRange = getAnalyticsComparisonRange(periodRange, compare, period, from);
-  const periodLabel = dashboard?.filterLabel || getAnalyticsPeriodLabel(period, from, to);
+  const periodRange = getSelectedPeriodRange(period, from, to);
+  const baselineRange = getBaselinePeriodRange(periodRange, compare, period, from, {
+    from: baselineFrom,
+    to: baselineTo,
+  });
+  const periodLabel = dashboard?.filterLabel || getSelectedPeriodLabel(period, from, to);
   const compareDisabled = period === 'all' || (period === 'custom' && (!from || !to)) || (period === 'selectedYear' && !from);
+
+  const overviewComparisonRows = useMemo(() => {
+    if (!compare || !dashboard?.comparison) return [];
+    return buildComparisonRows({
+      current: dashboard.comparison.totals?.current,
+      baseline: dashboard.comparison.totals?.baseline,
+      deltas: dashboard.comparison.totals,
+      keys: COMPARISON_SUMMARY_KEYS,
+    });
+  }, [compare, dashboard]);
+
+  const overviewExplanations = useMemo(() => {
+    if (!compare || !dashboard?.comparison) return [];
+    return buildComparisonExplanation({
+      rows: overviewComparisonRows,
+      series: dashboard.comparison.series || [],
+      primaryKey: 'doses',
+      currentLabel: dashboard.comparison.current?.label || 'the current period',
+      baselineLabel: dashboard.comparison.baseline?.label || 'the baseline period',
+      currentPartial: dashboard.comparison.current?.partial,
+      baselinePartial: dashboard.comparison.baseline?.partial,
+    });
+  }, [compare, dashboard, overviewComparisonRows]);
 
   useEffect(() => {
     if (compareDisabled && compare) setCompare('');
   }, [compareDisabled, compare]);
+
+  const handlePeriodChange = (next) => {
+    setPeriod(next);
+    if (next !== 'custom') {
+      setFrom('');
+      setTo('');
+    }
+    if (next === 'selectedYear') setFrom(String(new Date().getFullYear()));
+    if (next === 'custom') {
+      setBaselineFrom('');
+      setBaselineTo('');
+    }
+  };
+
+  const handleCompareChange = (next) => {
+    setCompare(next);
+    if (next === 'custom' && (!baselineFrom || !baselineTo)) {
+      const auto = getPreviousEqualRange(periodRange);
+      setBaselineFrom(auto?.from || '');
+      setBaselineTo(auto?.to || '');
+    }
+  };
 
   useEffect(() => {
     if (tab !== "overview") return;
@@ -340,6 +398,9 @@ export default function AnalyticsReports() {
     if (periodRange.from) url += `&from=${periodRange.from}`;
     if (periodRange.to) url += `&to=${periodRange.to}`;
     if (compare && !compareDisabled) url += `&compare=${compare}`;
+    if (compare === 'custom' && baselineFrom && baselineTo) {
+      url += `&baselineFrom=${baselineFrom}&baselineTo=${baselineTo}`;
+    }
 
     api
       .get(url)
@@ -370,7 +431,7 @@ export default function AnalyticsReports() {
       .finally(() => {
         setLoading(false);
       });
-  }, [tab, period, periodRange.from, periodRange.to, compare, compareDisabled, retryCount]);
+  }, [tab, period, periodRange.from, periodRange.to, compare, compareDisabled, baselineFrom, baselineTo, retryCount]);
 
   return (
     <div className="page analytics-page">
@@ -400,33 +461,28 @@ export default function AnalyticsReports() {
         ))}
       </div>
       {tab !== 'comparison' && (
-        <AnalyticsPeriodFilter
+        <AnalyticsToolbar
           period={period}
-          onPeriodChange={(next) => {
-            setPeriod(next);
-            if (next !== 'custom') {
-              setFrom('');
-              setTo('');
-            }
-            if (next === 'selectedYear') setFrom(String(new Date().getFullYear()));
-          }}
+          onPeriodChange={handlePeriodChange}
           from={from}
           to={to}
           onFromChange={setFrom}
           onToChange={setTo}
           compare={compare}
-          onCompareChange={setCompare}
+          onCompareChange={handleCompareChange}
+          baselineFrom={baselineFrom}
+          baselineTo={baselineTo}
+          onBaselineFromChange={setBaselineFrom}
+          onBaselineToChange={setBaselineTo}
           compareDisabled={compareDisabled}
           onPrint={tab === 'overview' ? () => setPrintOpen(true) : undefined}
           onReports={tab === 'overview' ? () => setTab('reports') : undefined}
+          printLabel="Print overview"
+          reportsLabel="More reports →"
         />
       )}
       {tab === "overview" && (
         <>
-          <p className="analytics-period-label">
-            Showing: <strong>{periodLabel}</strong>
-          </p>
-
           {loading && <GlobalLoadingOverlay visible={true} message="Loading analytics data..." />}
 
           {!loading && error && (
@@ -445,30 +501,42 @@ export default function AnalyticsReports() {
                   label="Verified Pet Registrations"
                   value={dashboard.summary?.totalPets ?? '-'}
                   hint="Verified pet records grouped by registration date (encoded date is used when registration date is missing)."
-                  sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getComparisonLabel(dashboard.comparison, 'registrations') }] : undefined}
+                  sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getBaselineDeltaLabel(dashboard.comparison, 'registrations') }] : undefined}
                 />
                 <SummaryCard
                   label="Vaccinated Pets"
                   value={dashboard?.summary?.vaccinatedPets ?? '-'}
                   color="#1e7a46"
                   hint="Distinct pets with at least one vaccine record in the selected service-date range."
-                  sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getComparisonLabel(dashboard.comparison, 'pets') }] : undefined}
+                  sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getBaselineDeltaLabel(dashboard.comparison, 'pets') }] : undefined}
                 />
                 <SummaryCard
                   label="Generated QR"
                   value={dashboard?.summary?.totalQr ?? '-'}
                   color="#c6a15b"
                   hint="QR codes generated for verified pets in the selected period."
-                  sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getComparisonLabel(dashboard.comparison, 'qrIssued') }] : undefined}
+                  sub={compare && dashboard.comparison ? [{ label: 'vs baseline', value: getBaselineDeltaLabel(dashboard.comparison, 'qrIssued') }] : undefined}
                 />
               </div>
+
+              {compare && dashboard.comparison ? (
+                <ComparisonSummary
+                  title="Current vs baseline at a glance"
+                  subtitle="Every headline metric for the selected period and its baseline."
+                  currentLabel={dashboard.comparison.current?.label || 'Current period'}
+                  baselineLabel={dashboard.comparison.baseline?.label || 'Baseline period'}
+                  rows={overviewComparisonRows}
+                  explanations={overviewExplanations}
+                  note={dashboard.comparison.current?.partial ? 'Current period is still in progress' : undefined}
+                />
+              ) : null}
 
               <section className="analytics-overview-findings">
                 <div>
                   <h2>Key Findings</h2>
                   <ul>
-                    {buildOverviewFindings(dashboard).map((finding) => <li key={finding}>{finding}</li>)}
-                    {!buildOverviewFindings(dashboard).length && <li>Not enough verified records in this period to identify a meaningful trend.</li>}
+                    {buildOverviewInsights(dashboard).map((finding) => <li key={finding}>{finding}</li>)}
+                    {!buildOverviewInsights(dashboard).length && <li>Not enough verified records in this period to identify a meaningful trend.</li>}
                   </ul>
                   {Number(dashboard.vaccinationStatus?.find((row) => row.status === 'Overdue')?.total || 0) > 0 && (
                     <button type="button" className="analytics-inline-link analytics-overdue-action" onClick={() => {
@@ -491,42 +559,6 @@ export default function AnalyticsReports() {
                 </div>
               </section>
 
-              {compare && dashboard?.comparison && (
-                <details className="analytics-details">
-                  <summary>
-                    Comparison details — {dashboard.comparison.current?.label} vs {dashboard.comparison.baseline?.label}
-                    {dashboard.comparison.current?.partial ? ' (partial current period)' : ''}
-                  </summary>
-                  <p className="analytics-chart-section-desc">Changes compare the selected period with its baseline. Percentage change is unavailable for baselines below five; “New” means the current period has a value while the baseline is zero.</p>
-                  <div className="report-table-wrapper analytics-table-scroll">
-                    <table className="report-table">
-                      <thead><tr><th>Metric</th><th>Current</th><th>Baseline</th><th>Change</th><th>% Change</th></tr></thead>
-                      <tbody>
-                        {[
-                          ['registrations', 'Verified pet registrations'],
-                          ['doses', 'Vaccine doses'],
-                          ['revenue', 'Paid revenue'],
-                          ['consultations', 'Consultations'],
-                          ['qrIssued', 'QR codes issued'],
-                          ['newOwners', 'New owners'],
-                        ].map(([key, label]) => {
-                          const currentValue = dashboard.comparison.totals?.current?.[key] ?? 0;
-                          const baselineValue = dashboard.comparison.totals?.baseline?.[key] ?? 0;
-                          const change = dashboard.comparison.totals?.[key] || {};
-                          const format = (value) => key === 'revenue'
-                            ? `₱${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
-                            : fmtNum(value);
-                          const percent = change.pctChange == null
-                            ? (Number(baselineValue) === 0 && Number(currentValue) > 0 ? 'New' : 'N/A (baseline <5)')
-                            : `${Number(change.pctChange) > 0 ? '+' : ''}${Number(change.pctChange).toFixed(1)}%`;
-                          return <tr key={key}><td>{label}</td><td>{format(currentValue)}</td><td>{format(baselineValue)}</td><td>{fmtDelta(change.delta)}</td><td>{percent}</td></tr>;
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </details>
-              )}
-
               <h2>Analytics Graphs</h2>
               <p className="page-intro">
                 Each chart answers a different question: what pets are registered, where they live, how activity changes over time, and which pets need vaccine attention. Use the descriptions below to interpret the counts and decide where to follow up.
@@ -534,7 +566,7 @@ export default function AnalyticsReports() {
 
               <section className="analytics-chart-section">
                 <div className="chart-grid">
-                  <ChartCard title="Verified Pets by Species" description="Counts verified pets by species for this period. Use the mix to understand which animals are served and plan species-specific supplies or outreach." isEmpty={!hasChartData(dashboard?.species)}>
+                  <ChartCard title="Verified Pets by Species" description="Counts verified pets by species for this period. Use the mix to understand which animals are served and plan species-specific supplies or outreach." isEmpty={!hasPositiveValues(dashboard?.species)}>
                     <Bar
                       options={barChartOptions}
                       data={{
@@ -551,7 +583,7 @@ export default function AnalyticsReports() {
                     />
                   </ChartCard>
 
-                  <ChartCard title="Pet Profile by Sex" description="Shows verified pets in each recorded sex category. “Unknown” means the record has no usable sex value." isEmpty={!hasChartData(dashboard?.petsBySex)}>
+                  <ChartCard title="Pet Profile by Sex" description="Shows verified pets in each recorded sex category. “Unknown” means the record has no usable sex value." isEmpty={!hasPositiveValues(dashboard?.petsBySex)}>
                     <Doughnut
                       options={circularChartOptions}
                       data={{
@@ -566,16 +598,16 @@ export default function AnalyticsReports() {
                   </ChartCard>
 
                   <ChartCard
-                    title={distinctYears(dashboard?.registrations) >= 2 ? "Monthly Pet Registrations (Year-over-Year)" : "Monthly Pet Registrations"}
+                    title={countDistinctYears(dashboard?.registrations) >= 2 ? "Monthly Pet Registrations (Year-over-Year)" : "Monthly Pet Registrations"}
                     description="Compares verified registrations by month. When two years are available, each color represents a year; use the trend to spot seasonal changes."
                     tall
-                    isEmpty={!hasChartData(dashboard?.registrations)}
+                    isEmpty={!hasPositiveValues(dashboard?.registrations)}
                   >
                     <Bar
-                      options={distinctYears(dashboard?.registrations) >= 2 ? groupedYearBarChartOptions : barChartOptions}
+                      options={countDistinctYears(dashboard?.registrations) >= 2 ? groupedYearBarChartOptions : barChartOptions}
                       data={
-                        distinctYears(dashboard?.registrations) >= 2
-                          ? buildGroupedYearDatasets(dashboard?.registrations)
+                        countDistinctYears(dashboard?.registrations) >= 2
+                          ? buildYearComparisonChartData(dashboard?.registrations)
                           : {
                               labels: dashboard?.registrations.map((x) => x.month) || [],
                               datasets: [
@@ -590,7 +622,7 @@ export default function AnalyticsReports() {
                       }
                     />
                   </ChartCard>
-                  <ChartCard title="Top 10 Barangays" description="Ranks barangays by verified pets in this period. Higher counts show where registered pets are concentrated and can help guide outreach planning." tall isEmpty={!hasChartData(dashboard?.barangays)}>
+                  <ChartCard title="Top 10 Barangays" description="Ranks barangays by verified pets in this period. Higher counts show where registered pets are concentrated and can help guide outreach planning." tall isEmpty={!hasPositiveValues(dashboard?.barangays)}>
                     <Bar
                       options={horizontalBarChartOptions}
                       data={{
@@ -618,15 +650,15 @@ export default function AnalyticsReports() {
 
                 <div className="chart-grid">
                   <ChartCard
-                    title={distinctYears(dashboard?.vaccinations) >= 2 ? "Vaccinations Per Month (Year-over-Year)" : "Vaccinations Per Month"}
+                    title={countDistinctYears(dashboard?.vaccinations) >= 2 ? "Vaccinations Per Month (Year-over-Year)" : "Vaccinations Per Month"}
                     description="Counts vaccine doses by service month, not unique pets. Compare months to understand changes in clinic vaccination workload."
-                    isEmpty={!hasChartData(dashboard?.vaccinations)}
+                    isEmpty={!hasPositiveValues(dashboard?.vaccinations)}
                   >
                     <Bar
-                      options={distinctYears(dashboard?.vaccinations) >= 2 ? groupedYearBarChartOptions : barChartOptions}
+                      options={countDistinctYears(dashboard?.vaccinations) >= 2 ? groupedYearBarChartOptions : barChartOptions}
                       data={
-                        distinctYears(dashboard?.vaccinations) >= 2
-                          ? buildGroupedYearDatasets(dashboard?.vaccinations)
+                        countDistinctYears(dashboard?.vaccinations) >= 2
+                          ? buildYearComparisonChartData(dashboard?.vaccinations)
                           : {
                               labels: dashboard?.vaccinations.map((x) => x.month) || [],
                               datasets: [
@@ -645,7 +677,7 @@ export default function AnalyticsReports() {
                   <ChartCard
                     title="Latest Vaccine Due Status (verified pets)"
                     description="Groups verified pets by their latest recorded vaccine status. Overdue and No Record counts can guide follow-up; use Vaccine Compliance to review due episodes."
-                    isEmpty={!hasChartData(dashboard?.vaccinationStatus)}
+                    isEmpty={!hasPositiveValues(dashboard?.vaccinationStatus)}
                   >
                     {(dashboard.vaccinationStatus || []).filter((row) => Number(row.total) > 0).length >= 3 ? (
                       <Doughnut
@@ -692,14 +724,16 @@ export default function AnalyticsReports() {
         </>
       )}
 
-      {tab === "compliance" && <CompliancePanel from={periodRange.from} to={periodRange.to} initialSubTab={complianceSubTab} compare={compare} baselineFrom={complianceBaselineRange?.from} baselineTo={complianceBaselineRange?.to} />}
-      {tab === "comparison" && <ComparisonPanel />}
+      {tab === "compliance" && <CompliancePanel from={periodRange.from} to={periodRange.to} initialSubTab={complianceSubTab} compare={compare} baselineFrom={baselineRange?.from} baselineTo={baselineRange?.to} />}
+      {tab === "comparison" && <PeriodComparisonPanel />}
       {tab === "reports" && (
         <ReportsPanel
           from={periodRange.from}
           to={periodRange.to}
           periodLabel={periodLabel}
           compare={compare}
+          baselineFrom={baselineRange?.from}
+          baselineTo={baselineRange?.to}
           onOpenFollowups={() => {
             setComplianceSubTab("followups");
             setTab("compliance");
