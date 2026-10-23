@@ -547,55 +547,55 @@ export function getPrintFooter(signatoryLabel = 'Authorized Signatory') {
 
 export function openPrintDocument({ title, bodyHtml }) {
   try {
-    const logo = typeof window !== 'undefined' ? `${window.location.origin}/assets/logo.png.jpg` : LOGO_URL;
+    if (typeof window === 'undefined') return false;
+    const logo = `${window.location.origin}/assets/logo.png.jpg`;
     const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <base href="${typeof window !== 'undefined' ? window.location.origin + '/' : '/'}">
     <title>${String(title || 'Print Report').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;600&display=swap"
-      rel="stylesheet"
-    />
-    <style>${getPrintStyles().replace(LOGO_URL, logo)}</style>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+    <style>${getPrintStyles().replace(/\/assets\/logo\.png\.jpg/g, logo)}</style>
   </head>
   <body>
     <div class="print-watermark" aria-hidden="true">
-      <img src="${logo}" alt="" onerror="this.style.display='none'" />
+      <img src="${logo}" alt="" />
     </div>
     <div class="print-content">
-      ${bodyHtml.replace(/src="\/assets\/logo\.png\.jpg"/g, `src="${logo}"`)}
+      ${bodyHtml.replace(/\/assets\/logo\.png\.jpg/g, logo)}
     </div>
     <script>
-      window.addEventListener('load', function() {
-        setTimeout(function() {
-          try {
-            window.focus();
-            window.print();
-          } catch (e) {}
-        }, 400);
-      });
+      function printNow() {
+        try {
+          window.focus();
+          window.print();
+        } catch (e) {}
+      }
+      if (document.readyState === 'complete') setTimeout(printNow, 250);
+      else window.addEventListener('load', function(){ setTimeout(printNow, 300); });
     </script>
   </body>
 </html>`;
 
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const printWindow = window.open(url, '_blank', 'noopener,noreferrer');
+    const printWindow = window.open(url, '_blank');
 
     if (!printWindow) {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 30000);
       return true;
     }
 
-    setTimeout(() => {
-      try {
-        URL.revokeObjectURL(url);
-      } catch (e) {}
-    }, 120000);
-
+    printWindow.opener = null;
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 60000);
     return true;
   } catch (e) {
     return false;

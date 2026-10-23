@@ -104,17 +104,21 @@ export default function AdminReportModal({ open, onClose }) {
       if (from) params.from = from;
       if (to) params.to = to;
       const res = await api.get('/analytics/dashboard', { params });
-      if (!res.data.success) {
-        toast.error(res.data.message || 'Could not generate the report.');
+      if (!res.data?.success) {
+        toast.error(res.data?.message || 'Could not generate the report.');
+        setLoading(false);
         return;
       }
-      printAdminReport(res.data, {
+      const opened = printAdminReport(res.data, {
         title: 'Analytics Report',
-        period: res.data.filterLabel || 'All Time',
+        period: res.data.filterLabel || (from && to ? `${from} to ${to}` : 'All Time'),
       });
+      if (!opened) {
+        toast.error('Popup blocked. Allow popups for this site to print the report.');
+      }
+      setLoading(false);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not generate the report.');
-    } finally {
       setLoading(false);
     }
   };
