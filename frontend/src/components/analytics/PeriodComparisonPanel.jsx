@@ -389,30 +389,19 @@ export default function PeriodComparisonPanel() {
             <span>Viewing</span>
             <strong>{currentLabel}</strong>
           </span>
-          <span className="analytics-range-chip analytics-range-chip--baseline">
-            <span>Compared with</span>
-            <strong>{baselineLabel}</strong>
-          </span>
+          {showComparison ? (
+            <span className="analytics-range-chip analytics-range-chip--baseline">
+              <span>Compared with</span>
+              <strong>{baselineLabel}</strong>
+            </span>
+          ) : null}
           <span className="analytics-range-chip analytics-range-chip--quiet">
             {windows} {granularity === 'daily' ? 'day' : granularity === 'weekly' ? 'week' : granularity === 'monthly' ? 'month' : 'year'}{windows === 1 ? '' : 's'} per side
           </span>
         </div>
       </div>
 
-      <div className="analytics-metric-chips" role="group" aria-label="Quick comparison metrics">
-        {METRIC_OPTIONS.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            className={`analytics-metric-chip${metric === option.key ? ' is-active' : ''}`}
-            aria-pressed={metric === option.key}
-            onClick={() => setMetric(option.key)}
-          >
-            {option.label}
-            <small>{chipDelta(option)}</small>
-          </button>
-        ))}
-      </div>
+
 
       {loading && <GlobalLoadingOverlay visible={true} message="Building comparison..." />}
 
@@ -428,15 +417,22 @@ export default function PeriodComparisonPanel() {
       {!loading && !error && data && (
         <>
           {showComparison ? (
-            <ComparisonSummary
-              title="All metrics at a glance"
-              subtitle="Every comparable metric for the current and baseline windows."
-              currentLabel={currentLabel}
-              baselineLabel={baselineLabel}
-              rows={comparisonRows}
-              explanations={comparisonExplanations}
-              note={data?.current?.partial || data?.baseline?.partial ? 'One period is still in progress' : undefined}
-            />
+          <ComparisonSummary
+            title="Comparison summary"
+            subtitle={`Showing ${activeMetric.label} and key metrics for the current and baseline windows.`}
+            currentLabel={currentLabel}
+            baselineLabel={baselineLabel}
+            rows={comparisonRows.filter((row) => row.key === chartData.metric)}
+            explanations={comparisonExplanations.filter((item) => {
+              if (chartData.metric === 'registrations') return /registration/i.test(item);
+              if (chartData.metric === 'doses') return /dose|vaccin/i.test(item);
+              if (chartData.metric === 'pets') return /pet/i.test(item);
+              if (chartData.metric === 'owners') return /owner/i.test(item);
+              if (chartData.metric === 'revenue') return /revenue|peso|\u20b1/i.test(item);
+              return true;
+            })}
+            note={data?.current?.partial || data?.baseline?.partial ? 'One period is still in progress' : undefined}
+          />
           ) : null}
 
           <div className="summary-row">

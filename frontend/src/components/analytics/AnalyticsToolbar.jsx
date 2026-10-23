@@ -92,7 +92,7 @@ export default function AnalyticsToolbar({
           <span>Viewing</span>
           <strong>{currentLabel}</strong>
         </span>
-        {compare && baselineLabel ? (
+        {compare && baselineLabel && compareDisabled === false ? (
           <span className="analytics-range-chip analytics-range-chip--baseline">
             <span>Compared with</span>
             <strong>{baselineLabel}</strong>
