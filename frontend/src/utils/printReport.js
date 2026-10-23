@@ -547,16 +547,16 @@ export function getPrintFooter(signatoryLabel = 'Authorized Signatory') {
 
 export function openPrintDocument({ title, bodyHtml }) {
   try {
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer');
-    if (!printWindow) {
-      const blob = new Blob(
-        [
-          `<!DOCTYPE html>
-<html>
+    const html = `<!DOCTYPE html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>${title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${String(title || 'Print Report').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
     <style>${getPrintStyles()}</style>
   </head>
   <body>
@@ -564,47 +564,33 @@ export function openPrintDocument({ title, bodyHtml }) {
     <div class="print-content">
       ${bodyHtml}
     </div>
+    <script>
+      window.onload = function() {
+        setTimeout(function() {
+          window.focus();
+          window.print();
+        }, 300);
+      };
+    </script>
   </body>
-</html>`,
-        ],
-        { type: 'text/html' }
-      );
-      const url = URL.createObjectURL(blob);
-      window.location.href = url;
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const printWindow = window.open(url, '_blank', 'noopener,noreferrer,width=1024,height=768');
+
+    if (!printWindow) {
+      window.location.assign(url);
       return true;
     }
 
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>${title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
-          <link
-            href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;600&display=swap"
-            rel="stylesheet"
-          />
-          <style>${getPrintStyles()}</style>
-        </head>
-        <body>
-          ${getPrintWatermark()}
-          <div class="print-content">
-            ${bodyHtml}
-          </div>
-        </body>
-      </html>
-    `);
-
-    printWindow.document.close();
-    printWindow.focus();
+    // keep blob alive briefly
     setTimeout(() => {
       try {
-        printWindow.print();
-      } catch (e) {
-        // ignore
-      }
-    }, 250);
+        URL.revokeObjectURL(url);
+      } catch (e) {}
+    }, 60000);
+
     return true;
   } catch (e) {
     return false;
