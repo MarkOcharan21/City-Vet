@@ -546,32 +546,67 @@ export function getPrintFooter(signatoryLabel = 'Authorized Signatory') {
 }
 
 export function openPrintDocument({ title, bodyHtml }) {
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) return false;
+  try {
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+    if (!printWindow) {
+      const blob = new Blob(
+        [
+          `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+    <style>${getPrintStyles()}</style>
+  </head>
+  <body>
+    ${getPrintWatermark()}
+    <div class="print-content">
+      ${bodyHtml}
+    </div>
+  </body>
+</html>`,
+        ],
+        { type: 'text/html' }
+      );
+      const url = URL.createObjectURL(blob);
+      window.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      return true;
+    }
 
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>${title}</title>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;600&display=swap"
-          rel="stylesheet"
-        />
-        <style>${getPrintStyles()}</style>
-      </head>
-      <body>
-        ${getPrintWatermark()}
-        <div class="print-content">
-          ${bodyHtml}
-        </div>
-      </body>
-    </html>
-  `);
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
+          <link
+            href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;600&display=swap"
+            rel="stylesheet"
+          />
+          <style>${getPrintStyles()}</style>
+        </head>
+        <body>
+          ${getPrintWatermark()}
+          <div class="print-content">
+            ${bodyHtml}
+          </div>
+        </body>
+      </html>
+    `);
 
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
-  return true;
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      try {
+        printWindow.print();
+      } catch (e) {
+        // ignore
+      }
+    }, 250);
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
