@@ -1,17 +1,5 @@
 const MS_PER_DAY = 86400000;
 
-export const ANALYTICS_GRANULARITIES = ['daily', 'weekly', 'monthly', 'yearly'];
-
-export const ANALYTICS_PRESETS = [
-  { key: 'today', label: 'Today' },
-  { key: 'week', label: 'This Week' },
-  { key: 'month', label: 'This Month' },
-  { key: 'year', label: 'This Year' },
-  { key: 'selectedYear', label: 'Select Year' },
-  { key: 'all', label: 'All Time' },
-  { key: 'custom', label: 'Custom' },
-];
-
 export function formatISODate(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
     date.getDate()

@@ -6707,11 +6707,6 @@ body:has(.clinic-access-page)::before {
   box-shadow: 0 10px 24px rgba(36, 20, 22, 0.045);
 }
 
-.analytics-toolbar__row--baseline {
-  padding-top: 0.75rem;
-  border-top: 1px dashed var(--color-border);
-}
-
 .analytics-toolbar__actions {
   display: flex;
   flex-wrap: wrap;

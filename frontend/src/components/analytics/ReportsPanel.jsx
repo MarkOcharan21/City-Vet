@@ -314,9 +314,9 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
     }
   };
 
-  const reportPeriodLabel = preview?.filterLabel ||
-    (preview?.current ? formatDateRange(preview.current) || preview.current.label :
-      periodLabel || (from || to ? `${from || '…'} → ${to || '…'}` : 'All Time'));
+  const reportPeriodLabel = formatDateRange(preview?.current) || preview?.filterLabel ||
+    (preview?.current ? preview.current.label :
+      periodLabel || (from || to ? formatDateRange({ from, to }) : 'All Time'));
   const previewMonths = Array.from(new Set([
     ...(preview?.registrations || []).map((row) => row.month),
     ...(preview?.vaccinations || []).map((row) => row.month),
@@ -342,8 +342,8 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
       rows: reportMetricRows,
       series: preview?.series || [],
       primaryKey: preview?.primaryMetric || 'doses',
-      currentLabel: preview?.current?.label || 'the current period',
-      baselineLabel: preview?.baseline?.label || 'the baseline period',
+      currentLabel: formatDateRange(preview?.current) || preview?.current?.label || 'the current period',
+      baselineLabel: formatDateRange(preview?.baseline) || preview?.baseline?.label || 'the baseline period',
       currentPartial: preview?.current?.partial,
       baselinePartial: preview?.baseline?.partial,
     }),
@@ -588,8 +588,8 @@ export default function ReportsPanel({ from = '', to = '', periodLabel, onOpenFo
               <ComparisonSummary
                 title={activeReport.key === 'yearly' ? 'Year vs previous year' : 'Current vs baseline at a glance'}
                 subtitle="All five measures used by this report, side by side."
-                currentLabel={preview.current?.label || 'Current period'}
-                baselineLabel={preview.baseline?.label || 'Baseline period'}
+                currentLabel={formatDateRange(preview.current) || preview.current?.label || 'Current period'}
+                baselineLabel={formatDateRange(preview.baseline) || preview.baseline?.label || 'Baseline period'}
                 rows={reportMetricRows}
                 explanations={reportExplanations}
                 note={preview.current?.partial ? 'Current period is still in progress' : undefined}

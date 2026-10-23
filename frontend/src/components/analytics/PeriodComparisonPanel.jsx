@@ -39,7 +39,6 @@ const GRANULARITIES = [
 const COMPARE_MODES = [
   { key: 'previous', label: 'Previous period' },
   { key: 'previousYear', label: 'Same period last year' },
-  { key: 'custom', label: 'Custom dates' },
 ];
 
 const METRIC_OPTIONS = [
@@ -106,9 +105,6 @@ export default function PeriodComparisonPanel() {
   const [chartStyle, setChartStyle] = useState('bars');
   const [showEarlierYears, setShowEarlierYears] = useState(false);
   const [range, setRange] = useState(() => getDefaultComparisonRange('monthly'));
-  const [baselineRange, setBaselineRange] = useState(() =>
-    getAutoBaselineRange(getDefaultComparisonRange('monthly'), 'previous', 'monthly')
-  );
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -119,26 +115,21 @@ export default function PeriodComparisonPanel() {
   const windows = Math.min(60, countPeriods(range, granularity));
   const inputType = getGranularityInputType(granularity);
   const rangeInputs = getInputValuesForRange(granularity, range);
-  const baselineInputs = getInputValuesForRange(granularity, baselineRange);
+  const autoBaselineRange = getAutoBaselineRange(range, compare, granularity);
   const yearOptions = useMemo(() => getYearOptions(20), []);
   const currentDate = useMemo(() => formatISODate(new Date()), []);
   const currentMonth = currentDate.slice(0, 7);
 
   const buildParams = useCallback(() => {
-    const params = {
+    return {
       granularity,
-      compare: compare === 'custom' ? 'previous' : compare,
+      compare,
       metric,
       from: range.from,
       to: range.to,
       windows,
     };
-    if (compare === 'custom') {
-      params.baselineFrom = baselineRange.from;
-      params.baselineTo = baselineRange.to;
-    }
-    return params;
-  }, [granularity, compare, metric, range.from, range.to, windows, baselineRange.from, baselineRange.to]);
+  }, [granularity, compare, metric, range.from, range.to, windows]);
 
   const loadComparison = useCallback(async () => {
     setLoading(true);
@@ -164,11 +155,7 @@ export default function PeriodComparisonPanel() {
   const applyRange = (nextRange) => {
     const from = nextRange.from && nextRange.to && nextRange.from > nextRange.to ? nextRange.to : nextRange.from;
     const to = nextRange.from && nextRange.to && nextRange.from > nextRange.to ? nextRange.from : nextRange.to;
-    const normalized = { from, to };
-    setRange(normalized);
-    if (compare === 'custom') {
-      setBaselineRange(getAutoBaselineRange(normalized, 'previous', granularity));
-    }
+    setRange({ from, to });
   };
 
   const changeRangeBound = (bound, value) => {
@@ -176,22 +163,14 @@ export default function PeriodComparisonPanel() {
     applyRange(getRangeFromInput(granularity, values.from, values.to));
   };
 
-  const changeBaselineBound = (bound, value) => {
-    const values = { ...baselineInputs, [bound]: value };
-    setBaselineRange(getRangeFromInput(granularity, values.from, values.to));
-  };
-
   const changeGranularity = (next) => {
     setGranularity(next);
-    const nextRange = getDefaultComparisonRange(next);
-    setRange(nextRange);
-    setBaselineRange(getAutoBaselineRange(nextRange, next === 'yearly' ? 'previousYear' : 'previous', next));
+    setRange(getDefaultComparisonRange(next));
     if (next === 'yearly') setCompare('previousYear');
   };
 
   const changeCompare = (next) => {
     setCompare(next);
-    setBaselineRange(getAutoBaselineRange(range, next === 'custom' ? 'previous' : next, granularity));
   };
 
   const totals = data?.totals || {};
@@ -303,11 +282,11 @@ export default function PeriodComparisonPanel() {
     }
   };
 
-  const renderRangeInputs = (values, onChange, prefix, isBaseline = false) => {
+  const renderRangeInputs = (values, onChange, prefix) => {
     if (granularity === 'yearly') {
       return (
         <>
-          <label htmlFor={`${prefix}-from`}>{isBaseline ? 'Baseline period' : 'Current period'}</label>
+          <label htmlFor={`${prefix}-from`}>Date range</label>
           <select
             id={`${prefix}-from`}
             value={values.from}
@@ -326,10 +305,10 @@ export default function PeriodComparisonPanel() {
         </>
       );
     }
-    const maxValue = isBaseline ? undefined : inputType === 'month' ? currentMonth : currentDate;
+    const maxValue = inputType === 'month' ? currentMonth : currentDate;
     return (
       <>
-        <label htmlFor={`${prefix}-from`}>{isBaseline ? 'Baseline period' : 'Current period'}</label>
+        <label htmlFor={`${prefix}-from`}>Date range</label>
         <input
           id={`${prefix}-from`}
           type={inputType}
@@ -351,7 +330,8 @@ export default function PeriodComparisonPanel() {
   };
 
   const currentLabel = formatDateRange(data?.current) || data?.current?.label || formatDateRange(range);
-  const baselineLabel = formatDateRange(data?.baseline) || data?.baseline?.label || formatDateRange(baselineRange);
+  const baselineLabel =
+    formatDateRange(data?.baseline) || data?.baseline?.label || formatDateRange(autoBaselineRange);
 
   return (
     <div className="analytics-panel">
@@ -375,6 +355,7 @@ export default function PeriodComparisonPanel() {
           <div className="analytics-field analytics-field--dates">
             {renderRangeInputs(rangeInputs, changeRangeBound, 'comparison-current')}
           </div>
+
 
           <div className="analytics-segmented" role="group" aria-label="Compare against">
             <span className="analytics-segmented__label">Compare</span>
@@ -418,14 +399,6 @@ export default function PeriodComparisonPanel() {
             </button>
           </div>
         </div>
-
-        {compare === 'custom' ? (
-          <div className="analytics-toolbar__row analytics-toolbar__row--baseline">
-            <div className="analytics-field analytics-field--dates">
-              {renderRangeInputs(baselineInputs, changeBaselineBound, 'comparison-baseline', true)}
-            </div>
-          </div>
-        ) : null}
 
         <div className="analytics-toolbar__range">
           <span className="analytics-range-chip analytics-range-chip--current">

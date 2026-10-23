@@ -339,8 +339,11 @@ export default function CompliancePanel({ from = '', to = '', initialSubTab = ''
     : 0;
   const recordedReasons = (compliance?.retentionReasons || []).filter((row) => row.count > 0);
   const topReasons = recordedReasons.slice().sort((a, b) => b.count - a.count).slice(0, 3);
-  const currentPeriodLabel = compliance?.filterLabel || formatDateRange({ from, to });
-  const baselinePeriodLabel = baselineCompliance?.filterLabel || formatDateRange({ from: baselineFrom, to: baselineTo });
+  const currentPeriodLabel = formatDateRange({ from, to }) || compliance?.filterLabel || 'All Time';
+  const baselinePeriodLabel =
+    formatDateRange({ from: baselineFrom, to: baselineTo }) ||
+    baselineCompliance?.filterLabel ||
+    'Baseline period';
   const comparisonRows = useMemo(
     () => buildComparisonRows({
       current: summary,

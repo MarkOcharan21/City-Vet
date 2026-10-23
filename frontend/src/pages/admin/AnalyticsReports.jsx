@@ -14,8 +14,8 @@ import ReportsPanel from "../../components/analytics/ReportsPanel";
 import AnalyticsToolbar from "../../components/analytics/AnalyticsToolbar";
 import ComparisonSummary from "../../components/analytics/ComparisonSummary";
 import {
+  formatDateRange,
   getBaselinePeriodRange,
-  getPreviousEqualRange,
   getSelectedPeriodLabel,
   getSelectedPeriodRange,
 } from "../../utils/analyticsPeriods";
@@ -320,22 +320,16 @@ export default function AnalyticsReports() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [period, setPeriod] = useState("year");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [from, setFrom] = useState(() => getSelectedPeriodRange('year', '', '').from);
+  const [to, setTo] = useState(() => getSelectedPeriodRange('year', '', '').to);
   const [compare, setCompare] = useState("");
-  const [baselineFrom, setBaselineFrom] = useState("");
-  const [baselineTo, setBaselineTo] = useState("");
   const [retryCount, setRetryCount] = useState(0);
   const [printOpen, setPrintOpen] = useState(false);
 
-  const periodRange = getSelectedPeriodRange(period, from, to);
-  const baselineRange = getBaselinePeriodRange(periodRange, compare, period, from, {
-    from: baselineFrom,
-    to: baselineTo,
-  });
-  const periodLabel = dashboard?.filterLabel || getSelectedPeriodLabel(period, from, to);
-  const compareDisabled = period === 'all' || (period === 'custom' && (!from || !to)) || (period === 'selectedYear' && !from);
+  const periodRange = { from, to };
+  const baselineRange = getBaselinePeriodRange(periodRange, compare);
+  const periodLabel = formatDateRange(periodRange) || getSelectedPeriodLabel('custom', from, to);
+  const compareDisabled = !from || !to;
 
   const overviewComparisonRows = useMemo(() => {
     if (!compare || !dashboard?.comparison) return [];
@@ -353,8 +347,14 @@ export default function AnalyticsReports() {
       rows: overviewComparisonRows,
       series: dashboard.comparison.series || [],
       primaryKey: 'doses',
-      currentLabel: dashboard.comparison.current?.label || 'the current period',
-      baselineLabel: dashboard.comparison.baseline?.label || 'the baseline period',
+      currentLabel:
+        formatDateRange(dashboard.comparison.current) ||
+        dashboard.comparison.current?.label ||
+        'the current period',
+      baselineLabel:
+        formatDateRange(dashboard.comparison.baseline) ||
+        dashboard.comparison.baseline?.label ||
+        'the baseline period',
       currentPartial: dashboard.comparison.current?.partial,
       baselinePartial: dashboard.comparison.baseline?.partial,
     });
@@ -364,26 +364,8 @@ export default function AnalyticsReports() {
     if (compareDisabled && compare) setCompare('');
   }, [compareDisabled, compare]);
 
-  const handlePeriodChange = (next) => {
-    setPeriod(next);
-    if (next !== 'custom') {
-      setFrom('');
-      setTo('');
-    }
-    if (next === 'selectedYear') setFrom(String(new Date().getFullYear()));
-    if (next === 'custom') {
-      setBaselineFrom('');
-      setBaselineTo('');
-    }
-  };
-
   const handleCompareChange = (next) => {
     setCompare(next);
-    if (next === 'custom' && (!baselineFrom || !baselineTo)) {
-      const auto = getPreviousEqualRange(periodRange);
-      setBaselineFrom(auto?.from || '');
-      setBaselineTo(auto?.to || '');
-    }
   };
 
   useEffect(() => {
@@ -393,14 +375,10 @@ export default function AnalyticsReports() {
     setError(null);
     setDashboard(null);
 
-    const filter = period === 'custom' || period === 'selectedYear' ? 'all' : period;
-    let url = `/analytics/dashboard?filter=${filter}`;
+    let url = `/analytics/dashboard?filter=all`;
     if (periodRange.from) url += `&from=${periodRange.from}`;
     if (periodRange.to) url += `&to=${periodRange.to}`;
     if (compare && !compareDisabled) url += `&compare=${compare}`;
-    if (compare === 'custom' && baselineFrom && baselineTo) {
-      url += `&baselineFrom=${baselineFrom}&baselineTo=${baselineTo}`;
-    }
 
     api
       .get(url)
@@ -431,7 +409,7 @@ export default function AnalyticsReports() {
       .finally(() => {
         setLoading(false);
       });
-  }, [tab, period, periodRange.from, periodRange.to, compare, compareDisabled, baselineFrom, baselineTo, retryCount]);
+  }, [tab, periodRange.from, periodRange.to, compare, compareDisabled, retryCount]);
 
   return (
     <div className="page analytics-page">
@@ -462,18 +440,12 @@ export default function AnalyticsReports() {
       </div>
       {tab !== 'comparison' && (
         <AnalyticsToolbar
-          period={period}
-          onPeriodChange={handlePeriodChange}
           from={from}
           to={to}
           onFromChange={setFrom}
           onToChange={setTo}
           compare={compare}
           onCompareChange={handleCompareChange}
-          baselineFrom={baselineFrom}
-          baselineTo={baselineTo}
-          onBaselineFromChange={setBaselineFrom}
-          onBaselineToChange={setBaselineTo}
           compareDisabled={compareDisabled}
           onPrint={tab === 'overview' ? () => setPrintOpen(true) : undefined}
           onReports={tab === 'overview' ? () => setTab('reports') : undefined}
@@ -523,8 +495,16 @@ export default function AnalyticsReports() {
                 <ComparisonSummary
                   title="Current vs baseline at a glance"
                   subtitle="Every headline metric for the selected period and its baseline."
-                  currentLabel={dashboard.comparison.current?.label || 'Current period'}
-                  baselineLabel={dashboard.comparison.baseline?.label || 'Baseline period'}
+                  currentLabel={
+                    formatDateRange(dashboard.comparison.current) ||
+                    dashboard.comparison.current?.label ||
+                    'Current period'
+                  }
+                  baselineLabel={
+                    formatDateRange(dashboard.comparison.baseline) ||
+                    dashboard.comparison.baseline?.label ||
+                    'Baseline period'
+                  }
                   rows={overviewComparisonRows}
                   explanations={overviewExplanations}
                   note={dashboard.comparison.current?.partial ? 'Current period is still in progress' : undefined}
