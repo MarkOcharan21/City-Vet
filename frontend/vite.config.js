@@ -21,17 +21,16 @@ function httpsConfig() {
 
 const httpsOptions = httpsConfig();
 
+// For Render deployment: force plain HTTP to avoid cert issues
+// Set VITE_HTTPS=0 in Render environment to disable HTTPS forcing
+const FORCE_HTTP = process.env.VITE_FORCE_HTTP === "1";
+
 const BACKEND_TARGET = process.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
-// Socket.io clients reconnect constantly (HMR reload, tab wake, backend
-// restart, tunnel drop). Every one of those tears the proxied WebSocket down
-// mid-flight, and http-proxy surfaces that as an *unhandled* 'error' event ->
-// "[vite] ws proxy error: read ECONNRESET". These are normal reconnects, not
-// faults, so they are handled instead of thrown.
 const RECONNECT_CODES = new Set([
-  'ECONNRESET',   // peer closed the socket (reconnect, restart, HMR)
-  'ECONNABORTED', // socket destroyed locally
-  'EPIPE',        // wrote to a socket the peer already closed
+  'ECONNRESET',
+  'ECONNABORTED',
+  'EPIPE',
   'ERR_STREAM_PREMATURE_CLOSE',
   'ERR_STREAM_DESTROYED',
 ]);
@@ -41,8 +40,6 @@ function isReconnectNoise(err) {
     /socket hang up|aborted|premature close/i.test(err?.message || '');
 }
 
-// For the /socket.io ws proxy, http-proxy passes the raw net.Socket as the
-// 3rd arg. A real http.ServerResponse has writeHead(); a socket does not.
 function isHttpResponse(res) {
   return typeof res?.writeHead === 'function';
 }
@@ -51,9 +48,8 @@ function proxyLifecycle(label) {
   return (proxy) => {
     proxy.on('error', (err, req, res) => {
       if (isHttpResponse(res)) {
-        // HTTP proxy: fail the request cleanly instead of killing the process.
         if (!res.headersSent) {
-          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.writeHead(520, { 'Content-Type': 'application/json' });
         }
         res.end(JSON.stringify({
           success: false,
@@ -61,22 +57,17 @@ function proxyLifecycle(label) {
         }));
         return;
       }
-
-      // WebSocket proxy: close the half-open socket so socket.io can
-      // reconnect, but only report it once per cause instead of per attempt.
       if (typeof res?.destroy === 'function') res.destroy();
-
       if (isReconnectNoise(err)) {
         const now = Date.now();
         if (now - proxyLifecycle.lastLog < 30000) return;
         proxyLifecycle.lastLog = now;
         console.warn(
-          `[vite] ${label} connection reset (${err.code}) — socket.io will reconnect. ` +
+          `[vite] ${label} connection reset (${err.code}) �?" socket.io will reconnect. ` +
           `Target: ${BACKEND_TARGET}`
         );
         return;
       }
-
       console.error(`[vite] ${label} proxy error:`, err);
     });
   };
@@ -89,9 +80,9 @@ export default defineConfig({
     host: true,
     port: process.env.PORT ? Number(process.env.PORT) : 5178,
     strictPort: true,
-    // HTTPS by default (self-signed certs). Falls back to plain HTTP only when
-    // the local certs are missing. Force plain HTTP with VITE_HTTPS=0.
-    https: process.env.VITE_HTTPS === "0" ? undefined : httpsOptions,
+    // Force plain HTTP to avoid SSL cert issues on Render
+    // Remove the line below or set VITE_HTTPS=true in Render env to enable HTTPS
+    https: FORCE_HTTP ? undefined : httpsOptions,
     proxy: {
       '/api': {
         target: BACKEND_TARGET,
