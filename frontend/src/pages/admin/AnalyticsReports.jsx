@@ -321,28 +321,29 @@ export default function AnalyticsReports() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [from, setFrom] = useState(() => getSelectedPeriodRange('year', '', '').from);
-  const [to, setTo] = useState(() => getSelectedPeriodRange('year', '', '').to);
+  const [from] = useState(() => getSelectedPeriodRange('year', '', '').from);
+  const [to] = useState(() => getSelectedPeriodRange('year', '', '').to);
   const [compare, setCompare] = useState("");
-  const [baselineFrom, setBaselineFrom] = useState("");
-  const [baselineTo, setBaselineTo] = useState("");
   const [compareFrom, setCompareFrom] = useState("");
   const [compareTo, setCompareTo] = useState("");
   const [comparisonError, setComparisonError] = useState("");
   const [retryCount, setRetryCount] = useState(0);
   const [printOpen, setPrintOpen] = useState(false);
 
-  const periodRange = { from, to };
+  const isCustomCompare = compare === 'custom' && Boolean(compareFrom && compareTo);
+  const effectiveFrom = isCustomCompare ? compareFrom : from;
+  const effectiveTo = isCustomCompare ? compareFrom : to;
+  const periodRange = { from: effectiveFrom, to: effectiveTo };
   const baselineRange =
     compare === 'previousYear'
       ? getBaselinePeriodRange(periodRange, 'previousYear')
       : compare === 'previous'
         ? getPreviousEqualRange(periodRange)
-        : compare === 'custom' && compareFrom && compareTo
-          ? { from: compareFrom, to: compareTo }
+        : isCustomCompare
+          ? { from: compareTo, to: compareTo }
           : null;
-  const periodLabel = dashboard?.filterLabel || getSelectedPeriodLabel('custom', from, to);
-  const compareDisabled = !from || !to;
+  const periodLabel = dashboard?.filterLabel || getSelectedPeriodLabel('custom', effectiveFrom, effectiveTo);
+  const compareDisabled = !compareFrom || !compareTo;
 
   const overviewComparisonRows = useMemo(() => {
     if (!compare || !dashboard?.comparison) return [];
@@ -363,16 +364,12 @@ export default function AnalyticsReports() {
       currentLabel:
         formatDateRange(dashboard.comparison.current) ||
         dashboard.comparison.current?.label ||
-        (compareFrom ? compareFrom : 'the selected period'),
-      baselineLabel: 'the previous period',
+        (compareFrom ? compareFrom : 'Date 1'),
+      baselineLabel: compareTo ? compareTo : 'Date 2',
       currentPartial: dashboard.comparison.current?.partial,
       baselinePartial: dashboard.comparison.baseline?.partial,
     });
-  }, [compare, dashboard, overviewComparisonRows, compareFrom]);
-
-  useEffect(() => {
-    if (compareDisabled && compare) setCompare('');
-  }, [compareDisabled, compare]);
+  }, [compare, dashboard, overviewComparisonRows, compareFrom, compareTo]);
 
   useEffect(() => {
     if (compare !== 'custom') {
@@ -385,9 +382,7 @@ export default function AnalyticsReports() {
     }
     if (compareFrom === compareTo) {
       setComparisonError('Bawal ang same date ng same year.');
-      if (compare) {
-        setCompare('');
-      }
+      setCompare('');
       return;
     }
     setComparisonError('');
@@ -396,7 +391,7 @@ export default function AnalyticsReports() {
   const handleCompareChange = (next) => {
     if (next === 'custom') {
       if (!compareFrom || !compareTo) {
-        setComparisonError('Bawal ang same date ng same year.');
+        setComparisonError('Pumili ng Compare Date 1 at Compare Date 2.');
         return;
       }
       if (compareFrom === compareTo) {
@@ -411,13 +406,31 @@ export default function AnalyticsReports() {
     setCompare(next === compare ? '' : next);
   };
 
+  const handleCompareFromChange = (value) => {
+    setCompareFrom(value);
+    if (value && compareTo && value === compareTo) {
+      setComparisonError('Bawal ang same date ng same year.');
+      setCompare('');
+    } else {
+      setComparisonError('');
+    }
+  };
+
+  const handleCompareToChange = (value) => {
+    setCompareTo(value);
+    if (compareFrom && value && compareFrom === value) {
+      setComparisonError('Bawal ang same date ng same year.');
+      setCompare('');
+    } else {
+      setComparisonError('');
+    }
+  };
+
   const handleResetComparison = () => {
     setCompare('');
     setCompareFrom('');
     setCompareTo('');
     setComparisonError('');
-    setBaselineFrom('');
-    setBaselineTo('');
   };
 
   useEffect(() => {
@@ -430,12 +443,10 @@ export default function AnalyticsReports() {
     let url = `/analytics/dashboard?filter=all`;
     if (periodRange.from) url += `&from=${periodRange.from}`;
     if (periodRange.to) url += `&to=${periodRange.to}`;
-    if (compare && !compareDisabled && compare !== 'custom') url += `&compare=${compare}`;
-    else if (compare === 'custom' && compareFrom && compareTo && compareFrom !== compareTo) {
-      url += `&compare=custom&compareFrom=${compareFrom}&compareTo=${compareTo}`;
-    }
-    if (compare === 'previousYear' && baselineRange?.from && baselineRange?.to) {
-      url += `&from=${periodRange.from}&to=${periodRange.to}`;
+    if (compare === 'custom' && compareFrom && compareTo && compareFrom !== compareTo) {
+      url += `&compare=custom&baselineFrom=${compareTo}&baselineTo=${compareTo}`;
+    } else if (compare) {
+      url += `&compare=${compare}`;
     }
 
     api
@@ -498,10 +509,6 @@ export default function AnalyticsReports() {
       </div>
       {tab !== 'comparison' && (
         <AnalyticsToolbar
-          from={from}
-          to={to}
-          onFromChange={setFrom}
-          onToChange={setTo}
           compare={compare}
           onCompareChange={handleCompareChange}
           compareDisabled={compareDisabled}
@@ -511,24 +518,8 @@ export default function AnalyticsReports() {
           reportsLabel="More reports →"
           compareFrom={compareFrom}
           compareTo={compareTo}
-          onCompareFromChange={(value) => {
-            setCompareFrom(value);
-            if (value && compareTo && value === compareTo) {
-              setComparisonError('Bawal ang same date ng same year.');
-              setCompare('');
-            } else {
-              setComparisonError('');
-            }
-          }}
-          onCompareToChange={(value) => {
-            setCompareTo(value);
-            if (compareFrom && value && compareFrom === value) {
-              setComparisonError('Bawal ang same date ng same year.');
-              setCompare('');
-            } else {
-              setComparisonError('');
-            }
-          }}
+          onCompareFromChange={handleCompareFromChange}
+          onCompareToChange={handleCompareToChange}
           onResetComparison={handleResetComparison}
           comparisonError={comparisonError}
         />

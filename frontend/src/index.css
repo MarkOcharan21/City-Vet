@@ -6715,6 +6715,11 @@ body:has(.clinic-access-page)::before {
   margin-left: auto;
 }
 
+.analytics-toolbar__actions--start {
+  margin-left: 0;
+  margin-right: auto;
+}
+
 .analytics-toolbar__range {
   display: flex;
   flex-wrap: wrap;
