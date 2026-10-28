@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api";
 
@@ -343,7 +343,7 @@ export default function AnalyticsReports() {
           ? { from: compareTo, to: compareTo }
           : null;
   const periodLabel = dashboard?.filterLabel || getSelectedPeriodLabel('custom', effectiveFrom, effectiveTo);
-  const compareDisabled = !compareFrom || !compareTo;
+  const compareDisabled = !compareFrom || !compareTo || compareFrom === compareTo;
 
   const overviewComparisonRows = useMemo(() => {
     if (!compare || !dashboard?.comparison) return [];
@@ -381,7 +381,7 @@ export default function AnalyticsReports() {
       return;
     }
     if (compareFrom === compareTo) {
-      setComparisonError('Bawal ang same date ng same year.');
+      setComparisonError('Cannot compare the same date. Please select a different date.');
       setCompare('');
       return;
     }
@@ -391,11 +391,11 @@ export default function AnalyticsReports() {
   const handleCompareChange = (next) => {
     if (next === 'custom') {
       if (!compareFrom || !compareTo) {
-        setComparisonError('Pumili ng Compare Date 1 at Compare Date 2.');
+        setComparisonError('Please select Compare Date 1 and Compare Date 2.');
         return;
       }
       if (compareFrom === compareTo) {
-        setComparisonError('Bawal ang same date ng same year.');
+        setComparisonError('Cannot compare the same date. Please select a different date.');
         return;
       }
       setComparisonError('');
@@ -409,7 +409,7 @@ export default function AnalyticsReports() {
   const handleCompareFromChange = (value) => {
     setCompareFrom(value);
     if (value && compareTo && value === compareTo) {
-      setComparisonError('Bawal ang same date ng same year.');
+      setComparisonError('Cannot compare the same date. Please select a different date.');
       setCompare('');
     } else {
       setComparisonError('');
@@ -419,7 +419,7 @@ export default function AnalyticsReports() {
   const handleCompareToChange = (value) => {
     setCompareTo(value);
     if (compareFrom && value && compareFrom === value) {
-      setComparisonError('Bawal ang same date ng same year.');
+      setComparisonError('Cannot compare the same date. Please select a different date.');
       setCompare('');
     } else {
       setComparisonError('');
@@ -824,3 +824,4 @@ function ChartCard({ title, description, children, isEmpty = false, tall = false
     </div>
   );
 }
+

@@ -6720,6 +6720,27 @@ body:has(.clinic-access-page)::before {
   margin-right: auto;
 }
 
+.analytics-toolbar__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
+}
+
+.analytics-toolbar__group--end {
+  margin-left: auto;
+}
+
+.analytics-inline-warning {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(200, 16, 46, 0.25);
+  border-radius: 8px;
+  background: rgba(200, 16, 46, 0.06);
+  color: #a10d25;
+  font-size: 0.82rem;
+}
+
 .analytics-toolbar__range {
   display: flex;
   flex-wrap: wrap;
