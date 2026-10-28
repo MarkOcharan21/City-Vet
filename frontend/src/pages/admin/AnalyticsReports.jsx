@@ -326,6 +326,9 @@ export default function AnalyticsReports() {
   const [compare, setCompare] = useState("");
   const [baselineFrom, setBaselineFrom] = useState("");
   const [baselineTo, setBaselineTo] = useState("");
+  const [compareFrom, setCompareFrom] = useState("");
+  const [compareTo, setCompareTo] = useState("");
+  const [comparisonError, setComparisonError] = useState("");
   const [retryCount, setRetryCount] = useState(0);
   const [printOpen, setPrintOpen] = useState(false);
 
@@ -335,7 +338,9 @@ export default function AnalyticsReports() {
       ? getBaselinePeriodRange(periodRange, 'previousYear')
       : compare === 'previous'
         ? getPreviousEqualRange(periodRange)
-        : null;
+        : compare === 'custom' && compareFrom && compareTo
+          ? { from: compareFrom, to: compareTo }
+          : null;
   const periodLabel = dashboard?.filterLabel || getSelectedPeriodLabel('custom', from, to);
   const compareDisabled = !from || !to;
 
@@ -358,22 +363,61 @@ export default function AnalyticsReports() {
       currentLabel:
         formatDateRange(dashboard.comparison.current) ||
         dashboard.comparison.current?.label ||
-        'the current period',
-      baselineLabel:
-        formatDateRange(dashboard.comparison.baseline) ||
-        dashboard.comparison.baseline?.label ||
-        'the baseline period',
+        (compareFrom ? compareFrom : 'the selected period'),
+      baselineLabel: 'the previous period',
       currentPartial: dashboard.comparison.current?.partial,
       baselinePartial: dashboard.comparison.baseline?.partial,
     });
-  }, [compare, dashboard, overviewComparisonRows]);
+  }, [compare, dashboard, overviewComparisonRows, compareFrom]);
 
   useEffect(() => {
     if (compareDisabled && compare) setCompare('');
   }, [compareDisabled, compare]);
 
+  useEffect(() => {
+    if (compare !== 'custom') {
+      setComparisonError('');
+      return;
+    }
+    if (!compareFrom || !compareTo) {
+      setComparisonError('');
+      return;
+    }
+    if (compareFrom === compareTo) {
+      setComparisonError('Bawal ang same date ng same year.');
+      if (compare) {
+        setCompare('');
+      }
+      return;
+    }
+    setComparisonError('');
+  }, [compare, compareFrom, compareTo]);
+
   const handleCompareChange = (next) => {
+    if (next === 'custom') {
+      if (!compareFrom || !compareTo) {
+        setComparisonError('Bawal ang same date ng same year.');
+        return;
+      }
+      if (compareFrom === compareTo) {
+        setComparisonError('Bawal ang same date ng same year.');
+        return;
+      }
+      setComparisonError('');
+      setCompare('custom');
+      return;
+    }
+    setComparisonError('');
     setCompare(next === compare ? '' : next);
+  };
+
+  const handleResetComparison = () => {
+    setCompare('');
+    setCompareFrom('');
+    setCompareTo('');
+    setComparisonError('');
+    setBaselineFrom('');
+    setBaselineTo('');
   };
 
   useEffect(() => {
@@ -386,7 +430,10 @@ export default function AnalyticsReports() {
     let url = `/analytics/dashboard?filter=all`;
     if (periodRange.from) url += `&from=${periodRange.from}`;
     if (periodRange.to) url += `&to=${periodRange.to}`;
-    if (compare && !compareDisabled) url += `&compare=${compare}`;
+    if (compare && !compareDisabled && compare !== 'custom') url += `&compare=${compare}`;
+    else if (compare === 'custom' && compareFrom && compareTo && compareFrom !== compareTo) {
+      url += `&compare=custom&compareFrom=${compareFrom}&compareTo=${compareTo}`;
+    }
     if (compare === 'previousYear' && baselineRange?.from && baselineRange?.to) {
       url += `&from=${periodRange.from}&to=${periodRange.to}`;
     }
@@ -462,6 +509,28 @@ export default function AnalyticsReports() {
           onReports={tab === 'overview' ? () => setTab('reports') : undefined}
           printLabel="Print overview"
           reportsLabel="More reports →"
+          compareFrom={compareFrom}
+          compareTo={compareTo}
+          onCompareFromChange={(value) => {
+            setCompareFrom(value);
+            if (value && compareTo && value === compareTo) {
+              setComparisonError('Bawal ang same date ng same year.');
+              setCompare('');
+            } else {
+              setComparisonError('');
+            }
+          }}
+          onCompareToChange={(value) => {
+            setCompareTo(value);
+            if (compareFrom && value && compareFrom === value) {
+              setComparisonError('Bawal ang same date ng same year.');
+              setCompare('');
+            } else {
+              setComparisonError('');
+            }
+          }}
+          onResetComparison={handleResetComparison}
+          comparisonError={comparisonError}
         />
       )}
       {tab === "overview" && (
@@ -504,21 +573,33 @@ export default function AnalyticsReports() {
 
               {compare && dashboard.comparison ? (
                 <ComparisonSummary
-                  title="Current vs baseline at a glance"
-                  subtitle="Every headline metric for the selected period and its baseline."
+                  title="Comparison summary"
                   currentLabel={
-                    formatDateRange(dashboard.comparison.current) ||
-                    dashboard.comparison.current?.label ||
-                    'Current period'
+                    compareFrom
+                      ? new Date(`${compareFrom}T00:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                      : (formatDateRange(dashboard.comparison.current) ||
+                         dashboard.comparison.current?.label ||
+                         'Date 1')
                   }
                   baselineLabel={
-                    formatDateRange(dashboard.comparison.baseline) ||
-                    dashboard.comparison.baseline?.label ||
-                    'Baseline period'
+                    compareTo
+                      ? new Date(`${compareTo}T00:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                      : (formatDateRange(dashboard.comparison.baseline) ||
+                         dashboard.comparison.baseline?.label ||
+                         'Date 2')
+                  }
+                  date1Label={
+                    compareFrom
+                      ? new Date(`${compareFrom}T00:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                      : undefined
+                  }
+                  date2Label={
+                    compareTo
+                      ? new Date(`${compareTo}T00:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                      : undefined
                   }
                   rows={overviewComparisonRows}
                   explanations={overviewExplanations}
-                  note={dashboard.comparison.current?.partial ? 'Current period is still in progress' : undefined}
                 />
               ) : null}
 

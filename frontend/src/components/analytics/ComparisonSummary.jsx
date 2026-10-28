@@ -20,31 +20,35 @@ function changeLabel(row) {
 }
 
 export default function ComparisonSummary({
-  title = 'Current vs baseline',
-  subtitle = 'The same metrics, side by side for the two periods.',
-  currentLabel = 'Current',
-  baselineLabel = 'Baseline',
+  title = 'Comparison summary',
+  currentLabel = 'Date 1',
+  baselineLabel = 'Date 2',
+  date1Label,
+  date2Label,
   rows = [],
   explanations = [],
   note,
   className = '',
 }) {
   if (!rows.length) return null;
+  const label1 = date1Label || currentLabel;
+  const label2 = date2Label || baselineLabel;
   return (
     <section className={`comparison-summary ${className}`.trim()}>
       <div className="comparison-summary__header">
         <div>
           <h3>{title}</h3>
-          <p>{subtitle}</p>
+          <p className="comparison-summary__dates">
+            Comparing: <strong>{label1}</strong> and <strong>{label2}</strong>
+          </p>
         </div>
-        {note ? <span className="comparison-summary__note">{note}</span> : null}
       </div>
 
       <div className="comparison-summary__columns">
         <span>Metric</span>
-        <span>{currentLabel}</span>
-        <span>{baselineLabel}</span>
-        <span>Change</span>
+        <span>{label1}</span>
+        <span>{label2}</span>
+        <span>Changes</span>
       </div>
 
       <div className="comparison-summary__table" role="table" aria-label={title}>
@@ -73,9 +77,6 @@ export default function ComparisonSummary({
               <li key={sentence}>{sentence}</li>
             ))}
           </ul>
-          <p className="comparison-summary__disclaimer">
-            These notes describe the data only; they do not establish cause.
-          </p>
         </div>
       ) : null}
     </section>

@@ -163,6 +163,12 @@ export default function PeriodComparisonPanel() {
     setRange(getDefaultComparisonRange(next));
   };
 
+  const resetComparison = () => {
+    setShowComparison(false);
+    setMetric('doses');
+    setRange(getDefaultComparisonRange(granularity));
+  };
+
   const totals = data?.totals || {};
   const current = totals.current || {};
   const baseline = totals.baseline || {};
@@ -240,8 +246,8 @@ export default function PeriodComparisonPanel() {
       rows: comparisonRows,
       series,
       primaryKey: chartData.metric,
-      currentLabel: formatDateRange(data?.current) || data?.current?.label || 'the current period',
-      baselineLabel: formatDateRange(data?.baseline) || data?.baseline?.label || 'the baseline period',
+      currentLabel: formatDateRange(data?.current) || data?.current?.label || 'the selected period',
+      baselineLabel: 'the previous period',
       currentPartial: data?.current?.partial,
       baselinePartial: data?.baseline?.partial,
     }),
@@ -356,6 +362,14 @@ export default function PeriodComparisonPanel() {
             Compare
           </button>
 
+          <button
+            type="button"
+            className="btn-secondary analytics-toolbar__action"
+            onClick={resetComparison}
+          >
+            Reset
+          </button>
+
           <div className="analytics-field">
             <label htmlFor="comparison-metric">Metric</label>
             <select id="comparison-metric" value={metric} onChange={(event) => setMetric(event.target.value)}>
@@ -384,21 +398,11 @@ export default function PeriodComparisonPanel() {
           </div>
         </div>
 
-        <div className="analytics-toolbar__range">
-          <span className="analytics-range-chip analytics-range-chip--current">
-            <span>Viewing</span>
-            <strong>{currentLabel}</strong>
-          </span>
-          {showComparison ? (
-            <span className="analytics-range-chip analytics-range-chip--baseline">
-              <span>Compared with</span>
-              <strong>{baselineLabel}</strong>
-            </span>
-          ) : null}
-          <span className="analytics-range-chip analytics-range-chip--quiet">
-            {windows} {granularity === 'daily' ? 'day' : granularity === 'weekly' ? 'week' : granularity === 'monthly' ? 'month' : 'year'}{windows === 1 ? '' : 's'} per side
-          </span>
-        </div>
+        {currentLabel ? (
+          <p className="analytics-period-label">
+            Selected period: <strong>{currentLabel}</strong>
+          </p>
+        ) : null}
       </div>
 
 
@@ -419,9 +423,10 @@ export default function PeriodComparisonPanel() {
           {showComparison ? (
           <ComparisonSummary
             title="Comparison summary"
-            subtitle={`Showing ${activeMetric.label} and key metrics for the current and baseline windows.`}
             currentLabel={currentLabel}
             baselineLabel={baselineLabel}
+            date1Label={currentLabel}
+            date2Label={baselineLabel}
             rows={comparisonRows.filter((row) => row.key === chartData.metric)}
             explanations={comparisonExplanations.filter((item) => {
               if (chartData.metric === 'registrations') return /registration/i.test(item);
@@ -431,7 +436,6 @@ export default function PeriodComparisonPanel() {
               if (chartData.metric === 'revenue') return /revenue|peso|\u20b1/i.test(item);
               return true;
             })}
-            note={data?.current?.partial || data?.baseline?.partial ? 'One period is still in progress' : undefined}
           />
           ) : null}
 
@@ -480,13 +484,13 @@ export default function PeriodComparisonPanel() {
                         labels: chartData.labels,
                         datasets: [
                           {
-                            label: data.current?.label || 'Current',
+                            label: 'Selected period',
                             data: chartData.current,
                             backgroundColor: '#c8102e',
                             borderRadius: 4,
                           },
                           {
-                            label: data.baseline?.label || 'Baseline',
+                            label: 'Baseline',
                             data: chartData.baseline,
                             backgroundColor: '#c6a15b',
                             borderRadius: 4,
@@ -500,8 +504,8 @@ export default function PeriodComparisonPanel() {
                       data={{
                         labels: chartData.labels,
                         datasets: [
-                          { label: data.current?.label || 'Current', data: chartData.current, borderColor: '#c8102e', backgroundColor: 'rgba(200, 16, 46, 0.1)', fill: true, tension: 0, pointRadius: 3, spanGaps: true },
-                          { label: data.baseline?.label || 'Baseline', data: chartData.baseline, borderColor: '#c6a15b', backgroundColor: 'rgba(198, 161, 91, 0.1)', borderDash: [6, 4], tension: 0, pointRadius: 3, spanGaps: true },
+                          { label: 'Selected period', data: chartData.current, borderColor: '#c8102e', backgroundColor: 'rgba(200, 16, 46, 0.1)', fill: true, tension: 0, pointRadius: 3, spanGaps: true },
+                          { label: 'Baseline', data: chartData.baseline, borderColor: '#c6a15b', backgroundColor: 'rgba(198, 161, 91, 0.1)', borderDash: [6, 4], tension: 0, pointRadius: 3, spanGaps: true },
                         ],
                       }}
                     />
